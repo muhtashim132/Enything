@@ -98,44 +98,17 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       final auth = context.read<AuthProvider>();
       final allRoles = auth.user?.activeRoles ?? [];
 
-      // ── Priority 1: User explicitly requested a specific role ──────────────
-      if (_requestedRole != null) {
-        if (_requestedRole == 'admin') {
-          if (allRoles.contains('admin')) {
-            _goToWelcomeThenDashboard('admin');
-          } else {
-            // User requested Admin, but does not have active admin privileges yet
-            _showAdminActivationSheet();
-          }
-          return;
-        }
-
-        // For non-admin roles (seller, delivery_partner, customer):
-        // Case 1A: They do NOT have this role yet (e.g. an admin signing up as a seller!)
-        if (!allRoles.contains(_requestedRole)) {
-          Navigator.pushReplacementNamed(
-            context,
-            AppRoutes.completeProfile,
-            arguments: {
-              'role': _requestedRole,
-              'isAddingRole': true,
-            },
-          );
-          return;
-        }
-
-        // Case 1B: They ALREADY have this role (e.g. an admin logging in as a seller!)
-        await auth.switchSessionRole(_requestedRole!);
-        _goToWelcomeThenDashboard(_requestedRole!);
-        return;
-      }
-
-      // ── Priority 2: Generic login where no specific role was requested ────
+      // ── Admin Override: Admins always get the role picker or dashboard directly ──
       if (allRoles.contains('admin')) {
-        if (allRoles.length > 1) {
+        final Set<String> adminRolesToShow = {'admin'};
+        if (_requestedRole != null && allRoles.contains(_requestedRole)) {
+          adminRolesToShow.add(_requestedRole!);
+        }
+
+        if (adminRolesToShow.length > 1) {
           setState(() {
             _showRolePicker = true;
-            _availableRoles = allRoles.toList();
+            _availableRoles = adminRolesToShow.toList();
           });
         } else {
           _goToWelcomeThenDashboard('admin');
@@ -143,23 +116,38 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         return;
       }
 
-      // Fallback: No specific role requested, just use their active session role
-      final role = auth.user?.activeSessionRole ?? 'customer';
-      _goToWelcomeThenDashboard(role);
-    } else if (result == 'new') {
-      if (_requestedRole == 'admin') {
-        _showAdminActivationSheet();
-      } else {
-        // Brand-new user — go to profile setup with the selected role pre-filled
+      // ── Case 1: They requested a new role they don't have yet ────────
+      if (_requestedRole != null && !allRoles.contains(_requestedRole)) {
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.completeProfile,
           arguments: {
             'role': _requestedRole,
-            'isAddingRole': false,
+            'isAddingRole': true,
           },
         );
+        return;
       }
+
+      // ── Case 2: They requested a role they ALREADY have ────────
+      if (_requestedRole != null && allRoles.contains(_requestedRole)) {
+        _goToWelcomeThenDashboard(_requestedRole!);
+        return;
+      }
+
+      // Fallback: No specific role requested, just use their active session role
+      final role = auth.user?.activeSessionRole ?? 'customer';
+      _goToWelcomeThenDashboard(role);
+    } else if (result == 'new') {
+      // Brand-new user — go to profile setup with the selected role pre-filled
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.completeProfile,
+        arguments: {
+          'role': _requestedRole,
+          'isAddingRole': false,
+        },
+      );
     } else {
       _shakeCtrl.forward(from: 0);
       _ctrl.clear();
@@ -252,306 +240,6 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     _startTimer();
     _ctrl.clear();
     _focusNode.requestFocus();
-  }
-
-  void _showAdminActivationSheet() {
-    final inviteCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
-    final nameCtrl = TextEditingController(
-      text: context.read<AuthProvider>().user?.fullName ?? '',
-    );
-    bool isActivating = false;
-    bool obscurePass = true;
-    String? activationError;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Container(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
-              decoration: const BoxDecoration(
-                color: Color(0xFF0D1226),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black54,
-                    blurRadius: 25,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 44,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF9775FA).withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF9775FA).withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.admin_panel_settings_rounded,
-                          color: Color(0xFF9775FA),
-                          size: 36,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Activate Admin Access',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Phone $_phone is verified! To activate Admin privileges, enter your Admin Invite Code or Security Passcode.',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                        color: Colors.white60,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    if (activationError != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE03131).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFE03131).withValues(alpha: 0.40),
-                          ),
-                        ),
-                        child: Text(
-                          activationError!,
-                          style: GoogleFonts.outfit(
-                            color: const Color(0xFFFF6B6B),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    TextField(
-                      controller: nameCtrl,
-                      style: GoogleFonts.outfit(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Full Name',
-                        labelStyle: GoogleFonts.outfit(color: Colors.white60),
-                        prefixIcon: const Icon(Icons.person_outline_rounded,
-                            color: Color(0xFF9775FA)),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.05),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.15)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.15)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFF9775FA)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: inviteCtrl,
-                      style: GoogleFonts.outfit(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Admin Invite Code / Token',
-                        hintText: 'e.g. ENYTHING-ADMIN-MASTER-2026',
-                        hintStyle: GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
-                        labelStyle: GoogleFonts.outfit(color: Colors.white60),
-                        prefixIcon: const Icon(Icons.vpn_key_rounded,
-                            color: Color(0xFF9775FA)),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.05),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.15)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.15)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFF9775FA)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: passCtrl,
-                      obscureText: obscurePass,
-                      style: GoogleFonts.outfit(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Set Admin 2FA Password (min 6 chars)',
-                        labelStyle: GoogleFonts.outfit(color: Colors.white60),
-                        prefixIcon: const Icon(Icons.lock_outline_rounded,
-                            color: Color(0xFF9775FA)),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscurePass
-                                ? Icons.visibility_off_rounded
-                                : Icons.visibility_rounded,
-                            color: Colors.white54,
-                          ),
-                          onPressed: () {
-                            setSheetState(() => obscurePass = !obscurePass);
-                          },
-                        ),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.05),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.15)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.15)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFF9775FA)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7950F2),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 4,
-                      ),
-                      onPressed: isActivating
-                          ? null
-                          : () async {
-                              final code = inviteCtrl.text.trim();
-                              final pass = passCtrl.text.trim();
-                              final name = nameCtrl.text.trim();
-
-                              if (code.isEmpty) {
-                                setSheetState(() => activationError =
-                                    'Please enter your Admin Invite Code.');
-                                return;
-                              }
-                              if (pass.length < 6) {
-                                setSheetState(() => activationError =
-                                    'Admin password must be at least 6 characters.');
-                                return;
-                              }
-
-                              setSheetState(() {
-                                isActivating = true;
-                                activationError = null;
-                              });
-
-                              final err = await context
-                                  .read<AuthProvider>()
-                                  .activateAdminWithInviteCode(
-                                    inviteCode: code,
-                                    adminPassword: pass,
-                                    fullName: name.isNotEmpty ? name : null,
-                                  );
-
-                              if (!mounted) return;
-
-                              if (err == null) {
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                _goToWelcomeThenDashboard('admin');
-                              } else {
-                                setSheetState(() {
-                                  isActivating = false;
-                                  activationError = err;
-                                });
-                              }
-                            },
-                      child: isActivating
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Text(
-                              'Activate Admin Privileges ⚡',
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.pushNamed(
-                            context, AppRoutes.acceptAdminInvite);
-                      },
-                      child: Text(
-                        'Have an Invite Link or Email? Open Admin Invite Portal',
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF9775FA),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   void _showSnack(String msg, {bool isError = false}) {

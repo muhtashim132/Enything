@@ -97,8 +97,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
         return 'Seller';
       case 'delivery_partner':
         return 'Delivery Partner';
-      case 'admin':
-        return 'Admin';
       default:
         return '';
     }
@@ -112,8 +110,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
         return '🏪';
       case 'delivery_partner':
         return '🏍️';
-      case 'admin':
-        return '🛡️';
       default:
         return '⚡';
     }
@@ -125,8 +121,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
         return const Color(0xFFF4C542);
       case 'delivery_partner':
         return const Color(0xFF51CF66);
-      case 'admin':
-        return const Color(0xFF9775FA);
       default:
         return const Color(0xFF4C6EF5);
     }
@@ -578,8 +572,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                                     const TextSpan(text: 'Seller ')
                                   else if (_selectedRole == 'delivery_partner')
                                     const TextSpan(text: 'Delivery Partner ')
-                                  else if (_selectedRole == 'admin')
-                                    const TextSpan(text: 'Admin ')
                                   else
                                     const TextSpan(text: 'Customer '),
                                   WidgetSpan(

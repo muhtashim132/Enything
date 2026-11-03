@@ -51,14 +51,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isProfileFetched => _isProfileFetched;
   String? get error => _error;
   bool get isAuthenticated => _user != null;
-  String? get currentUserId {
-    if (_user?.id != null) return _user!.id;
-    try {
-      return _supabase.auth.currentUser?.id;
-    } catch (_) {
-      return null;
-    }
-  }
+  String? get currentUserId => _supabase.auth.currentUser?.id;
   String? get pendingPhone => _pendingPhone;
   String? get localSessionId => _localSessionId;
 
@@ -80,8 +73,7 @@ class AuthProvider extends ChangeNotifier {
   StreamSubscription<AuthState>? _authSubscription;
 
   void _init() {
-    try {
-      _authSubscription = _supabase.auth.onAuthStateChange.listen((event) {
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         _fetchProfile();
       } else if (event.event == AuthChangeEvent.signedOut) {
@@ -152,11 +144,8 @@ class AuthProvider extends ChangeNotifier {
         }
       }
     });
-      if (_supabase.auth.currentUser != null) {
-        _fetchProfile();
-      }
-    } catch (_) {
-      // Supabase uninitialized or headless test environment
+    if (_supabase.auth.currentUser != null) {
+      _fetchProfile();
     }
   }
 
@@ -1385,45 +1374,6 @@ class AuthProvider extends ChangeNotifier {
         _error = 'Invalid or expired invite code.';
       }
     }
-    _isLoading = false;
-    safeNotifyListeners();
-    return _error;
-  }
-
-  /// Activates admin access for the currently authenticated user using an invite code or passcode.
-  Future<String?> activateAdminWithInviteCode({
-    required String inviteCode,
-    required String adminPassword,
-    String? fullName,
-  }) async {
-    _isLoading = true;
-    _error = null;
-    safeNotifyListeners();
-
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('User is not authenticated.');
-      }
-
-      await _supabase.rpc('admin_signup_with_invite_code', params: {
-        'p_invite_code': inviteCode.trim(),
-        'p_admin_password': adminPassword.trim(),
-        'p_full_name': fullName?.trim(),
-      });
-
-      // Reload profile with admin as preferred role
-      await _fetchProfile(preferredRole: 'admin');
-
-      _isLoading = false;
-      safeNotifyListeners();
-      return null;
-    } on PostgrestException catch (e) {
-      _error = e.message;
-    } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
-    }
-
     _isLoading = false;
     safeNotifyListeners();
     return _error;

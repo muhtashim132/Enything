@@ -19,7 +19,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
   late AnimationController _bgCtrl;
   late AnimationController _cardCtrl;
   late Animation<double> _bgAnim;
-  late Animation<double> _card1Anim, _card2Anim, _card3Anim, _card4Anim;
+  late Animation<double> _card1Anim, _card2Anim, _card3Anim;
   late Animation<double> _titleFade, _titleSlide;
 
   @override
@@ -41,10 +41,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
         curve: const Interval(0.15, 0.75, curve: Curves.easeOutBack));
     _card3Anim = CurvedAnimation(
         parent: _cardCtrl,
-        curve: const Interval(0.30, 0.85, curve: Curves.easeOutBack));
-    _card4Anim = CurvedAnimation(
-        parent: _cardCtrl,
-        curve: const Interval(0.45, 1.00, curve: Curves.easeOutBack));
+        curve: const Interval(0.30, 1.00, curve: Curves.easeOutBack));
     _titleFade = CurvedAnimation(
         parent: _cardCtrl,
         curve: const Interval(0.0, 0.5, curve: Curves.easeIn));
@@ -126,17 +123,15 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                   animation: _cardCtrl,
                   builder: (_, __) => LayoutBuilder(
                     builder: (context, constraints) {
-                      return Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 540),
-                          child: SingleChildScrollView(
-                            physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 20),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
+                      final bool isSmallScreen = constraints.maxHeight < 700;
+
+                      Widget content = Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (isSmallScreen)
+                            const SizedBox(height: 32)
+                          else
+                            const Spacer(flex: 3),
 
                           // Logo
                           FadeTransition(
@@ -226,7 +221,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             ),
                           ),
 
-                          const SizedBox(height: 24),
+                          if (isSmallScreen)
+                            const SizedBox(height: 40)
+                          else
+                            const Spacer(flex: 4),
 
                           // Heading
                           FadeTransition(
@@ -322,7 +320,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                             ),
                           ),
 
-                          const SizedBox(height: 20),
+                          if (isSmallScreen)
+                            const SizedBox(height: 32)
+                          else
+                            const Spacer(flex: 3),
 
                           // Role cards
                           _AnimatedRoleCard(
@@ -338,7 +339,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                               setState(() => _selectedRole = 'customer');
                             },
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           _AnimatedRoleCard(
                             anim: _card2Anim,
                             icon: '🏪',
@@ -352,7 +353,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                               setState(() => _selectedRole = 'seller');
                             },
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           _AnimatedRoleCard(
                             anim: _card3Anim,
                             icon: '🏍️',
@@ -367,22 +368,11 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                   () => _selectedRole = 'delivery_partner');
                             },
                           ),
-                          const SizedBox(height: 12),
-                          _AnimatedRoleCard(
-                            anim: _card4Anim,
-                            icon: '🛡️',
-                            title: 'Admin / Control Tower',
-                            subtitle:
-                                'Platform control, dispatch radar,\nmerchants & financial governance',
-                            accentColor: const Color(0xFF9775FA),
-                            badge: 'Control',
-                            selected: _selectedRole == 'admin',
-                            onTap: () {
-                              setState(() => _selectedRole = 'admin');
-                            },
-                          ),
 
-                          const SizedBox(height: 24),
+                          if (isSmallScreen)
+                            const SizedBox(height: 40)
+                          else
+                            const Spacer(flex: 4),
 
                           // CTA
                           GestureDetector(
@@ -413,48 +403,55 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                     : [],
                               ),
                               child: Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          _selectedRole != null
-                                              ? 'Continue as ${_roleName(_selectedRole!)}'
-                                              : 'Select a role to continue',
-                                          style: GoogleFonts.outfit(
-                                            color: _selectedRole != null
-                                                ? Colors.black
-                                                : Colors.white38,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                        if (_selectedRole != null) ...[
-                                          const SizedBox(width: 10),
-                                          const Icon(
-                                              Icons.arrow_forward_rounded,
-                                              color: Colors.black,
-                                              size: 20),
-                                        ],
-                                      ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _selectedRole != null
+                                          ? 'Continue as ${_roleName(_selectedRole!)}'
+                                          : 'Select a role to continue',
+                                      style: GoogleFonts.outfit(
+                                        color: _selectedRole != null
+                                            ? Colors.black
+                                            : Colors.white38,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
-                                  ),
+                                    if (_selectedRole != null) ...[
+                                      const SizedBox(width: 10),
+                                      const Icon(Icons.arrow_forward_rounded,
+                                          color: Colors.black, size: 20),
+                                    ],
+                                  ],
                                 ),
                               ),
                             ),
                           ),
 
-                          const SizedBox(height: 16),
+                          if (isSmallScreen)
+                            const SizedBox(height: 32)
+                          else
+                            const Spacer(flex: 3),
                         ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+                      );
+
+                      if (isSmallScreen) {
+                        content = SingleChildScrollView(
+                          child: content,
+                        );
+                      }
+
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 540),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 28),
+                            child: content,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -474,8 +471,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
         return 'Seller';
       case 'delivery_partner':
         return 'Delivery Partner';
-      case 'admin':
-        return 'Admin';
       default:
         return role;
     }
@@ -530,12 +525,12 @@ class _AnimatedRoleCard extends StatelessWidget {
         pressScale: 0.97,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: selected
                 ? accentColor.withValues(alpha: 0.16)
                 : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color:
                   selected ? accentColor : Colors.white.withValues(alpha: 0.10),
@@ -555,13 +550,13 @@ class _AnimatedRoleCard extends StatelessWidget {
               // Icon bubble
               AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                width: 52,
-                height: 52,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   color: selected
                       ? accentColor.withValues(alpha: 0.22)
                       : Colors.white.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: selected
                         ? accentColor.withValues(alpha: 0.45)
@@ -569,9 +564,9 @@ class _AnimatedRoleCard extends StatelessWidget {
                   ),
                 ),
                 child: Center(
-                    child: Text(icon, style: const TextStyle(fontSize: 26))),
+                    child: Text(icon, style: const TextStyle(fontSize: 28))),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               // Text
               Expanded(
                 child: Column(

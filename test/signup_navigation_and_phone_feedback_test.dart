@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
-import 'package:enythingmobilenew/pages/auth/role_selection_page.dart';
-import 'package:enythingmobilenew/providers/auth_provider.dart';
 
 void main() {
   group('Signup Navigation & PopScope Fallback Tests', () {
@@ -123,79 +120,6 @@ void main() {
 
       expect(feedbackShown, isTrue);
       expect(find.text('Phone number is verified via OTP and locked to this account.'), findsOneWidget);
-    });
-
-    testWidgets('RoleSelectionPage renders all 4 roles without RenderBox layout or viewport crashes',
-        (tester) async {
-      tester.view.physicalSize = const Size(414, 896);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(),
-          child: const MaterialApp(
-            home: RoleSelectionPage(),
-          ),
-        ),
-      );
-
-      // Advance frames without timeout from repeating background animation
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 900));
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Choose your role'), findsOneWidget);
-      expect(find.text('Customer'), findsOneWidget);
-      expect(find.text('Seller'), findsOneWidget);
-      expect(find.text('Delivery Partner'), findsOneWidget);
-      expect(find.text('Admin / Control Tower'), findsOneWidget);
-      expect(find.text('Select a role to continue'), findsOneWidget);
-
-      // Select Admin
-      await tester.tap(find.text('Admin / Control Tower'));
-      await tester.pump(const Duration(milliseconds: 250));
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Continue as Admin'), findsOneWidget);
-
-      // Select Seller
-      await tester.tap(find.text('Seller'));
-      await tester.pump(const Duration(milliseconds: 250));
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Continue as Seller'), findsOneWidget);
-    });
-
-    testWidgets('RoleSelectionPage renders flawlessly on small screen without unbounded height exception',
-        (tester) async {
-      tester.view.physicalSize = const Size(360, 640);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(),
-          child: const MaterialApp(
-            home: RoleSelectionPage(),
-          ),
-        ),
-      );
-
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 900));
-
-      // Absolutely zero RenderBox or unbounded height exceptions!
-      expect(tester.takeException(), isNull);
-      expect(find.text('Choose your role'), findsOneWidget);
-
-      // Ensure SingleChildScrollView viewport is scrollable and functional
-      await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -200));
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(tester.takeException(), isNull);
     });
   });
 }
