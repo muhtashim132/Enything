@@ -7,8 +7,7 @@ void main() {
     test('1. OrderItem status lifecycle getters & deserialization', () {
       final activeItem = OrderItem(
         id: 'item-1',
-        orderId: 'order-101',
-        productId: 'prod-1',
+        weightKg: 0.5, productId: 'prod-1',
         productName: 'Fresh Whole Milk 1L',
         price: 60.0,
         quantity: 2,
@@ -17,8 +16,7 @@ void main() {
 
       final declinedItem = OrderItem(
         id: 'item-2',
-        orderId: 'order-101',
-        productId: 'prod-2',
+        weightKg: 0.5, productId: 'prod-2',
         productName: 'Organic Brown Eggs 6-pack',
         price: 90.0,
         quantity: 1,
@@ -29,8 +27,7 @@ void main() {
 
       final cancelledItem = OrderItem(
         id: 'item-3',
-        orderId: 'order-101',
-        productId: 'prod-3',
+        weightKg: 0.5, productId: 'prod-3',
         productName: 'Greek Yogurt 200g',
         price: 50.0,
         quantity: 1,
@@ -65,11 +62,11 @@ void main() {
 
     test('2. OrderModel activeItems vs declinedItems filtering & aggregation', () {
       final items = [
-        OrderItem(id: '1', orderId: 'ord', productId: 'p1', productName: 'Atta 5kg', price: 250.0, quantity: 1, status: 'active'),
-        OrderItem(id: '2', orderId: 'ord', productId: 'p2', productName: 'Basmati Rice 1kg', price: 120.0, quantity: 2, status: 'declined', declinedReason: 'out_of_stock'),
-        OrderItem(id: '3', orderId: 'ord', productId: 'p3', productName: 'Sunflower Oil 1L', price: 160.0, quantity: 1, status: 'active'),
-        OrderItem(id: '4', orderId: 'ord', productId: 'p4', productName: 'Sugar 1kg', price: 50.0, quantity: 1, status: 'declined', declinedReason: 'out_of_stock'),
-        OrderItem(id: '5', orderId: 'ord', productId: 'p5', productName: 'Salt 1kg', price: 25.0, quantity: 2, status: 'active'),
+        OrderItem(id: '1', weightKg: 0.5, productId: 'p1', productName: 'Atta 5kg', price: 250.0, quantity: 1, status: 'active'),
+        OrderItem(id: '2', weightKg: 0.5, productId: 'p2', productName: 'Basmati Rice 1kg', price: 120.0, quantity: 2, status: 'declined', declinedReason: 'out_of_stock'),
+        OrderItem(id: '3', weightKg: 0.5, productId: 'p3', productName: 'Sunflower Oil 1L', price: 160.0, quantity: 1, status: 'active'),
+        OrderItem(id: '4', weightKg: 0.5, productId: 'p4', productName: 'Sugar 1kg', price: 50.0, quantity: 1, status: 'declined', declinedReason: 'out_of_stock'),
+        OrderItem(id: '5', weightKg: 0.5, productId: 'p5', productName: 'Salt 1kg', price: 25.0, quantity: 2, status: 'active'),
       ];
 
       final order = OrderModel(
@@ -79,7 +76,6 @@ void main() {
         status: 'preparing',
         totalAmount: 510.0,
         deliveryCharges: 30.0,
-        grandTotal: 540.0,
         createdAt: DateTime.now(),
         items: items,
       );
@@ -112,12 +108,12 @@ void main() {
 
       // 2 items declined: ₹300 worth of items removed. New subtotal = ₹700
       const newSubtotal = 700.0;
-      final ratio = newSubtotal / oldSubtotal; // 0.70
+      const ratio = newSubtotal / oldSubtotal; // 0.70
 
       final newNonFoodGst = (oldNonFoodGst * ratio).roundToDouble(); // 35.0
       final newCommission = (oldCommission * ratio).roundToDouble(); // 70.0
-      final newTcs = (newSubtotal * 0.005); // 3.50
-      final newTds = (newSubtotal * 0.001); // 0.70
+      const newTcs = (newSubtotal * 0.005); // 3.50
+      const newTds = (newSubtotal * 0.001); // 0.70
       final newSellerPayout = newSubtotal + newNonFoodGst - newCommission - newTcs - newTds;
       final newGrandTotal = newSubtotal + deliveryFee + platformFee + newNonFoodGst;
 
@@ -125,8 +121,8 @@ void main() {
       expect(newNonFoodGst, equals(35.0));
       expect(newCommission, equals(70.0));
       expect(newTcs, equals(3.50));
-      expect(newTds, equals(0.70));
-      expect(newSellerPayout, equals(660.80)); // 700 + 35 - 70 - 3.5 - 0.7
+      expect(newTds, closeTo(0.70, 0.0001));
+      expect(newSellerPayout, closeTo(660.80, 0.0001)); // 700 + 35 - 70 - 3.5 - 0.7
       expect(newGrandTotal, equals(775.0));
 
       final refundAmount = (oldSubtotal + deliveryFee + platformFee + oldNonFoodGst) - newGrandTotal;
@@ -155,20 +151,18 @@ void main() {
     });
 
     test('5. OrderGroup terminal fallback and 100% prepaid compliance', () {
-      final orderGroup = OrderGroup(
-        cartGroupId: 'cart-1',
-        orders: [
+      final orderGroup = OrderGroup('cart-1', [
           OrderModel(
             id: 'ord-1',
             customerId: 'c1',
             status: 'preparing',
             totalAmount: 200.0,
-            grandTotal: 230.0,
+            deliveryCharges: 30.0,
             createdAt: DateTime.now(),
             paymentStatus: 'captured',
             items: [
-              OrderItem(id: 'i1', orderId: 'ord-1', productId: 'p1', productName: 'Bread', price: 40.0, quantity: 1, status: 'active'),
-              OrderItem(id: 'i2', orderId: 'ord-1', productId: 'p2', productName: 'Butter', price: 60.0, quantity: 1, status: 'declined'),
+              OrderItem(id: 'i1', weightKg: 0.5, productId: 'p1', productName: 'Bread', price: 40.0, quantity: 1, status: 'active'),
+              OrderItem(id: 'i2', weightKg: 0.5, productId: 'p2', productName: 'Butter', price: 60.0, quantity: 1, status: 'declined'),
             ],
           ),
         ],
@@ -189,11 +183,11 @@ void main() {
     test('6. Mixed Multi-Shop Cart Group: One rejected shop + One shop with item decline', () {
       // Shop A (Supermarket): 5 items ordered, 1 item declined (4 active)
       final shopAItems = [
-        OrderItem(id: 'a1', orderId: 'ord-A', productId: 'pa1', productName: 'Milk 1L', price: 60.0, quantity: 1, status: 'active'),
-        OrderItem(id: 'a2', orderId: 'ord-A', productId: 'pa2', productName: 'Cereal 500g', price: 150.0, quantity: 1, status: 'declined'),
-        OrderItem(id: 'a3', orderId: 'ord-A', productId: 'pa3', productName: 'Sugar 1kg', price: 50.0, quantity: 1, status: 'active'),
-        OrderItem(id: 'a4', orderId: 'ord-A', productId: 'pa4', productName: 'Tea 250g', price: 120.0, quantity: 1, status: 'active'),
-        OrderItem(id: 'a5', orderId: 'ord-A', productId: 'pa5', productName: 'Biscuits', price: 40.0, quantity: 1, status: 'active'),
+        OrderItem(id: 'a1', weightKg: 0.5, productId: 'pa1', productName: 'Milk 1L', price: 60.0, quantity: 1, status: 'active'),
+        OrderItem(id: 'a2', weightKg: 0.5, productId: 'pa2', productName: 'Cereal 500g', price: 150.0, quantity: 1, status: 'declined'),
+        OrderItem(id: 'a3', weightKg: 0.5, productId: 'pa3', productName: 'Sugar 1kg', price: 50.0, quantity: 1, status: 'active'),
+        OrderItem(id: 'a4', weightKg: 0.5, productId: 'pa4', productName: 'Tea 250g', price: 120.0, quantity: 1, status: 'active'),
+        OrderItem(id: 'a5', weightKg: 0.5, productId: 'pa5', productName: 'Biscuits', price: 40.0, quantity: 1, status: 'active'),
       ];
 
       final orderA = OrderModel(
@@ -201,15 +195,15 @@ void main() {
         customerId: 'cust-1',
         shopId: 'shop-A',
         status: 'preparing',
-        totalAmount: 270.0, // 60 + 50 + 120 + 40
-        grandTotal: 300.0,
+        totalAmount: 270.0,
+        deliveryCharges: 30.0,
         createdAt: DateTime.now(),
         items: shopAItems,
       );
 
       // Shop B (Bakery): Completely rejected by merchant
       final shopBItems = [
-        OrderItem(id: 'b1', orderId: 'ord-B', productId: 'pb1', productName: 'Croissant 2-pack', price: 100.0, quantity: 1, status: 'active'),
+        OrderItem(id: 'b1', weightKg: 0.5, productId: 'pb1', productName: 'Croissant 2-pack', price: 100.0, quantity: 1, status: 'active'),
       ];
 
       final orderB = OrderModel(
@@ -218,14 +212,12 @@ void main() {
         shopId: 'shop-B',
         status: 'seller_rejected',
         totalAmount: 100.0,
-        grandTotal: 125.0,
+        deliveryCharges: 25.0,
         createdAt: DateTime.now(),
         items: shopBItems,
       );
 
-      final mixedGroup = OrderGroup(
-        cartGroupId: 'cart-mixed',
-        orders: [orderA, orderB],
+      final mixedGroup = OrderGroup('cart-mixed', [orderA, orderB],
       );
 
       // Only Shop A is active

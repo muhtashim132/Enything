@@ -1379,6 +1379,45 @@ class AuthProvider extends ChangeNotifier {
     return _error;
   }
 
+  /// Activates admin access for the currently authenticated user using an invite code or passcode.
+  Future<String?> activateAdminWithInviteCode({
+    required String inviteCode,
+    required String adminPassword,
+    String? fullName,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    safeNotifyListeners();
+
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User is not authenticated.');
+      }
+
+      await _supabase.rpc('admin_signup_with_invite_code', params: {
+        'p_invite_code': inviteCode.trim(),
+        'p_admin_password': adminPassword.trim(),
+        'p_full_name': fullName?.trim(),
+      });
+
+      // Reload profile with admin as preferred role
+      await _fetchProfile(preferredRole: 'admin');
+
+      _isLoading = false;
+      safeNotifyListeners();
+      return null;
+    } on PostgrestException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+    }
+
+    _isLoading = false;
+    safeNotifyListeners();
+    return _error;
+  }
+
   Future<String?> signIn(
       {required String email, required String password}) async {
     _isLoading = true;

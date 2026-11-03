@@ -94,6 +94,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       await prefs.setString('cached_signup_role', roleArg);
     }
 
+    if (roleArg == 'admin' && mounted) {
+      Navigator.pushReplacementNamed(context, AppRoutes.acceptAdminInvite);
+      return;
+    }
+
     if (roleArg != null && mounted) {
       setState(() {
         switch (roleArg) {

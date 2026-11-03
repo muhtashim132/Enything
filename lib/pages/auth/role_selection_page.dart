@@ -19,7 +19,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
   late AnimationController _bgCtrl;
   late AnimationController _cardCtrl;
   late Animation<double> _bgAnim;
-  late Animation<double> _card1Anim, _card2Anim, _card3Anim;
+  late Animation<double> _card1Anim, _card2Anim, _card3Anim, _card4Anim;
   late Animation<double> _titleFade, _titleSlide;
 
   @override
@@ -41,7 +41,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
         curve: const Interval(0.15, 0.75, curve: Curves.easeOutBack));
     _card3Anim = CurvedAnimation(
         parent: _cardCtrl,
-        curve: const Interval(0.30, 1.00, curve: Curves.easeOutBack));
+        curve: const Interval(0.30, 0.85, curve: Curves.easeOutBack));
+    _card4Anim = CurvedAnimation(
+        parent: _cardCtrl,
+        curve: const Interval(0.45, 1.00, curve: Curves.easeOutBack));
     _titleFade = CurvedAnimation(
         parent: _cardCtrl,
         curve: const Interval(0.0, 0.5, curve: Curves.easeIn));
@@ -368,6 +371,20 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                                   () => _selectedRole = 'delivery_partner');
                             },
                           ),
+                          const SizedBox(height: 16),
+                          _AnimatedRoleCard(
+                            anim: _card4Anim,
+                            icon: '🛡️',
+                            title: 'Admin / Control Tower',
+                            subtitle:
+                                'Platform control, dispatch radar,\nmerchants & financial governance',
+                            accentColor: const Color(0xFF9775FA),
+                            badge: 'Control',
+                            selected: _selectedRole == 'admin',
+                            onTap: () {
+                              setState(() => _selectedRole = 'admin');
+                            },
+                          ),
 
                           if (isSmallScreen)
                             const SizedBox(height: 40)
@@ -436,11 +453,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
                         ],
                       );
 
-                      if (isSmallScreen) {
-                        content = SingleChildScrollView(
-                          child: content,
-                        );
-                      }
+                      content = SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: content,
+                      );
 
                       return Center(
                         child: ConstrainedBox(
@@ -471,6 +487,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
         return 'Seller';
       case 'delivery_partner':
         return 'Delivery Partner';
+      case 'admin':
+        return 'Admin';
       default:
         return role;
     }
