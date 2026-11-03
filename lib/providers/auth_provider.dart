@@ -51,7 +51,14 @@ class AuthProvider extends ChangeNotifier {
   bool get isProfileFetched => _isProfileFetched;
   String? get error => _error;
   bool get isAuthenticated => _user != null;
-  String? get currentUserId => _supabase.auth.currentUser?.id;
+  String? get currentUserId {
+    if (_user?.id != null) return _user!.id;
+    try {
+      return _supabase.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
   String? get pendingPhone => _pendingPhone;
   String? get localSessionId => _localSessionId;
 
@@ -73,7 +80,8 @@ class AuthProvider extends ChangeNotifier {
   StreamSubscription<AuthState>? _authSubscription;
 
   void _init() {
-    _authSubscription = _supabase.auth.onAuthStateChange.listen((event) {
+    try {
+      _authSubscription = _supabase.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         _fetchProfile();
       } else if (event.event == AuthChangeEvent.signedOut) {
@@ -144,8 +152,11 @@ class AuthProvider extends ChangeNotifier {
         }
       }
     });
-    if (_supabase.auth.currentUser != null) {
-      _fetchProfile();
+      if (_supabase.auth.currentUser != null) {
+        _fetchProfile();
+      }
+    } catch (_) {
+      // Supabase uninitialized or headless test environment
     }
   }
 
