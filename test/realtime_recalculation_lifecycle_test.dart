@@ -119,16 +119,16 @@ void main() {
       );
 
       cart.addItem(p1, shop1);
-      // 1 shop in cart: platform fee = 20 flat, surcharge = 0
+      // 1 shop in cart: platform fee = 2.0 flat, surcharge = 0
       expect(cart.shops.length, 1);
-      expect(cart.platformFee, 20.0);
+      expect(cart.platformFee, 2.0);
       expect(cart.multiShopSurcharge, 0.0);
       expect(cart.totalDeliveryCharges(1.0), (20.0 * 1.18));
 
       cart.addItem(p2, shop2);
-      // 2 shops in cart: platform fee remains 20 flat, surcharge = 20
+      // 2 shops in cart: platform fee remains 2.0 flat, surcharge = 20
       expect(cart.shops.length, 2);
-      expect(cart.platformFee, 20.0);
+      expect(cart.platformFee, 2.0);
       expect(cart.multiShopSurcharge, 20.0);
       // Total delivery: (20 base + 20 surcharge) * 1.18 = 47.20
       expect(cart.totalDeliveryCharges(1.0), (40.0 * 1.18));

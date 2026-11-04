@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enything 100x Realtime Multi-Shop Simulator · Bandipora</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* Custom Map Marker & Animation Styles */
+    .pulse-beacon {
+      position: relative;
+    }
+    .pulse-beacon::after {
+      content: '';
+      position: absolute;
+      top: -12px;
+      left: -12px;
+      right: -12px;
+      bottom: -12px;
+      border-radius: 50%;
+      background: rgba(59, 130, 246, 0.45);
+      animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      z-index: -1;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.6); opacity: 0.95; }
+      100% { transform: scale(2.3); opacity: 0; }
+    }
+    .rider-marker {
+      transition: transform 0.12s linear;
+    }
+    /* Headlight cone projection */
+    .headlight-cone {
+      position: absolute;
+      top: -30px;
+      left: 5px;
+      width: 26px;
+      height: 35px;
+      background: linear-gradient(to top, rgba(254, 240, 138, 0.55), rgba(254, 240, 138, 0));
+      clip-path: polygon(30% 100%, 70% 100%, 100% 0%, 0% 0%);
+      pointer-events: none;
+      z-index: -1;
+    }
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+    /* Phone Mockup Frame */
+    .phone-frame {
+      border: 8px solid #1e293b;
+      border-radius: 36px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-hidden select-none">
+
+  <!-- Top Navigation & Global HUD -->
+  <header class="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex items-center justify-between z-20 shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 font-bold text-white text-lg">
+        🛵
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-sm font-bold tracking-tight text-white">Enything 100x Realtime Multi-Shop Simulator</h1>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Bandipora, J&K
+          </span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            Zero COD · 100% Prepaid
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          3 Shops (1km & 2km Apart) · 1 Customer · Live Telemetry Stream · Multi-Actor Synchronization
+        </p>
+      </div>
+    </div>
+
+    <!-- Mode Selector: Map vs Quad Devices -->
+    <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+      <button id="tab-map" onclick="switchView('map')" class="flex items-center space-x-1.5 px-3 py-1 rounded-lg font-semibold bg-amber-500 text-slate-950 transition">
+        <i data-lucide="map" class="w-3.5 h-3.5"></i>
+        <span>Operations Radar</span>
+      </button>
+      <button id="tab-devices" onclick="switchView('devices')" class="flex items-center space-x-1.5 px-3 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition">
+        <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+        <span>Multi-Device Quad View</span>
+      </button>
+    </div>
+
+    <!-- Live Telemetry Pill -->
+    <div class="hidden lg:flex items-center space-x-3 bg-slate-950 px-3.5 py-1.5 rounded-xl border border-slate-800 text-xs">
+      <div>
+        <span class="text-slate-500 block text-[9px] font-bold uppercase">Rider GPS</span>
+        <span id="hud-coords" class="font-mono text-amber-400 font-semibold text-[11px]">34.42050, 74.63800</span>
+      </div>
+      <div class="w-px h-5 bg-slate-800"></div>
+      <div>
+        <span class="text-slate-500 block text-[9px] font-bold uppercase">Speed & Bearing</span>
+        <span id="hud-speed" class="font-mono text-cyan-400 font-semibold text-[11px]">0 km/h · 0°</span>
+      </div>
+      <div class="w-px h-5 bg-slate-800"></div>
+      <div>
+        <span class="text-slate-500 block text-[9px] font-bold uppercase">Realtime WS</span>
+        <div class="flex items-center space-x-1">
+          <span id="ws-indicator" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="ws-label" class="text-slate-300 text-[11px]">Connected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Controls -->
+    <div class="flex items-center space-x-2">
+      <!-- Speed selector -->
+      <div class="flex items-center bg-slate-800/80 rounded-lg p-0.5 border border-slate-700 text-xs">
+        <button onclick="setSpeed(1)" class="speed-btn px-2 py-0.5 rounded font-bold bg-amber-500 text-slate-950" data-speed="1">1x</button>
+        <button onclick="setSpeed(2)" class="speed-btn px-2 py-0.5 rounded font-medium text-slate-300 hover:text-white" data-speed="2">2x</button>
+        <button onclick="setSpeed(5)" class="speed-btn px-2 py-0.5 rounded font-medium text-slate-300 hover:text-white" data-speed="5">5x</button>
+        <button onclick="setSpeed(10)" class="speed-btn px-2 py-0.5 rounded font-medium text-slate-300 hover:text-white" data-speed="10">10x</button>
+      </div>
+
+      <!-- Play/Pause Button -->
+      <button id="btn-toggle-play" onclick="toggleSimulation()" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md shadow-emerald-600/20 transition">
+        <i data-lucide="play" class="w-3.5 h-3.5"></i>
+        <span id="btn-play-text">Start Simulation</span>
+      </button>
+
+      <!-- Step Forward -->
+      <button onclick="stepSimulation()" class="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition" title="Step next tick">
+        <i data-lucide="step-forward" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <!-- Mute/Sound Toggle -->
+      <button id="btn-sound" onclick="toggleSound()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition" title="Toggle Audio Chimes">
+        <i data-lucide="volume-2" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Purge / Cleanup -->
+      <button onclick="purgeSimulationData()" class="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 text-rose-300 text-xs border border-rose-800/60 transition" title="Clean all test orders (Zero Test Leftovers Rule)">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        <span>Purge</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- VIEW 1: OPERATIONS RADAR & MAP (DEFAULT) -->
+  <main id="view-map" class="flex-1 flex overflow-hidden">
+    
+    <!-- LEFT PANEL: Customer Tracker & 3 Sellers Controls -->
+    <aside class="w-96 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 overflow-y-auto">
+      
+      <!-- Section 1: Customer Order Status & Stepper -->
+      <div class="p-4 border-b border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Customer Live Tracker</h2>
+          </div>
+          <span id="customer-status-badge" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400">
+            Awaiting Order
+          </span>
+        </div>
+
+        <!-- Customer Destination Card -->
+        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 mb-3">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-xs font-bold text-white flex items-center space-x-1">
+                <span>🏠 Customer Drop-off</span>
+              </div>
+              <div class="text-[11px] text-slate-400">Nowpora Residence, Bandipora</div>
+              <div class="text-[10px] font-mono text-slate-500 mt-0.5">34.4120° N, 74.6485° E</div>
+            </div>
+            <div class="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[10px] font-bold">
+              Prepaid (₹0 COD)
+            </div>
+          </div>
+          <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+            <span class="text-slate-400">Estimated Arrival:</span>
+            <span id="customer-eta" class="font-bold text-amber-400 font-mono">18 mins</span>
+          </div>
+        </div>
+
+        <!-- Live Stepper -->
+        <div class="space-y-1.5 text-xs">
+          <div id="step-placed" class="flex items-center space-x-2 text-slate-500 transition-colors">
+            <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-bold">1</div>
+            <span class="font-medium text-[11px]">Order Placed & Payment Captured</span>
+          </div>
+          <div id="step-sellers" class="flex items-center space-x-2 text-slate-500 transition-colors">
+            <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-bold">2</div>
+            <span class="font-medium text-[11px]">3 Shops Confirmed & Baking</span>
+          </div>
+          <div id="step-rider" class="flex items-center space-x-2 text-slate-500 transition-colors">
+            <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-bold">3</div>
+            <span class="font-medium text-[11px]">Rider Collecting from 3 Stores</span>
+          </div>
+          <div id="step-out" class="flex items-center space-x-2 text-slate-500 transition-colors">
+            <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-bold">4</div>
+            <span class="font-medium text-[11px]">Out for Delivery to Nowpora</span>
+          </div>
+          <div id="step-delivered" class="flex items-center space-x-2 text-slate-500 transition-colors">
+            <div class="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[9px] font-bold">5</div>
+            <span class="font-medium text-[11px]">Delivered & Verified</span>
+          </div>
+        </div>
+
+        <!-- Create Order Button -->
+        <div class="mt-3 pt-3 border-t border-slate-800">
+          <button id="btn-create-order" onclick="createMultiShopOrder()" class="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-orange-500/10 transition flex items-center justify-center space-x-1.5">
+            <i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i>
+            <span>Place Real 3-Shop Order</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 2: 3 Shop Acceptance Panels -->
+      <div class="p-4 border-b border-slate-800">
+        <div class="flex items-center justify-between mb-2.5">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">3 Shops Fulfillment</h2>
+          </div>
+          <span class="text-[10px] text-slate-500 font-mono">cart_group_id linked</span>
+        </div>
+
+        <div class="space-y-2.5">
+          
+          <!-- Shop 1: Bakery -->
+          <div id="shop1-card" class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 transition">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="text-xs font-bold text-white flex items-center space-x-1">
+                  <span>🏪 1. Central Bakery & Cafe</span>
+                </div>
+                <div class="text-[11px] text-amber-400/90 font-medium">Gulshan Chowk, Bandipora</div>
+                <div class="text-[10px] text-slate-400">Kashmiri Lavasa Bread × 2, Pastry × 2</div>
+              </div>
+              <span id="shop1-status" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400">
+                Pending
+              </span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[10px] text-slate-500 font-mono">34.4228, 74.6365</span>
+              <button id="btn-shop1-accept" onclick="acceptShopOrder(1)" class="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-xs font-medium transition">
+                Accept & Bake
+              </button>
+            </div>
+          </div>
+
+          <!-- Shop 2: Grocery (1km away) -->
+          <div id="shop2-card" class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 transition">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="text-xs font-bold text-white flex items-center space-x-1">
+                  <span>🏪 2. Kaloosa Fresh Mart</span>
+                </div>
+                <div class="text-[11px] text-emerald-400/90 font-medium">Kaloosa Sopore Rd (~1.05 km)</div>
+                <div class="text-[10px] text-slate-400">Fresh Cow Milk 1L, Kashmir Honey 500g</div>
+              </div>
+              <span id="shop2-status" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400">
+                Pending
+              </span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[10px] text-slate-500 font-mono">34.4148, 74.6305</span>
+              <div class="flex space-x-1">
+                <button id="btn-shop2-decline" onclick="triggerPartialRejectionShop2()" class="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-[11px] font-medium transition" title="Decline out-of-stock items (Tests Sibling Survival Rule)">
+                  Decline
+                </button>
+                <button id="btn-shop2-accept" onclick="acceptShopOrder(2)" class="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-xs font-medium transition">
+                  Accept & Pack
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shop 3: Chemist (2km away) -->
+          <div id="shop3-card" class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 transition">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="text-xs font-bold text-white flex items-center space-x-1">
+                  <span>🏪 3. Plan Valley Chemist</span>
+                </div>
+                <div class="text-[11px] text-cyan-400/90 font-medium">Plan Bandipora (~2.20 km from Shop 2)</div>
+                <div class="text-[10px] text-slate-400">Paracetamol 650mg, Sterile Bandages</div>
+              </div>
+              <span id="shop3-status" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400">
+                Pending
+              </span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[10px] text-slate-500 font-mono">34.4295, 74.6465</span>
+              <button id="btn-shop3-accept" onclick="acceptShopOrder(3)" class="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded text-xs font-medium transition">
+                Accept & Pack
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Section 3: 100x Edge-Case Stress Lab -->
+      <div class="p-4 bg-slate-950/70 border-b border-slate-800">
+        <div class="flex items-center space-x-2 mb-2">
+          <i data-lucide="flask-conical" class="w-3.5 h-3.5 text-amber-400"></i>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">100x Edge-Case Stress Lab</h2>
+        </div>
+        <p class="text-[10px] text-slate-400 mb-2.5">
+          Trigger production edge-cases with 1-tap to verify system immunity:
+        </p>
+        <div class="grid grid-cols-2 gap-2 text-[11px]">
+          <button onclick="triggerPartialRejectionShop2()" class="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-lg text-left text-rose-300 transition">
+            <span class="font-bold block">1. Sibling Survival</span>
+            <span class="text-[9px] text-slate-400">Decline Shop 2 items</span>
+          </button>
+          <button onclick="triggerGpsDeadzone()" class="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-lg text-left text-amber-300 transition">
+            <span class="font-bold block">2. GPS Deadzone</span>
+            <span class="text-[9px] text-slate-400">10s signal dropout</span>
+          </button>
+          <button onclick="triggerRiderReassignment()" class="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-lg text-left text-purple-300 transition">
+            <span class="font-bold block">3. Rider Drop</span>
+            <span class="text-[9px] text-slate-400">Reassign 2nd courier</span>
+          </button>
+          <button onclick="triggerKitchenWaitAlert()" class="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-lg text-left text-cyan-300 transition">
+            <span class="font-bold block">4. Kitchen Delay</span>
+            <span class="text-[9px] text-slate-400">Wait-time immunity</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 4: Rider Cockpit -->
+      <div class="p-4 bg-slate-950/90 flex-1">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Rider Terminal (Kishan)</h2>
+          </div>
+          <span id="rider-status-badge" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400">
+            At Depot
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-xs mb-2">
+          <span class="text-slate-400">Current Task:</span>
+          <span id="rider-task-desc" class="font-semibold text-slate-200">Waiting for assignment</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="btn-rider-accept" onclick="riderAcceptAssignment()" class="py-1.5 px-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold transition disabled:opacity-50">
+            Accept Route
+          </button>
+          <button id="btn-rider-action" onclick="riderPerformAction()" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg font-semibold transition">
+            Arrive at Stop
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER PANEL: Full Interactive Map Canvas -->
+    <section class="flex-1 relative flex flex-col">
+      <div id="map" class="w-full h-full bg-slate-900"></div>
+
+      <!-- Turn-by-Turn Navigation HUD Banner -->
+      <div id="nav-banner" class="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-700 shadow-2xl flex items-center space-x-3 pointer-events-auto max-w-lg">
+        <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-lg">
+          <i id="nav-turn-icon" data-lucide="navigation-2" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <div id="nav-instruction" class="text-xs font-bold text-white">Head north from Depot towards Shop 1 (Gulshan Chowk)</div>
+          <div class="flex items-center space-x-2 text-[10px] text-slate-400 font-mono mt-0.5">
+            <span id="nav-distance-leg" class="text-emerald-400 font-bold">290 meters</span>
+            <span>·</span>
+            <span id="nav-eta-leg">ETA: 1 min</span>
+            <span>·</span>
+            <span id="nav-street">Sopore-Bandipora Trunk Rd</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating Map Legend -->
+      <div class="absolute top-4 left-4 z-[1000] bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-xl text-xs space-y-2 pointer-events-auto">
+        <div class="font-bold text-white mb-1 flex items-center space-x-1.5">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>Bandipora Geospatial Graph</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+          <span class="text-slate-300">Shop 1 (Central Bakery)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+          <span class="text-slate-300">Shop 2 (Kaloosa Mart ~1.05 km)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-3 h-3 rounded-full bg-cyan-500"></span>
+          <span class="text-slate-300">Shop 3 (Plan Chemist ~2.20 km)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+          <span class="text-slate-300">Customer (Nowpora Residence)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+          <span class="text-slate-300">Live Rider (Kishan Nadda)</span>
+        </div>
+      </div>
+
+      <!-- Floating Distance & Leg Progress Card -->
+      <div class="absolute bottom-4 left-4 z-[1000] bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800 shadow-xl text-xs flex items-center space-x-4 pointer-events-auto">
+        <div>
+          <span class="text-slate-400 block text-[9px] font-bold uppercase">Total Route</span>
+          <span id="route-total-km" class="font-bold text-white font-mono text-sm">~6.8 km</span>
+        </div>
+        <div class="w-px h-6 bg-slate-800"></div>
+        <div>
+          <span class="text-slate-400 block text-[9px] font-bold uppercase">Remaining</span>
+          <span id="route-remain-km" class="font-bold text-amber-400 font-mono text-sm">6.8 km</span>
+        </div>
+        <div class="w-px h-6 bg-slate-800"></div>
+        <div>
+          <span class="text-slate-400 block text-[9px] font-bold uppercase">Next Stop Target</span>
+          <span id="route-next-stop" class="font-semibold text-emerald-400 text-xs">Shop 1 (Central Bakery)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Push Notifications & Live Diagnostics -->
+    <aside class="w-96 bg-slate-900/95 border-l border-slate-800 flex flex-col shrink-0 overflow-hidden">
+      
+      <!-- Notifications Header -->
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="bell" class="w-4 h-4 text-amber-400"></i>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Realtime Push Notifications</h2>
+        </div>
+        <button onclick="clearNotifications()" class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+      </div>
+
+      <!-- Notifications Feed -->
+      <div id="notifications-feed" class="flex-1 p-3 space-y-2.5 overflow-y-auto">
+        <div class="text-center py-8 text-slate-500 text-xs">
+          <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
+          <p>No notifications yet.</p>
+          <p class="text-[10px] text-slate-600 mt-0.5">Click "Place Real 3-Shop Order" to begin.</p>
+        </div>
+      </div>
+
+      <!-- Live Diagnostics & Database Ticker -->
+      <div class="h-64 border-t border-slate-800 bg-slate-950 p-3 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center space-x-1.5">
+            <i data-lucide="terminal" class="w-3.5 h-3.5 text-cyan-400"></i>
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Database & Edge Diagnostics</span>
+          </div>
+          <span id="sync-status" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        </div>
+        
+        <div id="diagnostics-log" class="flex-1 overflow-y-auto font-mono text-[10px] space-y-1 text-slate-400">
+          <div class="text-slate-500">[System] Initialized Bandipora Geospatial Engine.</div>
+          <div class="text-slate-500">[System] 100% Prepaid Model Verified (₹0 Cash Collection).</div>
+          <div class="text-slate-500">[System] Payment bypass ready for multi-shop test.</div>
+          <div class="text-emerald-400/80">[PostGIS] Geographic bounds validated [-90..90, -180..180].</div>
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- VIEW 2: MULTI-DEVICE QUAD VIEW (CUSTOMER + 3 SELLERS + RIDER MOCKUPS) -->
+  <main id="view-devices" class="flex-1 hidden bg-slate-950 p-6 overflow-y-auto">
+    <div class="max-w-7xl mx-auto space-y-6">
+      
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">Multi-Device Quad Perspective (Simultaneous Realtime Sync)</h2>
+          <p class="text-xs text-slate-400">Observe all 5 actors simultaneously responding to database mutations in Bandipora.</p>
+        </div>
+        <div class="text-xs font-mono text-amber-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
+          Sync Status: 5/5 Devices Active
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- DEVICE 1: CUSTOMER IPHONE 16 -->
+        <div class="bg-slate-900 rounded-3xl p-4 border border-slate-800 shadow-2xl flex flex-col h-[520px]">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3 text-xs">
+            <div class="flex items-center space-x-1.5 font-bold text-white">
+              <i data-lucide="smartphone" class="w-4 h-4 text-cyan-400"></i>
+              <span>Customer App (Nowpora)</span>
+            </div>
+            <span class="text-[10px] text-slate-400">iOS 18 · 5G</span>
+          </div>
+
+          <div class="flex-1 flex flex-col justify-between space-y-3">
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Order #ENY-BND-771</span>
+                <span id="quad-cust-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400">
+                  Confirmed
+                </span>
+              </div>
+              <div class="text-sm font-bold text-white mt-1">Estimated Arrival in 18 mins</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">3 Stores: Central Bakery, Kaloosa Mart, Plan Chemist</div>
+            </div>
+
+            <!-- Mini Map Preview -->
+            <div class="flex-1 bg-slate-950 rounded-2xl border border-slate-800 p-3 relative overflow-hidden flex flex-col justify-center items-center text-center">
+              <div class="w-12 h-12 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-2xl mb-2">
+                🛵
+              </div>
+              <div id="quad-rider-loc-text" class="text-xs font-bold text-white">Rider at Bus Stand Depot</div>
+              <div id="quad-rider-status-text" class="text-[11px] text-slate-400 mt-0.5">En route to Shop 1 (Central Bakery)</div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button class="py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold hover:bg-slate-700">Call Rider</button>
+              <button class="py-2 rounded-xl bg-cyan-600 text-white font-bold hover:bg-cyan-500">Live Support</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEVICE 2: MERCHANTS POS TABLET (SHOP 1 & 2 & 3) -->
+        <div class="bg-slate-900 rounded-3xl p-4 border border-slate-800 shadow-2xl flex flex-col h-[520px]">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3 text-xs">
+            <div class="flex items-center space-x-1.5 font-bold text-white">
+              <i data-lucide="tablet" class="w-4 h-4 text-amber-400"></i>
+              <span>Merchant Kitchen POS</span>
+            </div>
+            <span class="text-[10px] text-slate-400">Android POS · Wi-Fi</span>
+          </div>
+
+          <div class="flex-1 space-y-3 overflow-y-auto">
+            <!-- Shop 1 POS Card -->
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs">
+              <div class="flex items-center justify-between font-bold text-white">
+                <span>Shop 1: Central Bakery</span>
+                <span id="quad-shop1-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">Pending</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-1">2 × Lavasa Bread, 2 × Pastry</div>
+            </div>
+
+            <!-- Shop 2 POS Card -->
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs">
+              <div class="flex items-center justify-between font-bold text-white">
+                <span>Shop 2: Kaloosa Mart</span>
+                <span id="quad-shop2-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">Pending</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-1">1L Cow Milk, 500g Honey</div>
+            </div>
+
+            <!-- Shop 3 POS Card -->
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs">
+              <div class="flex items-center justify-between font-bold text-white">
+                <span>Shop 3: Plan Chemist</span>
+                <span id="quad-shop3-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">Pending</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-1">Paracetamol 650mg, Bandages</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEVICE 3: RIDER RUGGED HANDHELD -->
+        <div class="bg-slate-900 rounded-3xl p-4 border border-slate-800 shadow-2xl flex flex-col h-[520px]">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3 text-xs">
+            <div class="flex items-center space-x-1.5 font-bold text-white">
+              <i data-lucide="navigation" class="w-4 h-4 text-purple-400"></i>
+              <span>Rider Handheld (Kishan)</span>
+            </div>
+            <span class="text-[10px] text-slate-400">GPS Lock · 4G LTE</span>
+          </div>
+
+          <div class="flex-1 flex flex-col justify-between space-y-3">
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs">
+              <div class="text-slate-400 text-[10px] uppercase font-bold">Current Target Stop</div>
+              <div id="quad-rider-target-title" class="text-sm font-bold text-white mt-0.5">Shop 1 (Central Bakery)</div>
+              <div id="quad-rider-target-addr" class="text-[11px] text-amber-400 mt-0.5">Gulshan Chowk, Bandipora</div>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs space-y-2">
+              <div class="flex items-center justify-between text-slate-400">
+                <span>Earnings for Delivery:</span>
+                <span class="font-bold text-emerald-400 font-mono">₹100.00</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-400">
+                <span>Cash to Collect at Door:</span>
+                <span class="font-bold text-slate-200 font-mono">₹0.00 (Prepaid)</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-400">
+                <span>Stops Remaining:</span>
+                <span id="quad-rider-stops-count" class="font-bold text-white font-mono">4 stops</span>
+              </div>
+            </div>
+
+            <!-- Rider Confirmation Button -->
+            <button onclick="simulationTick()" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/20 transition">
+              Step / Advance Waypoint
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. CONFIGURATION & BANDIPORA GEOGRAPHIC DATA
+    // ─────────────────────────────────────────────────────────────────────────
+    const BANDIPORA_STOPS = {
+      depot: {
+        id: 'depot',
+        name: 'Rider Depot (Bus Stand Bandipora)',
+        lat: 34.4205,
+        lng: 74.6380,
+        role: 'depot'
+      },
+      shop1: {
+        id: 'shop1',
+        name: '1. Bandipora Central Bakery',
+        subtitle: 'Gulshan Chowk, Bandipora',
+        lat: 34.4228,
+        lng: 74.6365,
+        role: 'seller',
+        items: ['Kashmiri Lavasa Bread × 2', 'Bakers Pastry × 2']
+      },
+      shop2: {
+        id: 'shop2',
+        name: '2. Kaloosa Fresh Mart',
+        subtitle: 'Kaloosa Sopore Rd (~1.05 km from Shop 1)',
+        lat: 34.4148,
+        lng: 74.6305,
+        role: 'seller',
+        items: ['Fresh Cow Milk 1L', 'Kashmir Honey 500g']
+      },
+      shop3: {
+        id: 'shop3',
+        name: '3. Plan Valley Chemist',
+        subtitle: 'Plan Bandipora (~2.20 km from Shop 2)',
+        lat: 34.4295,
+        lng: 74.6465,
+        role: 'seller',
+        items: ['Paracetamol 650mg', 'Sterile Bandages']
+      },
+      customer: {
+        id: 'customer',
+        name: 'Customer Residence (Nowpora)',
+        subtitle: 'Nowpora, Bandipora',
+        lat: 34.4120,
+        lng: 74.6485,
+        role: 'customer'
+      }
+    };
+
+    let supabaseClient = null;
+    let realtimeChannel = null;
+    let config = {
+      SUPABASE_URL: 'https://hvtujaatwhyxielrlztr.supabase.co',
+      SUPABASE_ANON_KEY: 'sb_publishable_NnOTr7QGr-oQpg4EZ4GNVg_o25JykPs'
+    };
+
+    // State Variables
+    let currentCartGroupId = null;
+    let subOrderIds = { shop1: null, shop2: null, shop3: null };
+    let simSpeed = 1;
+    let isPlaying = false;
+    let soundEnabled = true;
+    let simInterval = null;
+    let currentRoutePoints = [];
+    let currentPointIndex = 0;
+    let currentLegIndex = 0; // 0: Depot->Shop1, 1: Shop1->Shop2, 2: Shop2->Shop3, 3: Shop3->Customer
+    let currentRiderPos = [BANDIPORA_STOPS.depot.lat, BANDIPORA_STOPS.depot.lng];
+    let currentBearing = 0;
+    let isGpsBlackout = false;
+
+    // Map & Layers
+    let map = null;
+    let riderMarker = null;
+    let routeLayers = [];
+    let breadcrumbPolyline = null;
+    let breadcrumbPoints = [];
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2. AUDIO SYNTHESIZER (WEB AUDIO API)
+    // ─────────────────────────────────────────────────────────────────────────
+    const AudioEngine = {
+      ctx: null,
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+      },
+      playChime(type = 'notification') {
+        if (!soundEnabled) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          if (this.ctx.state === 'suspended') this.ctx.resume();
+
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          const now = this.ctx.currentTime;
+          if (type === 'notification') {
+            osc.frequency.setValueAtTime(587.33, now); // D5
+            osc.frequency.exponentialRampToValueAtTime(880.00, now + 0.15); // A5
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            osc.start(now);
+            osc.stop(now + 0.35);
+          } else if (type === 'arrival') {
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.12);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            osc.start(now);
+            osc.stop(now + 0.4);
+          } else if (type === 'delivered') {
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+              const o = this.ctx.createOscillator();
+              const g = this.ctx.createGain();
+              o.connect(g);
+              g.connect(this.ctx.destination);
+              o.frequency.value = freq;
+              g.gain.setValueAtTime(0.12, now + i * 0.1);
+              g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.35);
+              o.start(now + i * 0.1);
+              o.stop(now + i * 0.1 + 0.35);
+            });
+          }
+        } catch (_) {}
+      }
+    };
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById('btn-sound');
+      if (soundEnabled) {
+        btn.classList.add('text-amber-400');
+        btn.classList.remove('text-slate-500');
+        logDiag('Audio chimes enabled.');
+      } else {
+        btn.classList.remove('text-amber-400');
+        btn.classList.add('text-slate-500');
+        logDiag('Audio chimes muted.');
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3. MAP INITIALIZATION & VECTOR MARKERS
+    // ─────────────────────────────────────────────────────────────────────────
+    function initMap() {
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([34.4225, 74.6366], 14);
+
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // Voyager / Light-Dark Clean Basemap
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      // Render Shop 1 Marker (Amber)
+      renderShopMarker(BANDIPORA_STOPS.shop1, '#f59e0b', 'bakery');
+
+      // Render Shop 2 Marker (Emerald)
+      renderShopMarker(BANDIPORA_STOPS.shop2, '#10b981', 'grocery');
+
+      // Render Shop 3 Marker (Cyan)
+      renderShopMarker(BANDIPORA_STOPS.shop3, '#06b6d4', 'pharmacy');
+
+      // Render Customer Marker with Pulse Ripple
+      const customerIcon = L.divIcon({
+        className: 'custom-customer-icon',
+        html: `
+          <div class="pulse-beacon w-9 h-9 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center text-white shadow-xl shadow-blue-500/50 font-bold text-sm">
+            🏠
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      });
+      L.marker([BANDIPORA_STOPS.customer.lat, BANDIPORA_STOPS.customer.lng], { icon: customerIcon })
+        .addTo(map)
+        .bindTooltip(`<b>${BANDIPORA_STOPS.customer.name}</b><br>${BANDIPORA_STOPS.customer.subtitle}`);
+
+      // Render Moving Rider Marker with Headlight Beam
+      const riderIcon = L.divIcon({
+        className: 'custom-rider-icon',
+        html: `
+          <div id="rider-icon-inner" class="rider-marker w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 border-2 border-white flex items-center justify-center text-white shadow-2xl shadow-purple-500/60 text-lg relative">
+            <div class="headlight-cone"></div>
+            🛵
+          </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+      });
+      riderMarker = L.marker([BANDIPORA_STOPS.depot.lat, BANDIPORA_STOPS.depot.lng], { icon: riderIcon })
+        .addTo(map)
+        .bindTooltip('<b>Rider Kishan Nadda</b><br>Delivery Partner · Bandipora Depot');
+
+      // Initialize breadcrumb trail layer
+      breadcrumbPolyline = L.polyline([], {
+        color: '#a855f7',
+        weight: 5,
+        opacity: 0.7,
+        dashArray: '5, 10'
+      }).addTo(map);
+
+      // Fetch and draw road routes between stops
+      fetchAndDrawAllLegs();
+    }
+
+    function renderShopMarker(shop, color, iconType) {
+      const iconEmoji = iconType === 'bakery' ? '🥐' : (iconType === 'grocery' ? '🛒' : '💊');
+      const shopIcon = L.divIcon({
+        className: 'custom-shop-icon',
+        html: `
+          <div style="background-color: ${color};" class="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-white shadow-lg text-sm font-bold">
+            ${iconEmoji}
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+      L.marker([shop.lat, shop.lng], { icon: shopIcon })
+        .addTo(map)
+        .bindTooltip(`<b>${shop.name}</b><br>${shop.subtitle}<br><span style="color:${color};font-weight:bold;">${shop.items.join(', ')}</span>`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 4. ROAD ROUTING ENGINE (OSRM API WITH FALLBACK)
+    // ─────────────────────────────────────────────────────────────────────────
+    const LEGS_METADATA = [
+      { from: BANDIPORA_STOPS.depot, to: BANDIPORA_STOPS.shop1, name: 'Depot ➔ Shop 1 (Bakery)', street: 'Main Bus Stand Rd', color: '#8b5cf6' },
+      { from: BANDIPORA_STOPS.shop1, to: BANDIPORA_STOPS.shop2, name: 'Shop 1 ➔ Shop 2 (Kaloosa Mart)', street: 'Sopore-Bandipora Trunk Rd', color: '#f59e0b' },
+      { from: BANDIPORA_STOPS.shop2, to: BANDIPORA_STOPS.shop3, name: 'Shop 2 ➔ Shop 3 (Plan Chemist)', street: 'Plan Link Rd', color: '#06b6d4' },
+      { from: BANDIPORA_STOPS.shop3, to: BANDIPORA_STOPS.customer, name: 'Shop 3 ➔ Customer (Nowpora)', street: 'Nowpora Residential Blvd', color: '#10b981' }
+    ];
+
+    let allLegWaypoints = [];
+
+    async function fetchAndDrawAllLegs() {
+      logDiag('Fetching road geometries from OSRM for Bandipora network...');
+      allLegWaypoints = [];
+
+      for (let i = 0; i < LEGS_METADATA.length; i++) {
+        const leg = LEGS_METADATA[i];
+        const points = await fetchOSRMRoute(leg.from, leg.to);
+        allLegWaypoints.push(points);
+
+        const poly = L.polyline(points, {
+          color: leg.color,
+          weight: 6,
+          opacity: 0.85
+        }).addTo(map);
+        routeLayers.push(poly);
+      }
+
+      currentRoutePoints = allLegWaypoints[0];
+      currentPointIndex = 0;
+      logDiag(`Loaded ${allLegWaypoints.reduce((acc, l) => acc + l.length, 0)} real road coordinates across 4 legs.`);
+    }
+
+    async function fetchOSRMRoute(from, to) {
+      const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+      try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.routes && data.routes.length > 0) {
+          return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        }
+      } catch (err) {
+        logDiag(`OSRM API offline, using high-resolution geodesic interpolation.`);
+      }
+      // Fallback interpolation
+      const fallback = [];
+      const steps = 30;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        fallback.push([
+          from.lat + t * (to.lat - from.lat),
+          from.lng + t * (to.lng - from.lng)
+        ]);
+      }
+      return fallback;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 5. MATHEMATICAL FORMULAS (BEARING, DISTANCE, LERP)
+    // ─────────────────────────────────────────────────────────────────────────
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      const toRad = Math.PI / 180;
+      const toDeg = 180 / Math.PI;
+      const dLon = (lon2 - lon1) * toRad;
+      const y = Math.sin(dLon) * Math.cos(lat2 * toRad);
+      const x = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) -
+                Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos(dLon);
+      const brng = Math.atan2(y, x) * toDeg;
+      return (brng + 360) % 360;
+    }
+
+    function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 6. SIMULATION TICK & MOVEMENT ENGINE
+    // ─────────────────────────────────────────────────────────────────────────
+    function toggleSimulation() {
+      if (isPlaying) {
+        pauseSimulation();
+      } else {
+        startSimulation();
+      }
+    }
+
+    function startSimulation() {
+      AudioEngine.init();
+      isPlaying = true;
+      document.getElementById('btn-play-text').textContent = 'Pause';
+      document.getElementById('btn-toggle-play').classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+      document.getElementById('btn-toggle-play').classList.add('bg-amber-600', 'hover:bg-amber-500');
+      
+      const intervalMs = Math.max(40, Math.floor(550 / simSpeed));
+      simInterval = setInterval(simulationTick, intervalMs);
+      logDiag(`Simulation started at ${simSpeed}x speed.`);
+    }
+
+    function pauseSimulation() {
+      isPlaying = false;
+      document.getElementById('btn-play-text').textContent = 'Resume';
+      document.getElementById('btn-toggle-play').classList.remove('bg-amber-600', 'hover:bg-amber-500');
+      document.getElementById('btn-toggle-play').classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+      if (simInterval) clearInterval(simInterval);
+    }
+
+    function setSpeed(speed) {
+      simSpeed = speed;
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        if (parseInt(btn.getAttribute('data-speed')) === speed) {
+          btn.classList.add('bg-amber-500', 'text-slate-950', 'font-bold');
+          btn.classList.remove('text-slate-300');
+        } else {
+          btn.classList.remove('bg-amber-500', 'text-slate-950', 'font-bold');
+          btn.classList.add('text-slate-300');
+        }
+      });
+      if (isPlaying) {
+        clearInterval(simInterval);
+        const intervalMs = Math.max(40, Math.floor(550 / simSpeed));
+        simInterval = setInterval(simulationTick, intervalMs);
+      }
+    }
+
+    function simulationTick() {
+      if (!currentRoutePoints || currentRoutePoints.length === 0) return;
+
+      if (currentPointIndex < currentRoutePoints.length - 1) {
+        const p1 = currentRoutePoints[currentPointIndex];
+        const p2 = currentRoutePoints[currentPointIndex + 1];
+
+        currentBearing = calculateBearing(p1[0], p1[1], p2[0], p2[1]);
+        currentRiderPos = p2;
+        currentPointIndex++;
+
+        // Update rider marker position
+        riderMarker.setLatLng(currentRiderPos);
+
+        // Rotate bike icon & headlight
+        const iconInner = document.getElementById('rider-icon-inner');
+        if (iconInner) {
+          iconInner.style.transform = `rotate(${currentBearing}deg)`;
+        }
+
+        // Add to breadcrumb trail
+        breadcrumbPoints.push(currentRiderPos);
+        breadcrumbPolyline.setLatLngs(breadcrumbPoints);
+
+        // Update Telemetry HUD
+        document.getElementById('hud-coords').textContent = `${currentRiderPos[0].toFixed(5)}, ${currentRiderPos[1].toFixed(5)}`;
+        const speedKmh = Math.floor(26 + Math.random() * 8);
+        document.getElementById('hud-speed').textContent = `${speedKmh} km/h · ${Math.round(currentBearing)}°`;
+
+        // Update Turn-by-Turn Nav HUD
+        updateNavigationHUD(p2);
+
+        // Sync with Supabase (if order placed)
+        if (!isGpsBlackout) {
+          syncRiderGpsToSupabase(currentRiderPos[0], currentRiderPos[1]);
+        }
+
+      } else {
+        // Arrived at current leg destination!
+        handleLegArrival();
+      }
+    }
+
+    function stepSimulation() {
+      simulationTick();
+    }
+
+    function updateNavigationHUD(pos) {
+      if (currentLegIndex < LEGS_METADATA.length) {
+        const leg = LEGS_METADATA[currentLegIndex];
+        const distKm = calculateDistanceKm(pos[0], pos[1], leg.to.lat, leg.to.lng);
+        const distM = Math.round(distKm * 1000);
+
+        document.getElementById('nav-street').textContent = leg.street;
+        document.getElementById('nav-distance-leg').textContent = distM > 1000 ? `${distKm.toFixed(2)} km` : `${distM} meters`;
+        document.getElementById('nav-eta-leg').textContent = `ETA: ${Math.max(1, Math.ceil(distKm * 2.5))} min`;
+        document.getElementById('nav-instruction').textContent = `Proceed along ${leg.street} towards ${leg.to.name}`;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 7. MULTI-SHOP LIFECYCLE & LEG TRANSITIONS
+    // ─────────────────────────────────────────────────────────────────────────
+    function handleLegArrival() {
+      pauseSimulation();
+
+      if (currentLegIndex === 0) {
+        // Arrived at Shop 1
+        AudioEngine.playChime('arrival');
+        logDiag('📍 Rider arrived at Shop 1 (Bandipora Central Bakery). arrived_at_shop_time stamped.');
+        document.getElementById('rider-task-desc').textContent = 'Collecting Bakery Items';
+        notify('rider', '📍 Arrived at Shop 1', 'Waiting for Central Bakery to hand over package.');
+        notify('customer', '📍 Rider Arrived at Central Bakery', 'Items are being packed.');
+        
+        setTimeout(() => {
+          pickupShop(1);
+          prepareNextLeg(1);
+        }, 1500);
+
+      } else if (currentLegIndex === 1) {
+        // Arrived at Shop 2
+        AudioEngine.playChime('arrival');
+        logDiag('📍 Rider arrived at Shop 2 (Kaloosa Fresh Mart). arrived_at_shop_time stamped.');
+        document.getElementById('rider-task-desc').textContent = 'Collecting Grocery Items';
+        notify('rider', '📍 Arrived at Shop 2', 'Collecting fresh milk and honey.');
+        notify('customer', '📍 Rider Arrived at Kaloosa Mart', 'Collecting second batch of items.');
+
+        setTimeout(() => {
+          pickupShop(2);
+          prepareNextLeg(2);
+        }, 1500);
+
+      } else if (currentLegIndex === 2) {
+        // Arrived at Shop 3
+        AudioEngine.playChime('arrival');
+        logDiag('📍 Rider arrived at Shop 3 (Plan Valley Chemist). arrived_at_shop_time stamped.');
+        document.getElementById('rider-task-desc').textContent = 'Collecting Medicines';
+        notify('rider', '📍 Arrived at Shop 3', 'Collecting pharmaceutical supplies.');
+        notify('customer', '📍 Rider Arrived at Plan Chemist', 'Collecting final items from pharmacy.');
+
+        setTimeout(() => {
+          pickupShop(3);
+          
+          // All 3 shops picked up! Out for Delivery transition
+          markGroupOutForDelivery();
+          prepareNextLeg(3);
+        }, 1500);
+
+      } else if (currentLegIndex === 3) {
+        // Arrived at Customer!
+        AudioEngine.playChime('delivered');
+        logDiag('🎉 Rider arrived at Customer Drop-off (Nowpora)! Order Delivered.');
+        document.getElementById('rider-task-desc').textContent = 'Delivery Completed (₹0 Collected)';
+        document.getElementById('rider-status-badge').textContent = 'Delivered';
+        document.getElementById('rider-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+
+        document.getElementById('customer-status-badge').textContent = 'Delivered 🎉';
+        document.getElementById('customer-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        document.getElementById('step-delivered').className = 'flex items-center space-x-2 text-emerald-400 font-bold';
+
+        // Quad screen update
+        document.getElementById('quad-cust-badge').textContent = 'Delivered';
+        document.getElementById('quad-cust-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400';
+        document.getElementById('quad-rider-status-text').textContent = 'Delivered safely at Nowpora!';
+
+        notify('customer', '🎉 Order Delivered! Enjoy your order', 'All items from Bakery, Grocery, and Chemist have arrived safely.');
+        notify('rider', '💰 Delivery Completed!', 'All 3 stops fulfilled. Rider earnings ₹100 credited. (Zero COD collection).');
+
+        updateOrderStatusInSupabase('delivered');
+      }
+    }
+
+    function prepareNextLeg(nextIndex) {
+      currentLegIndex = nextIndex;
+      if (currentLegIndex < allLegWaypoints.length) {
+        currentRoutePoints = allLegWaypoints[currentLegIndex];
+        currentPointIndex = 0;
+        document.getElementById('route-next-stop').textContent = LEGS_METADATA[currentLegIndex].to.name;
+        
+        // Update Quad view target
+        document.getElementById('quad-rider-target-title').textContent = LEGS_METADATA[currentLegIndex].to.name;
+        document.getElementById('quad-rider-target-addr').textContent = LEGS_METADATA[currentLegIndex].to.subtitle;
+        document.getElementById('quad-rider-stops-count').textContent = `${4 - currentLegIndex} stops left`;
+
+        setTimeout(() => {
+          if (!isPlaying) startSimulation();
+        }, 1000);
+      }
+    }
+
+    function pickupShop(shopNum) {
+      const statusEl = document.getElementById(`shop${shopNum}-status`);
+      if (statusEl) {
+        statusEl.textContent = 'Picked Up';
+        statusEl.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20';
+      }
+
+      const quadEl = document.getElementById(`quad-shop${shopNum}-badge`);
+      if (quadEl) {
+        quadEl.textContent = 'Picked Up';
+        quadEl.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400';
+      }
+
+      if (shopNum < 3) {
+        notify('customer', `🛍️ Items Picked Up from Shop ${shopNum}`, `Rider collected items. Heading to next stop!`);
+      }
+    }
+
+    function markGroupOutForDelivery() {
+      document.getElementById('customer-status-badge').textContent = 'Out for Delivery 🛵';
+      document.getElementById('customer-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+      document.getElementById('step-out').className = 'flex items-center space-x-2 text-amber-400 font-bold';
+
+      document.getElementById('quad-cust-badge').textContent = 'Out for Delivery';
+      document.getElementById('quad-cust-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400';
+
+      notify('customer', '🛵 Out for Delivery!', 'All items from all 3 stores collected! Rider heading to your doorstep.');
+      updateOrderStatusInSupabase('out_for_delivery');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 8. MULTI-SHOP ORDER CREATION & REAL SUPABASE INSERT
+    // ─────────────────────────────────────────────────────────────────────────
+    async function createMultiShopOrder() {
+      AudioEngine.playChime('notification');
+      currentCartGroupId = crypto.randomUUID();
+      subOrderIds = {
+        shop1: crypto.randomUUID(),
+        shop2: crypto.randomUUID(),
+        shop3: crypto.randomUUID()
+      };
+
+      document.getElementById('btn-create-order').disabled = true;
+      document.getElementById('btn-create-order').classList.add('opacity-50');
+
+      // Update UI Stepper
+      document.getElementById('step-placed').className = 'flex items-center space-x-2 text-emerald-400 font-bold';
+      document.getElementById('customer-status-badge').textContent = 'Awaiting Sellers';
+      document.getElementById('customer-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+
+      notify('customer', '🛍️ Order Confirmed! (Payment Bypassed)', '100% Prepaid Model verified. ₹0 to collect at doorstep.');
+      notify('seller', '🔔 Order Received: Central Bakery', 'Items: Lavasa Bread × 2, Pastry × 2.');
+      notify('seller', '🔔 Order Received: Kaloosa Mart', 'Items: Fresh Milk 1L, Honey 500g.');
+      notify('seller', '🔔 Order Received: Plan Chemist', 'Items: Paracetamol 650mg, Bandages.');
+
+      logDiag(`[DB] Created Cart Group: ${currentCartGroupId}`);
+      logDiag(`[DB] Sub-order 1: ${subOrderIds.shop1} (Shop 1 - Bakery)`);
+      logDiag(`[DB] Sub-order 2: ${subOrderIds.shop2} (Shop 2 - Grocery)`);
+      logDiag(`[DB] Sub-order 3: ${subOrderIds.shop3} (Shop 3 - Chemist)`);
+      logDiag(`[Payment] Bypass Active: payment_status = captured (Razorpay bypass)`);
+
+      // Write directly to Supabase if connected
+      if (supabaseClient) {
+        try {
+          const deadline = new Date(Date.now() + 15 * 60000).toISOString();
+          const baseOrder = {
+            cart_group_id: currentCartGroupId,
+            status: 'awaiting_acceptance',
+            payment_status: 'captured',
+            payment_method: 'practice',
+            total_amount: 0.0,
+            delivery_charges: 0.0,
+            grand_total_collected: 0.0,
+            address: 'Nowpora, Bandipora, J&K',
+            delivery_lat: BANDIPORA_STOPS.customer.lat,
+            delivery_lng: BANDIPORA_STOPS.customer.lng,
+            acceptance_deadline: deadline,
+            delivery_notes: '[PRACTICE ORDER] 100x Bandipora Multi-Shop Realtime Simulation'
+          };
+
+          const { data: profiles } = await supabaseClient.from('profiles').select('id').limit(1);
+          const customerId = profiles && profiles.length > 0 ? profiles[0].id : '00000000-0000-0000-0000-919999999996';
+
+          const ordersToInsert = [
+            { ...baseOrder, id: subOrderIds.shop1, shop_lat: BANDIPORA_STOPS.shop1.lat, shop_lng: BANDIPORA_STOPS.shop1.lng, customer_id: customerId },
+            { ...baseOrder, id: subOrderIds.shop2, shop_lat: BANDIPORA_STOPS.shop2.lat, shop_lng: BANDIPORA_STOPS.shop2.lng, customer_id: customerId },
+            { ...baseOrder, id: subOrderIds.shop3, shop_lat: BANDIPORA_STOPS.shop3.lat, shop_lng: BANDIPORA_STOPS.shop3.lng, customer_id: customerId }
+          ];
+
+          const { error } = await supabaseClient.from('orders').insert(ordersToInsert);
+          if (error) {
+            logDiag(`[Supabase Error] ${error.message}`);
+          } else {
+            logDiag(`[Supabase] Successfully inserted 3 real sub-orders with cart_group_id!`);
+            subscribeToRealtimeChannel(currentCartGroupId);
+          }
+        } catch (e) {
+          logDiag(`[Supabase Exception] ${e.message}`);
+        }
+      }
+
+      // Auto-accept sellers sequence
+      setTimeout(() => {
+        acceptShopOrder(1);
+        setTimeout(() => acceptShopOrder(2), 600);
+        setTimeout(() => acceptShopOrder(3), 1200);
+      }, 1000);
+    }
+
+    function acceptShopOrder(shopNum) {
+      AudioEngine.playChime('notification');
+      const badge = document.getElementById(`shop${shopNum}-status`);
+      const quadBadge = document.getElementById(`quad-shop${shopNum}-badge`);
+      const btn = document.getElementById(`btn-shop${shopNum}-accept`);
+      
+      if (badge) {
+        badge.textContent = 'Preparing';
+        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+      }
+      if (quadBadge) {
+        quadBadge.textContent = 'Preparing';
+        quadBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400';
+      }
+      if (btn) btn.disabled = true;
+
+      logDiag(`[Shop ${shopNum}] Confirmed order. Transitioned to 'preparing'.`);
+
+      // Check if all shops accepted
+      const s1 = document.getElementById('shop1-status').textContent.trim();
+      const s2 = document.getElementById('shop2-status').textContent.trim();
+      const s3 = document.getElementById('shop3-status').textContent.trim();
+
+      if ((s1 === 'Preparing' || shopNum === 1) &&
+          (s2 === 'Preparing' || shopNum === 2) &&
+          (s3 === 'Preparing' || shopNum === 3)) {
+        document.getElementById('step-sellers').className = 'flex items-center space-x-2 text-emerald-400 font-bold';
+        document.getElementById('customer-status-badge').textContent = 'Stores Packing';
+        notify('customer', '🏪 Stores Confirmed & Packing', 'All 3 merchants in Bandipora are preparing your items.');
+
+        setTimeout(() => {
+          riderOfferDelivery();
+        }, 1000);
+      }
+    }
+
+    function riderOfferDelivery() {
+      AudioEngine.playChime('notification');
+      document.getElementById('rider-status-badge').textContent = 'Offered';
+      document.getElementById('rider-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+      document.getElementById('rider-task-desc').textContent = '3-Store Route Offered';
+      notify('rider', '🛵 New Delivery Available!', 'Multi-shop pickup: Bakery ➔ Kaloosa ➔ Plan ➔ Nowpora.');
+
+      setTimeout(() => {
+        riderAcceptAssignment();
+      }, 1200);
+    }
+
+    function riderAcceptAssignment() {
+      AudioEngine.playChime('notification');
+      document.getElementById('rider-status-badge').textContent = 'Assigned';
+      document.getElementById('rider-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20';
+      document.getElementById('rider-task-desc').textContent = 'En Route to Shop 1 (Bakery)';
+      document.getElementById('step-rider').className = 'flex items-center space-x-2 text-emerald-400 font-bold';
+
+      notify('customer', 'New Rider Assigned! 🛵', 'Rider Kishan is heading to the first store.');
+      logDiag('[Rider] Accepted cart group. Assigned to all 3 sub-orders.');
+
+      if (!isPlaying) {
+        startSimulation();
+      }
+    }
+
+    function riderPerformAction() {
+      simulationTick();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 9. REALTIME SUPABASE WEBSOCKET & GPS SYNC
+    // ─────────────────────────────────────────────────────────────────────────
+    function subscribeToRealtimeChannel(cartGroupId) {
+      if (!supabaseClient) return;
+      if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+
+      const channelName = `customer-map-group-${cartGroupId}`;
+      logDiag(`[Realtime WS] Subscribing to channel: ${channelName}`);
+
+      realtimeChannel = supabaseClient.channel(channelName)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `cart_group_id=eq.${cartGroupId}` }, (payload) => {
+          logDiag(`[Realtime Event] Order ${payload.new.id.substring(0, 8)}... status=${payload.new.status}`);
+          // Flash WS indicator
+          const ind = document.getElementById('ws-indicator');
+          if (ind) {
+            ind.classList.remove('bg-emerald-500');
+            ind.classList.add('bg-cyan-400');
+            setTimeout(() => {
+              ind.classList.remove('bg-cyan-400');
+              ind.classList.add('bg-emerald-500');
+            }, 300);
+          }
+        })
+        .subscribe((status) => {
+          document.getElementById('ws-label').textContent = status === 'SUBSCRIBED' ? 'Subscribed' : status;
+        });
+    }
+
+    let lastSyncTime = 0;
+    async function syncRiderGpsToSupabase(lat, lng) {
+      const now = Date.now();
+      if (now - lastSyncTime < 1500) return;
+      lastSyncTime = now;
+
+      if (!supabaseClient || !currentCartGroupId) return;
+
+      try {
+        await supabaseClient.from('orders').update({
+          rider_lat: lat,
+          rider_lng: lng,
+          rider_location_updated_at: new Date().toISOString()
+        }).eq('cart_group_id', currentCartGroupId);
+      } catch (_) {}
+    }
+
+    async function updateOrderStatusInSupabase(status) {
+      if (!supabaseClient || !currentCartGroupId) return;
+      try {
+        await supabaseClient.from('orders').update({
+          status: status,
+          updated_at: new Date().toISOString()
+        }).eq('cart_group_id', currentCartGroupId);
+      } catch (_) {}
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 10. 100x EDGE-CASE STRESS TESTING HANDLERS
+    // ─────────────────────────────────────────────────────────────────────────
+    function triggerPartialRejectionShop2() {
+      AudioEngine.playChime('notification');
+      logDiag('⚠️ [Edge Case] Shop 2 (Kaloosa Mart) declined order due to out-of-stock items.');
+      
+      const badge = document.getElementById('shop2-status');
+      if (badge) {
+        badge.textContent = 'Store Declined';
+        badge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+      }
+
+      notify('customer', '⚠️ Store Declined Items', 'Kaloosa Mart was out of stock. Refund of ₹380 initiated. Remaining items are arriving!');
+      notify('rider', '⚠️ Route Updated: Sibling Order Survives', 'Kaloosa Mart declined. Proceed directly to Shop 3 (Plan Chemist).');
+
+      // Sibling survival rule: reroute dynamically!
+      // If we are currently heading to Shop 2, redirect route to Shop 3
+      if (currentLegIndex === 1) {
+        logDiag('Dynamic Rerouting: Skipping Shop 2. Directing rider to Shop 3.');
+        LEGS_METADATA[1].to = BANDIPORA_STOPS.shop3;
+        fetchOSRMRoute(BANDIPORA_STOPS.shop1, BANDIPORA_STOPS.shop3).then(points => {
+          allLegWaypoints[1] = points;
+          currentRoutePoints = points;
+          currentPointIndex = 0;
+          routeLayers[1].setLatLngs(points);
+        });
+      }
+    }
+
+    function triggerGpsDeadzone() {
+      AudioEngine.playChime('notification');
+      isGpsBlackout = true;
+      logDiag('🛰️ [Edge Case] Simulated GPS Deadzone (Cellular blackout in Bandipora).');
+      
+      document.getElementById('hud-coords').textContent = 'Signal Lost... (Holding Last)';
+      document.getElementById('hud-coords').className = 'font-mono text-rose-400 font-bold text-[11px] animate-pulse';
+      
+      notify('customer', '🛰️ GPS Signal Reconnecting...', 'Rider is in a temporary low-connectivity area. Last known location held.');
+
+      // Restore after 10s
+      setTimeout(() => {
+        isGpsBlackout = false;
+        document.getElementById('hud-coords').className = 'font-mono text-amber-400 font-semibold text-[11px]';
+        logDiag('🛰️ [Edge Case] GPS Re-acquired! Smooth lerp interpolation restored.');
+        notify('customer', '🛰️ GPS Signal Restored', 'Live rider tracking updated.');
+      }, 10000);
+    }
+
+    function triggerRiderReassignment() {
+      AudioEngine.playChime('notification');
+      logDiag('🔄 [Edge Case] Rider Kishan unassigned / dropped order.');
+      
+      document.getElementById('rider-status-badge').textContent = 'Unassigned';
+      document.getElementById('rider-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+
+      notify('customer', 'Searching for new rider... 🛵', 'Previous rider had a vehicle flat. Assigning replacement courier immediately.');
+
+      setTimeout(() => {
+        document.getElementById('rider-status-badge').textContent = 'Reassigned';
+        document.getElementById('rider-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20';
+        notify('customer', 'New Rider Assigned! 🛵', 'Rider Amit took over your delivery.');
+        logDiag('✅ Reassignment successful. State machine integrity preserved.');
+      }, 3000);
+    }
+
+    function triggerKitchenWaitAlert() {
+      AudioEngine.playChime('notification');
+      logDiag('⏳ [Edge Case] Kitchen Delay at Shop 1. Rider arrived early.');
+      
+      const card = document.getElementById('shop1-card');
+      if (card) {
+        card.classList.add('border-rose-500', 'bg-rose-950/20');
+      }
+
+      notify('seller', '⚠️ Rider Waiting at Shop 1', 'Prep time exceeded by 5 mins. Rush packing for customer.');
+      logDiag('Wait-time penalty immunity rule active (disputed flag checked).');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 11. VIEW SWITCHER (MAP VS QUAD SCREEN)
+    // ─────────────────────────────────────────────────────────────────────────
+    function switchView(viewName) {
+      const viewMap = document.getElementById('view-map');
+      const viewDevices = document.getElementById('view-devices');
+      const tabMap = document.getElementById('tab-map');
+      const tabDevices = document.getElementById('tab-devices');
+
+      if (viewName === 'map') {
+        viewMap.classList.remove('hidden');
+        viewDevices.classList.add('hidden');
+        tabMap.className = 'flex items-center space-x-1.5 px-3 py-1 rounded-lg font-semibold bg-amber-500 text-slate-950 transition';
+        tabDevices.className = 'flex items-center space-x-1.5 px-3 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition';
+        map.invalidateSize();
+      } else {
+        viewMap.classList.add('hidden');
+        viewDevices.classList.remove('hidden');
+        tabDevices.className = 'flex items-center space-x-1.5 px-3 py-1 rounded-lg font-semibold bg-amber-500 text-slate-950 transition';
+        tabMap.className = 'flex items-center space-x-1.5 px-3 py-1 rounded-lg font-medium text-slate-400 hover:text-white transition';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 12. PURGE SIMULATION DATA (ZERO TEST LEFTOVERS RULE)
+    // ─────────────────────────────────────────────────────────────────────────
+    async function purgeSimulationData() {
+      pauseSimulation();
+      logDiag('🧹 Purging test records to adhere to Zero Test Leftovers rule...');
+      
+      if (supabaseClient && currentCartGroupId) {
+        try {
+          await supabaseClient.from('orders').delete().eq('cart_group_id', currentCartGroupId);
+          logDiag('✅ Purged test orders from Supabase.');
+        } catch (e) {
+          logDiag(`Purge error: ${e.message}`);
+        }
+      }
+
+      // Reset state
+      currentCartGroupId = null;
+      currentPointIndex = 0;
+      currentLegIndex = 0;
+      currentRiderPos = [BANDIPORA_STOPS.depot.lat, BANDIPORA_STOPS.depot.lng];
+      riderMarker.setLatLng(currentRiderPos);
+      breadcrumbPoints = [];
+      breadcrumbPolyline.setLatLngs([]);
+
+      // Reset UI elements
+      document.getElementById('btn-create-order').disabled = false;
+      document.getElementById('btn-create-order').classList.remove('opacity-50');
+
+      ['shop1', 'shop2', 'shop3'].forEach(s => {
+        document.getElementById(`${s}-status`).textContent = 'Pending';
+        document.getElementById(`${s}-status`).className = 'px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400';
+        const b = document.getElementById(`btn-${s}-accept`);
+        if (b) b.disabled = false;
+        const qb = document.getElementById(`quad-${s}-badge`);
+        if (qb) {
+          qb.textContent = 'Pending';
+          qb.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400';
+        }
+      });
+
+      document.getElementById('customer-status-badge').textContent = 'Awaiting Order';
+      document.getElementById('customer-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400';
+
+      document.getElementById('rider-status-badge').textContent = 'At Depot';
+      document.getElementById('rider-status-badge').className = 'px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400';
+      document.getElementById('rider-task-desc').textContent = 'Waiting for assignment';
+
+      ['step-placed', 'step-sellers', 'step-rider', 'step-out', 'step-delivered'].forEach(st => {
+        document.getElementById(st).className = 'flex items-center space-x-2 text-slate-500';
+      });
+
+      notify('system', '🧹 Database Cleaned', 'All simulated orders purged. Zero test leftovers in DB.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 13. NOTIFICATIONS & DIAGNOSTICS HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+    function notify(role, title, body) {
+      AudioEngine.playChime('notification');
+      const feed = document.getElementById('notifications-feed');
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      let roleBadgeColor = 'bg-slate-800 text-slate-300';
+      let roleLabel = 'SYSTEM';
+      if (role === 'customer') {
+        roleBadgeColor = 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20';
+        roleLabel = 'CUSTOMER';
+      } else if (role === 'seller') {
+        roleBadgeColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        roleLabel = 'MERCHANT';
+      } else if (role === 'rider') {
+        roleBadgeColor = 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
+        roleLabel = 'RIDER';
+      }
+
+      const card = document.createElement('div');
+      card.className = 'bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs shadow-md animate-fade-in';
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${roleBadgeColor}">${roleLabel}</span>
+          <span class="text-[10px] text-slate-500 font-mono">${timeStr}</span>
+        </div>
+        <div class="font-bold text-white text-[11px] mb-0.5">${title}</div>
+        <div class="text-[11px] text-slate-400 leading-relaxed">${body}</div>
+      `;
+
+      feed.insertBefore(card, feed.firstChild);
+    }
+
+    function clearNotifications() {
+      document.getElementById('notifications-feed').innerHTML = '';
+    }
+
+    function logDiag(msg) {
+      const log = document.getElementById('diagnostics-log');
+      const line = document.createElement('div');
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 14. INITIALIZATION ON DOM LOAD
+    // ─────────────────────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      initMap();
+
+      try {
+        const resp = await fetch('/config');
+        if (resp.ok) {
+          const remoteConfig = await resp.json();
+          config = { ...config, ...remoteConfig };
+          logDiag('Loaded Supabase environment configuration.');
+        }
+      } catch (_) {}
+
+      if (window.supabase && config.SUPABASE_URL && config.SUPABASE_ANON_KEY) {
+        try {
+          supabaseClient = window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+          logDiag('Supabase client initialized & connected.');
+        } catch (e) {
+          logDiag(`Supabase client init error: ${e.message}`);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

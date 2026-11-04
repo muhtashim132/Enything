@@ -155,6 +155,7 @@ Future<void> main() async {
   } catch (_) {}
 
   final double expectedSmallCartFee = (100.0 < currentSmallCartThreshold) ? currentSmallCartFee : 0.0;
+  final double expectedDeliveryCharges1 = (20.0 + expectedSmallCartFee) * 1.18;
 
   await client.auth.signInWithPassword(email: _emailFromPhone(custPhone), password: _passwordFromPhone(custPhone));
 
@@ -168,9 +169,9 @@ Future<void> main() async {
         'total_amount': 100.0,
         'payment_status': 'pending',
         'payment_method': 'upi',
-        'grand_total_collected': 100.0 + 5.0 + 41.30 + currentPlatformFee,
-        'grand_total': 100.0 + 5.0 + 41.30 + currentPlatformFee,
-        'delivery_charges': 41.30,
+        'grand_total_collected': 100.0 + 5.0 + expectedDeliveryCharges1 + currentPlatformFee,
+        'grand_total': 100.0 + 5.0 + expectedDeliveryCharges1 + currentPlatformFee,
+        'delivery_charges': expectedDeliveryCharges1,
         'rider_earnings': 28.0,
         'multi_shop_surcharge': 0.0,
         'platform_fee': currentPlatformFee,
@@ -222,7 +223,7 @@ Future<void> main() async {
   print('• Grand Total Collected: ₹${o1Db['grand_total_collected']}');
 
   if (o1Db['small_cart_fee'] != expectedSmallCartFee) throw Exception('FAILED: Small cart fee must be $expectedSmallCartFee');
-  if ((o1Db['grand_total_collected'] - (100.0 + 5.0 + 41.30 + currentPlatformFee)).abs() > 0.01) throw Exception('FAILED: Grand total mismatch');
+  if ((o1Db['grand_total_collected'] - (100.0 + 5.0 + expectedDeliveryCharges1 + currentPlatformFee)).abs() > 0.01) throw Exception('FAILED: Grand total mismatch');
   print('✅ [TEST 1 PASSED] Small cart fee and single-shop bill summary verified!');
 
   // ── TEST 2: 2-SHOP MULTI-ORDER CART WITH MULTI-SHOP SURCHARGE & GST ──

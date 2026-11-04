@@ -44,6 +44,8 @@ class OrderModel {
   final String? customerPhone;
   final String? shopPhone;
   final String? riderPhone;
+  final String? riderName;
+  final bool isAdminDelivery;
   final String? paymentMethod;
   final String? paymentStatus;
   final String? deliveryOtp;
@@ -178,6 +180,8 @@ class OrderModel {
     this.customerPhone,
     this.shopPhone,
     this.riderPhone,
+    this.riderName,
+    this.isAdminDelivery = false,
     this.paymentMethod,
     this.paymentStatus,
     this.deliveryOtp,
@@ -264,6 +268,10 @@ class OrderModel {
       customerPhone: map['customer_phone']?.toString(),
       shopPhone: map['shop_phone']?.toString(),
       riderPhone: map['rider_phone']?.toString(),
+      riderName: map['rider_name']?.toString(),
+      isAdminDelivery: map['is_admin_delivery'] == true ||
+          map['is_admin_delivery'] == 'true' ||
+          (map['rider_name']?.toString().toLowerCase().contains('admin') ?? false),
       paymentMethod: map['payment_method']?.toString(),
       paymentStatus: map['payment_status']?.toString(),
       deliveryOtp: map['delivery_otp']?.toString(),
@@ -397,6 +405,8 @@ class OrderModel {
     String? customerPhone,
     String? shopPhone,
     String? riderPhone,
+    String? riderName,
+    bool? isAdminDelivery,
     bool? sellerAccepted,
     bool? partnerAccepted,
     bool? hasCustomerRated,
@@ -454,6 +464,8 @@ class OrderModel {
       customerPhone: customerPhone ?? this.customerPhone,
       shopPhone: shopPhone ?? this.shopPhone,
       riderPhone: riderPhone ?? this.riderPhone,
+      riderName: riderName ?? this.riderName,
+      isAdminDelivery: isAdminDelivery ?? this.isAdminDelivery,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       cancelledReason: cancelledReason ?? this.cancelledReason,

@@ -435,7 +435,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
           order: order,
           groupOrders: groupOrders,
           shopName: shopName,
-          riderName: order.riderPhone != null ? 'Delivery Partner' : null,
+          riderName: order.riderName ?? (order.riderPhone != null ? 'Delivery Partner' : null),
         );
       } else {
         LiveActivityService().activeStateNotifier.value = null;

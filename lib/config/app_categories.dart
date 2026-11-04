@@ -194,10 +194,11 @@ class AppCategories {
         cat.contains('hypermarket') ||
         cat.contains('supermart') ||
         cat.contains('hypermart') ||
-        cat.contains('super mart') ||
-        cat.contains('hyper mart') ||
         cat.contains('super market') ||
         cat.contains('hyper market') ||
+        cat.contains('super mart') ||
+        cat.contains('hyper mart') ||
+        cat.contains('grocery') ||
         cat.contains('departmental') ||
         cat.contains('department store') ||
         cat.contains('general store') ||
@@ -207,6 +208,72 @@ class AppCategories {
         cat.contains('mega mart') ||
         cat.contains('daily mart') ||
         cat.contains('kirana');
+  }
+
+  /// Returns whether a category is part of the Supermarket, Hypermarket, or Grocery umbrella.
+  static bool isSupermarketOrGroceryCategory(String? categoryName) {
+    if (categoryName == null || categoryName.trim().isEmpty) return false;
+    final cat = categoryName.trim().toLowerCase();
+    return cat.contains('supermarket') ||
+        cat.contains('hypermarket') ||
+        cat.contains('supermart') ||
+        cat.contains('hypermart') ||
+        cat.contains('super market') ||
+        cat.contains('hyper market') ||
+        cat.contains('grocery');
+  }
+
+  /// 100x Store-Level Product Inheritance & Zero-Leakage Matching Engine.
+  /// Determines whether a product should be included when a customer browses [targetCategories].
+  ///
+  /// Rules:
+  /// 1. Direct Item Category Match: product's own category is in targetCategories (case-insensitive).
+  /// 2. Grocery Low Margin Match: target is grocery/supermarket and product is Grocerylm.
+  /// 3. Store-Level Inheritance: If customer is browsing Supermarket/Hypermarket/Grocery,
+  ///    and the shop is an omnibus/supermarket/grocery store (e.g. Maxx Retail),
+  ///    ALL products from that shop are included (e.g. lipstick, shampoo, snacks, groceries).
+  /// 4. Zero-Leakage Specialty Protection: If customer is browsing a specialty category (e.g. Cosmetics & Beauty),
+  ///    only products whose specific category matches Cosmetics & Beauty are included (Atta/Rice from a supermarket will not leak).
+  static bool matchesBrowsingCategory({
+    required String? productCategory,
+    required String? shopCategory,
+    required Iterable<String> targetCategories,
+    List<String>? shopCategories,
+  }) {
+    if (targetCategories.isEmpty) return true;
+
+    final pCat = (productCategory ?? '').trim().toLowerCase();
+    final lowerTargets =
+        targetCategories.map((c) => c.trim().toLowerCase()).toSet();
+
+    // 1. Direct item category match
+    if (pCat.isNotEmpty && lowerTargets.contains(pCat)) {
+      return true;
+    }
+
+    final isBrowsingOmnibus =
+        lowerTargets.any(isSupermarketOrGroceryCategory);
+
+    // 2. Grocery Low Margin match
+    if (isBrowsingOmnibus && isGroceryLowMargin(pCat)) {
+      return true;
+    }
+
+    // 3. Store-Level Inheritance for Omnibus & Supermarket/Grocery stores
+    final isShopOmnibus = isOmnibusStoreCategory(shopCategory) ||
+        (shopCategories != null && shopCategories.any(isOmnibusStoreCategory));
+
+    if (isBrowsingOmnibus && isShopOmnibus) {
+      return true;
+    }
+
+    // 4. Non-omnibus specialty shop match (if shop category matches target)
+    final sCat = (shopCategory ?? '').trim().toLowerCase();
+    if (!isShopOmnibus && sCat.isNotEmpty && lowerTargets.contains(sCat)) {
+      return true;
+    }
+
+    return false;
   }
 
   /// Returns the group for [categoryName]. Defaults to [CategoryGroup.retail].

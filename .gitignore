@@ -118,5 +118,11 @@ scripts/auto_upload/data/test_img/
 scripts/auto_upload/data/*.pdf
 scripts/auto_upload/data/*.jpg
 scripts/auto_upload/data/*.jpeg
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
 web_public/app
 

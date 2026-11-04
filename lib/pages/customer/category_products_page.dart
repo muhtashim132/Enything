@@ -16,6 +16,7 @@ import '../../widgets/product_card.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../utils/demographic_utils.dart';
+import '../../utils/search_relevance_engine.dart';
 import '../../widgets/customer/floating_cart_bar.dart';
 import '../../config/app_categories.dart';
 
@@ -406,33 +407,20 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
               }
             }
 
-            // 100x Multi-Category Fortress: For omnibus/multi-department stores (e.g. Supermarkets),
-            // ensure products shown on this category page actually belong to the requested category.
-            final pCat = (p['category'] as String?)?.trim().toLowerCase() ?? '';
+            // 100x Multi-Category Fortress: For omnibus/multi-department stores (e.g. Supermarkets)
+            // and specialty stores, match using unified AppCategories.matchesBrowsingCategory
             final shopData = nearbyShops.firstWhere(
               (s) => s['id'] == p['shop_id'],
               orElse: () => null,
             );
-            final sCat = (shopData?['category'] as String?)?.trim().toLowerCase() ?? '';
-            final subcatsLower = subcategories.map((c) => c.trim().toLowerCase()).toSet();
-            final isOmnibus = AppCategories.isOmnibusStoreCategory(sCat);
-
-            if (isOmnibus) {
-              // For omnibus stores, if the customer is not browsing an omnibus category,
-              // enforce strict product category isolation so cross-category products don't leak.
-              final isBrowsingOmnibus = subcatsLower.any(AppCategories.isOmnibusStoreCategory);
-              if (!isBrowsingOmnibus) {
-                if (pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
-                  return false;
-                }
-              }
-            } else if (!subcatsLower.contains(sCat)) {
-              if (pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
-                return false;
-              }
-            }
-
-            return true;
+            final sCat = shopData?['category'] as String?;
+            final sCategories = (shopData?['categories'] as List?)?.map((c) => c.toString()).toList();
+            return AppCategories.matchesBrowsingCategory(
+              productCategory: p['category'] as String?,
+              shopCategory: sCat,
+              targetCategories: subcategories,
+              shopCategories: sCategories,
+            );
           }).toList();
 
           final productsByShop = <String, List<dynamic>>{};
@@ -635,7 +623,6 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
       final newProducts = <ProductModel>[];
       final missingShopIds = <String>{};
 
-      final subcatsLower = subcategories.map((c) => c.trim().toLowerCase()).toSet();
       for (final r in (rows as List)) {
         final p = ProductModel.fromMap(r as Map<String, dynamic>);
         if (!existingIds.contains(p.id) && config.isActiveCategory(p.category)) {
@@ -645,20 +632,15 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
             (s) => s['id'] == p.shopId,
             orElse: () => null,
           );
-          final sCat = (shopData?['category'] as String?)?.trim().toLowerCase() ?? '';
-          final isOmnibus = AppCategories.isOmnibusStoreCategory(sCat);
-          final pCat = p.category.trim().toLowerCase();
-
-          if (isOmnibus) {
-            final isBrowsingOmnibus = subcatsLower.any(AppCategories.isOmnibusStoreCategory);
-            if (!isBrowsingOmnibus && pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
-              continue;
-            }
-          } else if (!subcatsLower.contains(sCat)) {
-            if (pCat.isNotEmpty && !subcatsLower.contains(pCat)) {
-              continue;
-            }
-          }
+          final sCat = shopData?['category'] as String?;
+          final sCategories = (shopData?['categories'] as List?)?.map((c) => c.toString()).toList();
+          final matchesCategory = AppCategories.matchesBrowsingCategory(
+            productCategory: p.category,
+            shopCategory: sCat,
+            targetCategories: subcategories,
+            shopCategories: sCategories,
+          );
+          if (!matchesCategory) continue;
 
           newProducts.add(p);
           existingIds.add(p.id);
@@ -1060,6 +1042,14 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                   ));
                             }).toList();
                           }
+                        }
+
+                        if (_searchQuery.isNotEmpty) {
+                          filteredProducts = SearchRelevanceEngine.sortProducts(
+                            products: List<ProductModel>.from(filteredProducts),
+                            query: _searchQuery,
+                            shops: _productShops,
+                          );
                         }
 
                         final displayProducts = _searchQuery.isNotEmpty

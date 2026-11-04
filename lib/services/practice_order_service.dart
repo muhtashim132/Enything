@@ -12,6 +12,7 @@ enum PracticeTargetType {
   allRiders,
   specificRider,
   dual,
+  bandiporaMultiShop,
 }
 
 /// Result returned from practice order simulation dispatch.
@@ -243,6 +244,21 @@ class PracticeOrderService {
               customNotes: customNotes,
             );
             if (orderId != null) createdOrderIds.add(orderId);
+          }
+          break;
+
+        // ── Case F: Bandipora 3-Shop Realtime Route Simulation ──────────────
+        case PracticeTargetType.bandiporaMultiShop:
+          final bRes = await dispatchBandiporaMultiShopSimulation(
+            targetRiderId: targetRiderId,
+            targetRiderPhone: null,
+            actorId: actorId,
+            actorRole: actorRole,
+          );
+          if (bRes.success) {
+            createdOrderIds.addAll(bRes.orderIds);
+          } else {
+            return bRes;
           }
           break;
       }
@@ -530,6 +546,175 @@ class PracticeOrderService {
       forRider: true,
       customNotes: 'Rider Self-Test & Navigation Simulation',
     );
+  }
+
+  // ── 100x Bandipora Multi-Shop Realtime Simulator Dispatcher ────────────────
+  /// Dispatches a realistic 3-shop linked cart order in Bandipora, J&K.
+  /// - Shop 1: Central Bakery (Gulshan Chowk - 34.4228, 74.6365)
+  /// - Shop 2: Kaloosa Fresh Mart (Kaloosa Sopore Rd - 34.4148, 74.6305, ~1.05 km)
+  /// - Shop 3: Plan Valley Chemist (Plan Bandipora - 34.4295, 74.6465, ~2.20 km)
+  /// - Customer: Nowpora Residence (34.4120, 74.6485)
+  /// - 100% Prepaid Model (Zero COD): payment_status = 'captured', payment_method = 'practice'.
+  Future<PracticeDispatchResult> dispatchBandiporaMultiShopSimulation({
+    String? targetRiderId,
+    String? targetRiderPhone,
+    String? actorId,
+    String? actorRole,
+  }) async {
+    try {
+      final cartGroupId = _uuid.v4();
+      final now = DateTime.now().toUtc();
+      final deadline = now.add(const Duration(minutes: 15));
+      final createdOrderIds = <String>[];
+
+      // Resolve fallback customer ID to satisfy foreign key constraints
+      String customerId = _db.auth.currentUser?.id ?? '';
+      if (customerId.isEmpty) {
+        final profile = await _db.from('profiles').select('id').limit(1).maybeSingle();
+        customerId = profile?['id'] as String? ?? '00000000-0000-0000-0000-000000000001';
+      }
+
+      final bandiporaShops = [
+        {
+          'name': '1. Bandipora Central Bakery',
+          'lat': 34.4228,
+          'lng': 74.6365,
+          'phone': '+919876500001',
+          'category': 'Bakery',
+          'items': [
+            {'name': 'Kashmiri Lavasa Bread', 'qty': 2, 'price': 20.0},
+            {'name': 'Bakers Cream Pastry', 'qty': 2, 'price': 50.0},
+          ]
+        },
+        {
+          'name': '2. Kaloosa Fresh Mart',
+          'lat': 34.4148,
+          'lng': 74.6305,
+          'phone': '+919876500002',
+          'category': 'Grocery',
+          'items': [
+            {'name': 'Fresh Cow Milk 1L', 'qty': 1, 'price': 60.0},
+            {'name': 'Pure Kashmir Honey 500g', 'qty': 1, 'price': 320.0},
+          ]
+        },
+        {
+          'name': '3. Plan Valley Chemist',
+          'lat': 34.4295,
+          'lng': 74.6465,
+          'phone': '+919876500003',
+          'category': 'Pharmacy',
+          'items': [
+            {'name': 'Paracetamol 650mg', 'qty': 1, 'price': 35.0},
+            {'name': 'Sterile Cotton Bandages', 'qty': 2, 'price': 40.0},
+          ]
+        },
+      ];
+
+      // Query any real shops in DB to satisfy FK constraints if needed
+      final dbShopsResp = await _db
+          .from('shops')
+          .select('id, seller_id, phone')
+          .limit(3);
+      final dbShops = (dbShopsResp as List).cast<Map<String, dynamic>>();
+
+      for (int i = 0; i < bandiporaShops.length; i++) {
+        final sDef = bandiporaShops[i];
+        final orderId = _uuid.v4();
+        final shopId = dbShops.length > i ? dbShops[i]['id'] : null;
+
+        final orderPayload = <String, dynamic>{
+          'id': orderId,
+          'cart_group_id': cartGroupId,
+          'customer_id': customerId,
+          if (shopId != null) 'shop_id': shopId,
+          'status': 'awaiting_acceptance',
+          'order_type': 'instant',
+          'total_amount': 0.0,
+          'delivery_charges': 0.0,
+          'rider_earnings': 35.0,
+          'multi_shop_surcharge': 0.0,
+          'platform_fee': 0.0,
+          'small_cart_fee': 0.0,
+          'heavy_order_fee': 0.0,
+          'grand_total_collected': 0.0,
+          'payment_method': practicePaymentMethod,
+          'payment_status': 'captured', // Bypassed for simulation
+          'acceptance_deadline': deadline.toIso8601String(),
+          'address': 'Customer Residence, Nowpora, Bandipora, J&K',
+          'address_label': 'Home',
+          'delivery_notes': '$practiceTag 100x Multi-Shop Simulation: ${sDef['name']}',
+          'customer_phone': defaultPracticePhone,
+          'shop_phone': sDef['phone'],
+          'delivery_lat': 34.4120, // Nowpora
+          'delivery_lng': 74.6485,
+          'shop_lat': sDef['lat'],
+          'shop_lng': sDef['lng'],
+          'seller_accepted': false,
+          'partner_accepted': targetRiderId != null,
+          'delivery_partner_id': targetRiderId,
+          'rider_phone': targetRiderPhone,
+          'estimated_distance_km': i == 0 ? 0.3 : (i == 1 ? 1.05 : 2.20),
+          'created_at': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+        };
+
+        await _db.from('orders').insert(orderPayload);
+        createdOrderIds.add(orderId);
+
+        // Insert items
+        final itemsList = sDef['items'] as List<Map<String, dynamic>>;
+        final itemsToInsert = itemsList.map((item) {
+          return {
+            'id': _uuid.v4(),
+            'order_id': orderId,
+            'product_name': '🧪 [Practice] ${item['name']}',
+            'quantity': item['qty'],
+            'price': 0.0,
+            'weight_kg': 0.5,
+            'special_instructions': 'Practice Simulation Item - Do Not Prepare',
+            'created_at': now.toIso8601String(),
+          };
+        }).toList();
+
+        await _db.from('order_items').insert(itemsToInsert);
+      }
+
+      // Audit Log
+      if (actorId != null) {
+        AuditRepository().log(
+          actorId: actorId,
+          actorRole: actorRole ?? 'admin',
+          action: 'practice_orders.bandipora_multishop_dispatched',
+          entityType: 'practice_orders',
+          entityId: cartGroupId,
+          metadata: {
+            'cart_group_id': cartGroupId,
+            'orders_created': createdOrderIds.length,
+            'order_ids': createdOrderIds,
+            'target_rider_id': targetRiderId,
+          },
+        );
+      }
+
+      NotificationService().showNotification(
+        title: '🛵 Bandipora Multi-Shop Simulation Placed!',
+        body: '3 stores linked under cart group ${cartGroupId.substring(0, 8)}. Check Radar & Map.',
+      );
+
+      return PracticeDispatchResult(
+        success: true,
+        ordersCreated: createdOrderIds.length,
+        orderIds: createdOrderIds,
+      );
+    } catch (e, st) {
+      debugPrint('[PracticeOrderService] Bandipora dispatch error: $e\n$st');
+      return PracticeDispatchResult(
+        success: false,
+        ordersCreated: 0,
+        orderIds: [],
+        errorMessage: e.toString(),
+      );
+    }
   }
 
   // ── Private Helpers ────────────────────────────────────────────────────────

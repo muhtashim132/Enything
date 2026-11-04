@@ -15,6 +15,7 @@ import '../../providers/platform_config_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../utils/demographic_utils.dart';
+import '../../utils/search_relevance_engine.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
@@ -264,8 +265,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
     if (lower.isEmpty) return false;
 
     final title = _pageTitle.toLowerCase();
-    if (title == lower || (lower.length >= 4 && title.contains(lower)))
+    if (title == lower || (lower.length >= 4 && title.contains(lower))) {
       return true;
+    }
 
     // Check if query directly references an entire shop name alone
     for (final s in widget.shops) {
@@ -394,8 +396,9 @@ class _AllListingsPageState extends State<AllListingsPage> {
               if (!matches) return false;
             }
             if (!loc.hasLocation) return true;
-            if (s.location.latitude == 0 || s.location.longitude == 0)
+            if (s.location.latitude == 0 || s.location.longitude == 0) {
               return false;
+            }
             final d = s.distanceKm ?? loc.distanceTo(s.location);
             return DeliveryCalculator.isWithinRange(d);
           })
@@ -937,43 +940,17 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
   List<ProductModel> _computeSortedProducts() {
     final loc = context.read<LocationProvider>();
-    final lowerFilters =
-        widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty
-            ? widget.categoryFilter!.map((c) => c.trim().toLowerCase()).toSet()
-            : null;
 
     var list = _allProducts.where((p) {
-      if (lowerFilters != null) {
-        final pCat = p.category.trim().toLowerCase();
+      if (widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty) {
         final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
-        final isOmnibus =
-            shop != null && AppCategories.isOmnibusStoreCategory(shop.category);
-        final isGroceryFilter = lowerFilters.any((c) =>
-            c.contains('grocery') ||
-            c.contains('supermarket') ||
-            c.contains('hypermarket'));
-        final isGroceryLmProduct = AppCategories.isGroceryLowMargin(pCat);
-        final matchesProdCat = lowerFilters.contains(pCat) ||
-            (isGroceryFilter && isGroceryLmProduct);
-
-        if (isOmnibus) {
-          // For omnibus multi-department stores, items MUST strictly match the category filter
-          // so groceries and produce do not leak into specialty category exploration (e.g. Cosmetics)
-          if (!matchesProdCat) return false;
-        } else {
-          final sCat = shop?.category.trim().toLowerCase() ?? '';
-          final matchesShopCat = sCat.isNotEmpty && lowerFilters.contains(sCat);
-          final matchesShopMultiCat = shop?.categories
-                  .any((c) => lowerFilters.contains(c.trim().toLowerCase())) ??
-              false;
-          final matchesShopScope = widget.shops.any((s) => s.id == p.shopId);
-          if (!matchesProdCat &&
-              !matchesShopCat &&
-              !matchesShopMultiCat &&
-              !matchesShopScope) {
-            return false;
-          }
-        }
+        final matches = AppCategories.matchesBrowsingCategory(
+          productCategory: p.category,
+          shopCategory: shop?.category,
+          targetCategories: widget.categoryFilter!,
+          shopCategories: shop?.categories,
+        );
+        if (!matches) return false;
       }
       final shop = _allProductShops[p.id] ?? _shopsMap[p.shopId];
       if (loc.hasLocation && shop != null) {
@@ -1027,6 +1004,19 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
       switch (_sortMode) {
         case _AllListingsSortMode.bestRating:
+          if (_searchQuery.trim().isNotEmpty) {
+            final scoreA = SearchRelevanceEngine.computeScore(
+              product: a,
+              query: _searchQuery,
+              shop: sA,
+            );
+            final scoreB = SearchRelevanceEngine.computeScore(
+              product: b,
+              query: _searchQuery,
+              shop: sB,
+            );
+            if (scoreA != scoreB) return scoreB.compareTo(scoreA);
+          }
           return b.rating.compareTo(a.rating);
         case _AllListingsSortMode.nearest:
           return (sA?.distanceKm ?? double.infinity)

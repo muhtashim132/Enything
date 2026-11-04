@@ -30,6 +30,7 @@ import '../../config/app_categories.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../utils/demographic_utils.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/search_relevance_engine.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
@@ -93,8 +94,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   int _shopsDisplayLimit = 3;
   int _productsDisplayLimit = 6;
   int _searchShopsDisplayLimit = 12;
-  // Show 3 products initially per search (with "See more" to expand to full list)
-  int _searchProductsDisplayLimit = 3;
   List<ShopModel> _shops = [];
   List<ShopModel> _searchResults = [];
   List<ProductModel> _searchProductResults = [];
@@ -313,7 +312,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'outfit',
       'jewellery',
     ],
-    'More': [
+    'Cosmetics': [
       'cosmetics',
       'cosmetic',
       'makeup',
@@ -321,6 +320,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'skincare',
       'skin care',
       'lipstick',
+      'lipsticks',
       'lip balm',
       'eyeliner',
       'kajal',
@@ -333,21 +333,67 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'moisturizer',
       'sunscreen',
       'serum',
+      'serums',
       'shampoo',
       'conditioner',
       'perfume',
+      'perfumes',
       'deodorant',
+      'deodorants',
       'body spray',
       'nail polish',
+      'hair oil',
+      'cleanser',
+      'toner',
+      'body wash',
+      'face cream',
+      'cream',
+      'garnier',
+      'mamaearth',
+      'nivea',
+      'loreal',
+      'biotique',
+      'cetaphil',
+      'minimalist',
+      'plum',
+      'lakme',
+      'maybelline',
+    ],
+    'Stationery': [
       'stationery',
       'notebook',
+      'notebooks',
       'pen',
+      'pens',
       'pencil',
+      'pencils',
+      'eraser',
+      'sharpener',
+      'scale',
+      'ruler',
+      'calculator',
+      'file',
+      'folder',
+      'stapler',
+      'scissors',
+      'glue',
+      'tape',
+      'marker',
+      'highlighter',
+      'chart',
+      'book',
+      'books',
+      'diary',
+      'register',
+    ],
+    'More': [
       'toys',
       'games',
       'sports',
       'pet supplies',
       'flowers',
+      'hardware',
+      'home decor',
     ],
     'Electronics': [
       'electronics',
@@ -452,7 +498,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           return (sA?.distanceKm ?? double.infinity)
               .compareTo(sB?.distanceKm ?? double.infinity);
         case _SortMode.relevant:
-          return 0; // Maintain original order
+          if (_searchQuery.trim().isNotEmpty) {
+            final scoreA = SearchRelevanceEngine.computeScore(
+              product: a,
+              query: _searchQuery,
+              shop: _searchProductShops[a.id],
+            );
+            final scoreB = SearchRelevanceEngine.computeScore(
+              product: b,
+              query: _searchQuery,
+              shop: _searchProductShops[b.id],
+            );
+            if (scoreA != scoreB) {
+              return scoreB.compareTo(scoreA); // Highest relevance first!
+            }
+          }
+          return b.rating.compareTo(a.rating);
       }
     });
     return list;
@@ -509,10 +570,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     List<String> targetCategories, {
     bool applyDemographic = false,
   }) {
-    final lowerTargets =
-        targetCategories.map((c) => c.trim().toLowerCase()).toSet();
     var list = _products.where((p) {
-      return lowerTargets.contains(p.category.trim().toLowerCase());
+      final shop = _productShops[p.id];
+      return AppCategories.matchesBrowsingCategory(
+        productCategory: p.category,
+        shopCategory: shop?.category,
+        targetCategories: targetCategories,
+        shopCategories: shop?.categories,
+      );
     }).toList();
 
     if (applyDemographic && _selectedFeedDemographic != 'All') {
@@ -949,6 +1014,175 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     }).toList();
   }
 
+  /// 100x Contextual Metadata for the Products Section & See All Action
+  ({String sectionTitle, String buttonLabel, List<String>? categoryFilter})
+      _getProductSectionMeta() {
+    final config = context.read<PlatformConfigProvider>();
+
+    // 1. If an Explore Category tab is selected
+    if (_selectedTabIndex >= 0 && _selectedTabIndex < _categories.length) {
+      final tabName = _categories[_selectedTabIndex]['name'] as String;
+      final rawSubcategories = _tabCategories[tabName] ?? [tabName];
+      final finalCategories =
+          rawSubcategories.where((c) => config.isActiveCategory(c)).toList();
+
+      if (tabName == 'Supermarket / Hypermarket') {
+        return (
+          sectionTitle: 'Popular in Supermarket & Hypermarket',
+          buttonLabel: 'See all Supermarket & Hypermarket products',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Food') {
+        return (
+          sectionTitle: 'Popular in Food & Restaurants',
+          buttonLabel: 'See all Food & Restaurant items',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Pharmacy') {
+        return (
+          sectionTitle: 'Popular in Pharmacy & Healthcare',
+          buttonLabel: 'See all Pharmacy & Healthcare products',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Clothing') {
+        final demoTitle = _selectedFeedDemographic == 'Men/Boys'
+            ? 'Popular for Men & Boys'
+            : (_selectedFeedDemographic == 'Women/Girls'
+                ? 'Popular for Women & Girls'
+                : (_selectedFeedDemographic == 'Kids'
+                    ? 'Popular for Kids'
+                    : (_selectedFeedDemographic == 'Unisex'
+                        ? 'Popular Unisex Fashion'
+                        : 'Popular in Clothing & Fashion')));
+        final demoBtn = _selectedFeedDemographic != 'All'
+            ? 'See all $_selectedFeedDemographic fashion'
+            : 'See all Clothing & Fashion products';
+        return (
+          sectionTitle: demoTitle,
+          buttonLabel: demoBtn,
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Electronics') {
+        return (
+          sectionTitle: 'Popular in Electronics & Gadgets',
+          buttonLabel: 'See all Electronics & Gadgets',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'More') {
+        return (
+          sectionTitle: 'Popular in More Categories',
+          buttonLabel: 'See all products in this category',
+          categoryFilter: finalCategories,
+        );
+      } else {
+        return (
+          sectionTitle: 'Popular in $tabName',
+          buttonLabel: 'See all $tabName products',
+          categoryFilter: finalCategories,
+        );
+      }
+    }
+
+    // 2. If filtering via custom filter categories without tab selection
+    if (_selectedFilterCategories.isNotEmpty) {
+      final firstFilter = _selectedFilterCategories.first;
+      final effectiveCategories = <String>[];
+      for (final cat in _selectedFilterCategories) {
+        final subs = _tabCategories[cat] ?? [cat];
+        effectiveCategories
+            .addAll(subs.where((c) => config.isActiveCategory(c)));
+      }
+      return (
+        sectionTitle: _selectedFilterCategories.length == 1
+            ? 'Popular in $firstFilter'
+            : 'Filtered Popular Products',
+        buttonLabel: 'See all filtered products',
+        categoryFilter: effectiveCategories,
+      );
+    }
+
+    // 3. Default "All" dashboard view
+    final defaultTitle = _selectedFeedDemographic == 'Men/Boys'
+        ? 'Popular for Men & Boys'
+        : (_selectedFeedDemographic == 'Women/Girls'
+            ? 'Popular for Women & Girls'
+            : (_selectedFeedDemographic == 'Kids'
+                ? 'Popular for Kids'
+                : (_selectedFeedDemographic == 'Unisex'
+                    ? 'Popular Unisex Fashion'
+                    : 'Popular in your area')));
+    final defaultBtn = _selectedFeedDemographic != 'All'
+        ? 'See all $_selectedFeedDemographic products'
+        : 'See all popular products';
+
+    return (
+      sectionTitle: defaultTitle,
+      buttonLabel: defaultBtn,
+      categoryFilter: null,
+    );
+  }
+
+  /// 100x Contextual Metadata for the Stores Section & See All Action
+  ({String sectionTitle, String buttonLabel, List<String>? categoryFilter})
+      _getStoreSectionMeta() {
+    final config = context.read<PlatformConfigProvider>();
+
+    if (_selectedTabIndex >= 0 && _selectedTabIndex < _categories.length) {
+      final tabName = _categories[_selectedTabIndex]['name'] as String;
+      final rawSubcategories = _tabCategories[tabName] ?? [tabName];
+      final finalCategories =
+          rawSubcategories.where((c) => config.isActiveCategory(c)).toList();
+
+      if (tabName == 'Food') {
+        return (
+          sectionTitle: 'Restaurants near you',
+          buttonLabel: 'See all restaurants',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Supermarket / Hypermarket') {
+        return (
+          sectionTitle: 'Supermarkets & Hypermarkets near you',
+          buttonLabel: 'See all supermarkets & hypermarkets',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Pharmacy') {
+        return (
+          sectionTitle: 'Pharmacies & Medical Stores near you',
+          buttonLabel: 'See all pharmacies & medical stores',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Clothing') {
+        return (
+          sectionTitle: _selectedFeedDemographic == 'Men/Boys'
+              ? 'Men & Boys Stores'
+              : (_selectedFeedDemographic == 'Women/Girls'
+                  ? 'Women & Girls Stores'
+                  : 'Clothing & Fashion Stores near you'),
+          buttonLabel: 'See all clothing stores',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Electronics') {
+        return (
+          sectionTitle: 'Electronics Stores near you',
+          buttonLabel: 'See all electronics stores',
+          categoryFilter: finalCategories,
+        );
+      } else {
+        return (
+          sectionTitle: 'Stores in $tabName near you',
+          buttonLabel: 'See all $tabName stores',
+          categoryFilter: finalCategories,
+        );
+      }
+    }
+
+    return (
+      sectionTitle: 'Stores near you',
+      buttonLabel: 'See all stores',
+      categoryFilter: null,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1318,7 +1552,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       _comingSoonSubMessage = null;
       _searchQuery = query;
       _searchShopsDisplayLimit = 2;
-      _searchProductsDisplayLimit = 3;
       if (!skipNLP) {
         _selectedSearchDemographic = 'All';
         _selectedSizes.clear();
@@ -1332,11 +1565,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       final String lowerQuery = query.toLowerCase().trim();
       final String cleanQuery =
           query.replaceAll(RegExp(r'[,()"\x27]'), ' ').trim();
-      final List<String> terms = cleanQuery
+      final List<String> rawTerms = cleanQuery
           .toLowerCase()
           .split(RegExp(r'\s+'))
           .where((t) => t.isNotEmpty)
           .toList();
+
+      // 100x Noise & Stop-Word Stripping for multi-word queries:
+      // (e.g. "serum for face" -> ['serum', 'face'], "milk and bread" -> ['milk', 'bread'])
+      const stopWords = {'for', 'in', 'of', 'with', 'and', 'the', 'a', 'an', 'at', 'by', 'to', '&'};
+      final List<String> filteredTerms = rawTerms.length > 1
+          ? rawTerms.where((t) => !stopWords.contains(t)).toList()
+          : rawTerms;
+      final List<String> terms = filteredTerms.isNotEmpty ? filteredTerms : rawTerms;
+
       List<String> matchedSubcategories = [];
 
       if (!skipNLP) {
@@ -1354,7 +1596,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         });
       }
 
-
       List<String>? effectiveCategories;
       if (_selectedFilterCategories.isNotEmpty) {
         effectiveCategories = [];
@@ -1363,7 +1604,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
         }
       } else {
-        effectiveCategories = config.activeCategoryNames;
+        // 100x Omni-Search: When no filter category chip is selected, search across ALL categories platform-wide!
+        effectiveCategories = null;
       }
       List<dynamic> shopsByName = [];
       List<dynamic> productsByName = [];
@@ -1392,183 +1634,179 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         } catch (e) {
           debugPrint(
               '[Search] Step 1/4 FAILED (search_shops_geospatial byName): $e');
-          rethrow;
         }
 
-        // Phase 26 Fix: Fetch products without .select('*, shops(*)')  which
-        // causes PostgREST to reject embedded-resource requests on SETOF RPCs.
-        // Instead, we batch-fetch shops separately and reconstruct the map.
+        // ── 100x Forensic Geospatial Product Omni-Search ───────────────────
+        // Calls the high-performance search_products_geospatial RPC directly.
+        // It tokenizes query, matches product name, brand, description, category,
+        // sub_category, menu_category, special tags, and parent shop name with
+        // PostGIS geospatial ST_DWithin and partitions by shop.
         debugPrint(
-            '[Search] Step 2/4: search_products_geospatial (byName) BYPASS q="$query"');
+            '[Search] Step 2/4: search_products_geospatial q="$query"');
         List<dynamic> rawProductsByName = [];
         try {
-          // Offload geospatial ST_DWithin and ST_Distance to the working shops RPC
-          final nearbyShops =
-              await _supabase.rpc('search_shops_geospatial', params: {
+          final rpcProducts =
+              await _supabase.rpc('search_products_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
-            'p_query': null, // All shops in radius to search their products
+            'p_query': query,
             'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
-            'p_limit': 150
+            'p_limit': 150,
+            'p_limit_per_shop': 10,
+            'p_special_tag': _selectedSearchDemographic != 'All'
+                ? _selectedSearchDemographic
+                : null,
           });
+          if (rpcProducts is List && rpcProducts.isNotEmpty) {
+            rawProductsByName.addAll(rpcProducts);
+            debugPrint(
+                '[Search] Step 2/4 OK via search_products_geospatial RPC: ${rawProductsByName.length} products');
+          }
+        } catch (e) {
+          debugPrint(
+              '[Search] Step 2/4 search_products_geospatial RPC failed: $e');
+        }
 
-          final shopIds =
-              (nearbyShops as List).map((s) => s['id'] as String).toList();
+        // Store-Name Match Supplementation:
+        // If the query matched a restaurant or shop by name or cuisine (e.g. "Maxx Retail" or "Biryani Hut"),
+        // fetch that store's top available products and prepend them to results.
+        final matchingShops = shopsByName.where((s) {
+          final sName = (s['name'] as String? ?? '').toLowerCase();
+          final sCuisine = (s['cuisine_type'] as String? ?? '').toLowerCase();
+          final sCat = (s['category'] as String? ?? '').toLowerCase();
+          if (lowerQuery.isNotEmpty &&
+              (sName.contains(lowerQuery) || lowerQuery.contains(sName))) {
+            return true;
+          }
+          if (terms.isNotEmpty && terms.every((t) => sName.contains(t))) {
+            return true;
+          }
+          if (terms.isNotEmpty &&
+              terms.every((t) => sCuisine.contains(t) || sCat.contains(t))) {
+            return true;
+          }
+          return false;
+        }).toList();
 
-          if (shopIds.isNotEmpty) {
-            // ── 100x Forensic Restaurant / Store Name Matching ─────────────────
-            // If the query matches a restaurant or shop by name or cuisine:
-            final matchingShops = shopsByName.where((s) {
-              final sName = (s['name'] as String? ?? '').toLowerCase();
-              final sCuisine = (s['cuisine_type'] as String? ?? '').toLowerCase();
-              final sCat = (s['category'] as String? ?? '').toLowerCase();
-              if (lowerQuery.isNotEmpty &&
-                  (sName.contains(lowerQuery) || lowerQuery.contains(sName))) {
-                return true;
+        final matchingShopIds = matchingShops.map((s) => s['id'] as String).toSet();
+        if (matchingShopIds.isNotEmpty) {
+          try {
+            final storeProdsRaw = await _supabase
+                .from('products')
+                .select()
+                .eq('is_deleted', false)
+                .eq('is_available', true)
+                .inFilter('shop_id', matchingShopIds.take(10).toList())
+                .order('rating', ascending: false)
+                .limit(50);
+            final existingIds = rawProductsByName.map((p) => p['id']).toSet();
+            for (final sp in storeProdsRaw) {
+              if (!existingIds.contains(sp['id'])) {
+                rawProductsByName.insert(0, sp);
+                existingIds.add(sp['id']);
               }
-              if (terms.isNotEmpty && terms.every((t) => sName.contains(t))) {
-                return true;
-              }
-              if (terms.isNotEmpty &&
-                  terms.every((t) => sCuisine.contains(t) || sCat.contains(t))) {
-                return true;
-              }
-              return false;
-            }).toList();
-
-            final matchingShopIds = matchingShops.map((s) => s['id'] as String).toSet();
-
-            if (matchingShopIds.isNotEmpty) {
-              // 1. Fetch ALL active products belonging to the matched restaurant(s)
-              // WITHOUT ANY RESTRICTION ON PRODUCT TITLE TEXT and WITHOUT take(5) capping!
-              final matchingProdsRaw = await _supabase
-                  .from('products')
-                  .select()
-                  .eq('is_deleted', false)
-                  .eq('is_available', true)
-                  .inFilter('shop_id', matchingShopIds.toList());
-
-              final matchingFiltered = matchingProdsRaw.where((p) {
-                if (_selectedSizes.isNotEmpty) {
-                  final variants = p['variants'] as List<dynamic>? ?? [];
-                  final matchesSize = variants.any((v) {
-                    final name = (v['name'] as String?)?.trim() ?? '';
-                    return _selectedSizes.contains(name);
-                  });
-                  if (!matchesSize) return false;
-                }
-                if (_selectedSearchDemographic != 'All') {
-                  final allowedTags = DemographicUtils.getAllowedTags(_selectedSearchDemographic);
-                  if (allowedTags != null) {
-                    final tagsRaw = p['special_tags'];
-                    final List<String> tags = (tagsRaw is List)
-                        ? tagsRaw.map((t) => t.toString().trim()).toList()
-                        : [];
-                    if (!tags.any((t) => allowedTags.contains(t))) return false;
-                  }
-                }
-                return true;
-              }).toList();
-
-              matchingFiltered.sort((a, b) {
-                final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
-                final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
-                return ratingB.compareTo(ratingA);
-              });
-
-              // Add all matching store products to the front of results!
-              rawProductsByName.addAll(matchingFiltered);
             }
+          } catch (e) {
+            debugPrint('[Search] Store products fetch failed: $e');
+          }
+        }
 
-            // 2. Fetch keyword-matching products from other shops in radius
-            final otherShopIds = shopIds.where((sid) => !matchingShopIds.contains(sid)).toList();
-            if (otherShopIds.isNotEmpty && terms.isNotEmpty) {
+        // Direct-Query Resilient Fallback:
+        // If search_products_geospatial was unavailable or returned 0 products,
+        // perform chunked direct search on products table (max 25 shop IDs per chunk
+        // to strictly prevent HTTP 414 URL length overflow!).
+        if (rawProductsByName.isEmpty && terms.isNotEmpty) {
+          try {
+            final nearbyShops =
+                await _supabase.rpc('search_shops_geospatial', params: {
+              'p_lat': lat,
+              'p_lng': lng,
+              'p_query': null,
+              'p_categories': effectiveCategories,
+              'p_radius_km': maxRadius,
+              'p_limit': 100
+            });
+            final allShopIds =
+                (nearbyShops as List).map((s) => s['id'] as String).toList();
+
+            for (int i = 0; i < allShopIds.length; i += 25) {
+              final chunk = allShopIds.sublist(
+                  i, math.min(i + 25, allShopIds.length));
               var q = _supabase
                   .from('products')
                   .select()
                   .eq('is_deleted', false)
                   .eq('is_available', true)
-                  .inFilter('shop_id', otherShopIds);
+                  .inFilter('shop_id', chunk);
 
-              final orParts = <String>[];
               for (final term in terms) {
                 if (!DemographicUtils.isDemographicKeyword(term)) {
-                  orParts.add('name.ilike.%$term%');
-                  orParts.add('description.ilike.%$term%');
-                  orParts.add('brand.ilike.%$term%');
-                  orParts.add('category.ilike.%$term%');
-                  orParts.add('menu_category.ilike.%$term%');
-                  orParts.add('sub_category.ilike.%$term%');
+                  q = q.or(
+                    'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,medicine_type.ilike.%$term%',
+                  );
                 }
               }
-              if (orParts.isNotEmpty) {
-                q = q.or(orParts.join(','));
+
+              final chunkProds =
+                  await q.order('rating', ascending: false).limit(50);
+              rawProductsByName.addAll(chunkProds);
+              if (rawProductsByName.length >= 60) break;
+            }
+          } catch (e) {
+            debugPrint('[Search] Direct query fallback failed: $e');
+          }
+        }
+
+        // Local Filter for Size, Demographic, and Dietary preferences
+        final filteredByName = rawProductsByName.where((p) {
+          if (terms.isNotEmpty) {
+            final searchable =
+                '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
+                    .toLowerCase();
+            final cleanSearchable = searchable.replaceAll(RegExp(r'[,()"\x27\-]'), '');
+            final spacedSearchable = searchable.replaceAll(RegExp(r'[,()"\x27\-]'), ' ');
+            final matchesAllTerms = terms.every((t) {
+              if (DemographicUtils.isDemographicKeyword(t)) {
+                return DemographicUtils.rawProductMatchesTerm(
+                  product: p,
+                  term: t,
+                  searchableText: searchable,
+                );
               }
-
-              final otherProducts = await q;
-
-              final otherFiltered = otherProducts.where((p) {
-                if (terms.isNotEmpty) {
-                  final searchable =
-                      '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
-                          .toLowerCase();
-                  final matchesAllTerms = terms.every((t) =>
-                      DemographicUtils.rawProductMatchesTerm(
-                        product: p,
-                        term: t,
-                        searchableText: searchable,
-                      ));
-                  if (!matchesAllTerms) return false;
-                }
-                if (_selectedSizes.isNotEmpty) {
-                  final variants = p['variants'] as List<dynamic>? ?? [];
-                  final matchesSize = variants.any((v) {
-                    final name = (v['name'] as String?)?.trim() ?? '';
-                    return _selectedSizes.contains(name);
-                  });
-                  if (!matchesSize) return false;
-                }
-                if (_selectedSearchDemographic != 'All') {
-                  final allowedTags = DemographicUtils.getAllowedTags(_selectedSearchDemographic);
-                  if (allowedTags != null) {
-                    final tagsRaw = p['special_tags'];
-                    final List<String> tags = (tagsRaw is List)
-                        ? tagsRaw.map((t) => t.toString().trim()).toList()
-                        : [];
-                    if (!tags.any((t) => allowedTags.contains(t))) return false;
-                  }
-                }
-                return true;
-              }).toList();
-
-              final productsByShop = <String, List<dynamic>>{};
-              for (final p in otherFiltered) {
-                final sid = p['shop_id'] as String;
-                productsByShop.putIfAbsent(sid, () => []).add(p);
+              final cleanT = t.replaceAll(RegExp(r'[,()"\x27\-]'), '');
+              // Direct or punctuation-agnostic match (e.g. loreal matches l'oreal)
+              if (searchable.contains(t) || cleanSearchable.contains(cleanT) || spacedSearchable.contains(t)) return true;
+              if (t.endsWith('s') && t.length > 3) {
+                final stem = t.substring(0, t.length - 1);
+                if (searchable.contains(stem) || cleanSearchable.contains(stem)) return true;
               }
-
-              for (final shop in nearbyShops) {
-                final sid = shop['id'] as String;
-                if (productsByShop.containsKey(sid)) {
-                  final shopProds = productsByShop[sid]!;
-                  shopProds.sort((a, b) {
-                    final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
-                    final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
-                    return ratingB.compareTo(ratingA);
-                  });
-                  rawProductsByName.addAll(shopProds.take(5));
-                  if (rawProductsByName.length >= 60) break;
-                }
-              }
+              return false;
+            });
+            if (!matchesAllTerms) return false;
+          }
+          if (_selectedSizes.isNotEmpty) {
+            final variants = p['variants'] as List<dynamic>? ?? [];
+            final matchesSize = variants.any((v) {
+              final name = (v['name'] as String?)?.trim() ?? '';
+              return _selectedSizes.contains(name);
+            });
+            if (!matchesSize) return false;
+          }
+          if (_selectedSearchDemographic != 'All') {
+            final allowedTags =
+                DemographicUtils.getAllowedTags(_selectedSearchDemographic);
+            if (allowedTags != null) {
+              final tagsRaw = p['special_tags'];
+              final List<String> tags = (tagsRaw is List)
+                  ? tagsRaw.map((t) => t.toString().trim()).toList()
+                  : [];
+              if (!tags.any((t) => allowedTags.contains(t))) return false;
             }
           }
-          debugPrint(
-              '[Search] Step 2/4 OK: ${rawProductsByName.length} products found');
-        } catch (e) {
-          debugPrint('[Search] Step 2/4 FAILED (byName bypass): $e');
-          rethrow;
-        }
+          return true;
+        }).toList();
+        rawProductsByName = filteredByName;
 
         List<dynamic> rawProductsByCat = [];
         if (matchedSubcategories.isNotEmpty && !skipNLP) {
@@ -1581,97 +1819,43 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               'p_lng': lng,
               'p_categories': matchedSubcategories,
               'p_radius_km': maxRadius,
-              'p_limit': 50
+              'p_limit': 30
             });
             debugPrint(
                 '[Search] Step 3/4 OK: ${shopsByCat.length} shops found');
-          } catch (e) {
-            debugPrint(
-                '[Search] Step 3/4 FAILED (search_shops_geospatial byCat): $e');
-            rethrow;
-          }
 
-          debugPrint(
-              '[Search] Step 4/4: search_products_geospatial (byCat) BYPASS cats=$matchedSubcategories');
-          try {
-            // Leverage shopsByCat from Step 3 which is already distance sorted
-            final shopIds = shopsByCat.map((s) => s['id'] as String).toList();
+            final catShopIds =
+                shopsByCat.map((s) => s['id'] as String).toList();
 
-            if (shopIds.isNotEmpty) {
-              final allProducts = await _supabase
-                  .from('products')
-                  .select()
-                  .eq('is_deleted', false)
-                  .eq('is_available', true)
-                  .inFilter('shop_id', shopIds);
+            if (catShopIds.isNotEmpty && terms.isNotEmpty) {
+              // 100x Safe Chunked Query with SQL text filter (Never do unfiltered download of whole shops!)
+              for (int i = 0; i < catShopIds.length; i += 25) {
+                final chunk = catShopIds.sublist(
+                    i, math.min(i + 25, catShopIds.length));
+                var q = _supabase
+                    .from('products')
+                    .select()
+                    .eq('is_deleted', false)
+                    .eq('is_available', true)
+                    .inFilter('shop_id', chunk);
 
-              // Pre-truncation Local Size & Demographic Filter (Avoids PostgREST JSONB operator mismatch)
-              final filteredProducts = allProducts.where((p) {
-                if (terms.isNotEmpty) {
-                  final searchable =
-                      '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
-                          .toLowerCase();
-                  final matchesAllTerms = terms.every((t) =>
-                      DemographicUtils.rawProductMatchesTerm(
-                        product: p,
-                        term: t,
-                        searchableText: searchable,
-                      ));
-                  if (!matchesAllTerms) return false;
-                }
-                if (_selectedSizes.isNotEmpty) {
-                  final variants = p['variants'] as List<dynamic>? ?? [];
-                  final matchesSize = variants.any((v) {
-                    final name = (v['name'] as String?)?.trim() ?? '';
-                    return _selectedSizes.contains(name);
-                  });
-                  if (!matchesSize) return false;
-                }
-
-                if (_selectedSearchDemographic != 'All') {
-                  final allowedTags = DemographicUtils.getAllowedTags(_selectedSearchDemographic);
-                  if (allowedTags != null) {
-                    final tagsRaw = p['special_tags'];
-                    final List<String> tags = (tagsRaw is List)
-                        ? tagsRaw.map((t) => t.toString().trim()).toList()
-                        : [];
-                    final matchesDemographic =
-                        tags.any((t) => allowedTags.contains(t));
-                    if (!matchesDemographic) return false;
+                for (final term in terms) {
+                  if (!DemographicUtils.isDemographicKeyword(term)) {
+                    q = q.or(
+                      'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,medicine_type.ilike.%$term%',
+                    );
                   }
                 }
 
-                return true;
-              }).toList();
-
-              final productsByShop = <String, List<dynamic>>{};
-              for (final p in filteredProducts) {
-                final sid = p['shop_id'] as String;
-                productsByShop.putIfAbsent(sid, () => []).add(p);
-              }
-
-              for (final shop in shopsByCat) {
-                final sid = shop['id'] as String;
-                if (productsByShop.containsKey(sid)) {
-                  final shopProds = productsByShop[sid]!;
-                  shopProds.sort((a, b) {
-                    final ratingA = (a['rating'] as num?)?.toDouble() ?? 0.0;
-                    final ratingB = (b['rating'] as num?)?.toDouble() ?? 0.0;
-                    return ratingB.compareTo(ratingA);
-                  });
-                  rawProductsByCat.addAll(shopProds.take(5));
-                  if (rawProductsByCat.length >= 100) break;
-                }
-              }
-              if (rawProductsByCat.length > 100) {
-                rawProductsByCat = rawProductsByCat.sublist(0, 100);
+                final catProds =
+                    await q.order('rating', ascending: false).limit(30);
+                rawProductsByCat.addAll(catProds);
+                if (rawProductsByCat.length >= 60) break;
               }
             }
-            debugPrint(
-                '[Search] Step 4/4 OK: ${rawProductsByCat.length} products found');
           } catch (e) {
-            debugPrint('[Search] Step 4/4 FAILED (byCat bypass): $e');
-            rethrow;
+            debugPrint('[Search] Step 3/4 warning (non-fatal): $e');
+            // Do NOT rethrow! Preserve all products discovered in Step 2!
           }
         } else {
           debugPrint(
@@ -1690,18 +1874,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (sid != null && sid.isNotEmpty) productShopIds.add(sid);
         }
 
-        // Single batch query for all shops referenced by the product results.
+        // Batch query for all shops referenced by the product results in safe chunks of 30.
         final Map<String, Map<String, dynamic>> shopById = {};
         if (productShopIds.isNotEmpty) {
           debugPrint(
               '[Search] Batch-fetching ${productShopIds.length} shop(s) for product results');
-          final shopRows = await _supabase
-              .from('shops')
-              .select('*')
-              .inFilter('id', productShopIds.toList());
-          for (final s in shopRows as List) {
-            final sm = s as Map<String, dynamic>;
-            shopById[sm['id'] as String] = sm;
+          final idList = productShopIds.toList();
+          for (int i = 0; i < idList.length; i += 30) {
+            final chunk = idList.sublist(i, math.min(i + 30, idList.length));
+            final shopRows = await _supabase
+                .from('shops')
+                .select('*')
+                .inFilter('id', chunk);
+            for (final s in shopRows as List) {
+              final sm = s as Map<String, dynamic>;
+              shopById[sm['id'] as String] = sm;
+            }
           }
         }
 
@@ -1823,6 +2011,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       addProducts(productsByName);
       addProducts(productsByCat);
+
+      if (_searchQuery.trim().isNotEmpty) {
+        SearchRelevanceEngine.sortProducts(
+          products: prodResults,
+          query: _searchQuery,
+          shops: prodShops,
+        );
+      }
 
       if (mounted) {
         if (_searchQuery != query) return;
@@ -2163,11 +2359,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         diverseShopIds.add(s.id);
       }
 
+      final perShopLimit = diverseShopIds.length <= 2 ? 12 : 8;
       final productsResponse = diverseShopIds.isEmpty
           ? []
           : await _supabase.rpc('get_feed_products', params: {
               'p_shop_ids': diverseShopIds.toList(),
-              'p_limit_per_shop': 5,
+              'p_limit_per_shop': perShopLimit,
               'p_categories': effectiveCategories,
             }).select('*, shops(*)');
 
@@ -2177,14 +2374,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
         for (final p in productsResponse) {
           final product = ProductModel.fromMap(p);
-          if (!effectiveCategories.contains(product.category) ||
-              !config.isActiveCategory(product.category)) {
-            continue;
-          }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+
+          final matchesCategory = AppCategories.matchesBrowsingCategory(
+            productCategory: product.category,
+            shopCategory: shop.category,
+            targetCategories: effectiveCategories,
+            shopCategories: shop.categories,
+          );
+          if (!matchesCategory || !config.isActiveCategory(product.category)) {
+            continue;
+          }
 
           if (locationProvider.hasLocation) {
             if (shop.location.latitude == 0 || shop.location.longitude == 0) {
@@ -2457,12 +2660,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       // Phase 21 Fix: Prevent Pixel Overloading by using RPC to fetch a diverse per-shop limit
       final nearbyShopIds = nearby.map((s) => s.id).take(50).toList();
+      final perShopLimit = nearbyShopIds.length <= 2 ? 12 : 8;
 
       final productsResponse = nearbyShopIds.isEmpty
           ? []
           : await _supabase.rpc('get_feed_products', params: {
               'p_shop_ids': nearbyShopIds,
-              'p_limit_per_shop': 5,
+              'p_limit_per_shop': perShopLimit,
               'p_categories': finalCategories,
             }).select('*, shops(*)');
 
@@ -2471,15 +2675,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         final prodShops = <String, ShopModel>{};
 
         for (final p in productsResponse) {
-          final product = ProductModel.fromMap(p);
-          if (!effectiveCategories.contains(product.category) ||
-              !config.isActiveCategory(product.category)) {
-            continue;
-          }
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
           if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+
+          final product = ProductModel.fromMap(p);
+          if (!config.isActiveCategory(product.category)) continue;
+
+          final matchesCategory = AppCategories.matchesBrowsingCategory(
+            productCategory: product.category,
+            shopCategory: shop.category,
+            targetCategories: finalCategories,
+            shopCategories: shop.categories,
+          );
+          if (!matchesCategory) continue;
 
           if (locationProvider.hasLocation) {
             if (shop.location.latitude == 0 || shop.location.longitude == 0) {
@@ -2617,6 +2827,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final locationProvider = context.watch<LocationProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
+    final productMeta = _getProductSectionMeta();
+    final storeMeta = _getStoreSectionMeta();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -3030,6 +3242,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           ),
                           const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
+                          // Contextual Multi-Coloured Event & Party Catering discovery when query matches party/event keywords
+                          if (!_isSearching &&
+                              !_searchError &&
+                              _searchQuery.trim().isNotEmpty &&
+                              RegExp(r'\b(party|event|cater|catering|wedding|birthday|bulk|gathering|feast)\b', caseSensitive: false)
+                                  .hasMatch(_searchQuery)) ...[
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildBulkCateringCard(isDark),
+                              ),
+                            ),
+                          ],
+
                           // Skeleton while loading
                           if (_isSearching)
                             SliverToBoxAdapter(
@@ -3291,10 +3517,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ),
                               ),
                               SliverList.builder(
-                                itemCount: math.min(
-                                  _sortedProductResults.length,
-                                  _searchProductsDisplayLimit,
-                                ),
+                                itemCount: _sortedProductResults.length,
                                 itemBuilder: (context, index) {
                                   final product = _sortedProductResults[index];
                                   final shop = _searchProductShops[product.id];
@@ -3308,60 +3531,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   );
                                 },
                               ),
-
-                              // ── 100x "See more" / "See less" Option ───────────────────
-                              if (_sortedProductResults.length > 3)
-                                SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 8, bottom: 8),
-                                    child: Center(
-                                      child: InkWell(
-                                        onTap: () {
-                                          SensoryHaptics.light();
-                                          setState(() {
-                                            if (_searchProductsDisplayLimit <= 3) {
-                                              _searchProductsDisplayLimit =
-                                                  _sortedProductResults.length;
-                                            } else {
-                                              _searchProductsDisplayLimit = 3;
-                                            }
-                                          });
-                                        },
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? Colors.white.withValues(alpha: 0.08)
-                                                : AppColors.primary.withValues(alpha: 0.08),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: AppColors.primary.withValues(alpha: 0.3),
-                                              width: 1,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                _searchProductsDisplayLimit <= 3
-                                                    ? 'See more (${_sortedProductResults.length - 3} more) ▾'
-                                                    : 'See less ▴',
-                                                style: GoogleFonts.outfit(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 13,
-                                                  color: AppColors.primary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                              const SliverToBoxAdapter(child: SizedBox(height: 16)),
                             ],
 
                             // ── Under "See more": The Restaurant Itself! ──────────────
@@ -3845,15 +4015,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ],
                             SliverToBoxAdapter(
                               child: _buildSectionTitle(
-                                _selectedFeedDemographic == 'Men/Boys'
-                                    ? 'Popular for Men & Boys'
-                                    : (_selectedFeedDemographic == 'Women/Girls'
-                                        ? 'Popular for Women & Girls'
-                                        : (_selectedFeedDemographic == 'Kids'
-                                            ? 'Popular for Kids'
-                                            : (_selectedFeedDemographic == 'Unisex'
-                                                ? 'Popular Unisex Fashion'
-                                                : 'Popular in your area'))),
+                                productMeta.sectionTitle,
                               ),
                             ),
                             const SliverToBoxAdapter(
@@ -3877,8 +4039,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       crossAxisCount;
                                   final itemHeight = itemWidth + 134;
                                   final childAspectRatio = itemWidth / itemHeight;
+                                  final targetGridCount = crossAxisCount == 2
+                                      ? 6
+                                      : (crossAxisCount * 2);
+                                  final effectiveLimit = math.max(
+                                      _productsDisplayLimit, targetGridCount);
                                   final displayProducts = _sortedNormalProducts
-                                      .take(_productsDisplayLimit)
+                                      .take(effectiveLimit)
                                       .toList();
 
                                   return SliverGrid.builder(
@@ -3908,7 +4075,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               SliverToBoxAdapter(
                                 child: _buildModernSeeAllButton(
                                   context,
-                                  label: 'See all popular items',
+                                  label: productMeta.buttonLabel,
                                   onTap: () => Navigator.pushNamed(
                                     context,
                                     AppRoutes.allListings,
@@ -3920,13 +4087,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           Map<String, ShopModel>.from(
                                               _productShops),
                                       'shops': List<ShopModel>.from(_shops),
-                                      'sectionTitle':
-                                          _selectedFeedDemographic == 'Men/Boys'
-                                              ? 'Popular for Men & Boys'
-                                              : (_selectedFeedDemographic ==
-                                                      'Women/Girls'
-                                                  ? 'Popular for Women & Girls'
-                                                  : 'Popular in Your Area'),
+                                      'categoryFilter':
+                                          productMeta.categoryFilter,
+                                      'sectionTitle': productMeta.sectionTitle,
                                     },
                                   ),
                                   isDark: isDark,
@@ -3986,15 +4149,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 child: SizedBox(height: 24)),
                             SliverToBoxAdapter(
                               child: _buildSectionTitle(
-                                _selectedTabIndex < 0
-                                    ? 'Stores near you'
-                                    : _isFoodTab
-                                        ? 'Restaurants near you'
-                                        : _selectedFeedDemographic == 'Men/Boys'
-                                            ? 'Men & Boys Stores'
-                                            : (_selectedFeedDemographic == 'Women/Girls'
-                                                ? 'Women & Girls Stores'
-                                                : 'Shops near you'),
+                                storeMeta.sectionTitle,
                                 subtitle:
                                     '${_shops.length} within ${DeliveryCalculator.maxRadiusKm.toInt()} km',
                                 count: _shops.length,
@@ -4057,9 +4212,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               SliverToBoxAdapter(
                                 child: _buildModernSeeAllButton(
                                   context,
-                                  label: _isFoodTab
-                                      ? 'See all restaurants'
-                                      : 'See all stores',
+                                  label: storeMeta.buttonLabel,
                                   onTap: () => Navigator.pushNamed(
                                     context,
                                     AppRoutes.allListings,
@@ -4069,11 +4222,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           : ListingType.shops,
                                       'shops': List<ShopModel>.from(
                                           _sortedNormalShops),
-                                      'sectionTitle': _selectedTabIndex < 0
-                                          ? 'Stores Near You'
-                                          : _isFoodTab
-                                              ? 'All Restaurants'
-                                              : 'All Shops',
+                                      'categoryFilter':
+                                          storeMeta.categoryFilter,
+                                      'sectionTitle':
+                                          storeMeta.sectionTitle,
                                     },
                                   ),
                                   isDark: isDark,
@@ -4099,7 +4251,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             const SliverToBoxAdapter(
                                 child: SizedBox(height: 8)),
                             SliverToBoxAdapter(
-                              child: _buildSectionTitle('Popular in your area'),
+                              child: _buildSectionTitle(productMeta.sectionTitle),
                             ),
                             SliverToBoxAdapter(
                               child: Padding(
@@ -4725,97 +4877,324 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   Widget _buildBulkCateringCard(bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(top: 16, bottom: 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [const Color(0xFF281838), const Color(0xFF1B2338)]
-              : [const Color(0xFFFFF4EB), const Color(0xFFF3E8FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFF8E24AA).withValues(alpha: 0.2),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purple.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      child: PerspectiveCard(
+        borderRadius: 20,
+        pressScale: 0.985,
+        maxTiltAngle: 0.04,
+        enableHaptics: true,
+        enableSpecular: true,
+        onTap: () {
+          SensoryHaptics.light();
+          Navigator.pushNamed(context, AppRoutes.bulkOrderDiscovery);
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            // Multi-coloured celebration border harmonized with Enything brand (Cobalt Blue + Warm Coral + Festive Gold)
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF1E3FD8), // Enything Vivid Cobalt (Brand Primary)
+                Color(0xFF6366F1), // Electric Indigo / Violet
+                Color(0xFFFF007F), // Festive Celebration Magenta
+                Color(0xFFFF6B35), // Enything Warm Coral (Brand CTA)
+                Color(0xFFFFB800), // Sparkling Gold / Amber (Brand Accent)
+                Color(0xFF1E3FD8), // Seamless loop back to Cobalt Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E3FD8).withValues(alpha: isDark ? 0.28 : 0.12),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: const Color(0xFFFF6B35).withValues(alpha: isDark ? 0.18 : 0.08),
+                blurRadius: 10,
+                offset: const Offset(2, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () {
-            Navigator.pushNamed(context, AppRoutes.bulkOrderDiscovery);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8E24AA).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Center(
-                    child: Text('🎉', style: TextStyle(fontSize: 26)),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.all(1.5), // Crisp 1.5px multi-colour gradient border
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18.5),
+              // App-harmonized canvas: Enything crisp surface with subtle celebratory champagne warmth
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [
+                        const Color(0xFF0C0E1A), // Enything darkBg
+                        const Color(0xFF141626), // Enything darkSurface
+                        const Color(0xFF1A1D30), // Enything darkCard
+                        const Color(0xFF161936), // Deep cobalt midnight depth
+                      ]
+                    : [
+                        const Color(0xFFFFFFFF), // Crisp white card surface
+                        const Color(0xFFF5F6FF), // Enything AppColors.background (slight cobalt tint)
+                        const Color(0xFFEEF0FF), // Enything surfaceElevatedLight
+                        const Color(0xFFFFF9F2), // Subtle warm celebratory champagne glow
+                      ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Row 1: Header - Perfectly balanced SpaceBetween row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Host an Event or Party?',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      // Left: Category Pill Badge - Enything Cobalt to Electric Violet
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.5, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF1E3FD8), Color(0xFF6366F1)],
                             ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF1E3FD8).withValues(alpha: 0.30),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF8E24AA).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('🎉', style: TextStyle(fontSize: 10)),
+                              SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'HOST & EVENT PARTY',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.0,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.7,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+
+                      // Right: High-Energy Savings Pill - Enything Coral to Gold
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.5, vertical: 3.5),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF6B35), Color(0xFFFFB800)],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF6B35).withValues(alpha: 0.25),
+                              blurRadius: 5,
+                              offset: const Offset(0, 2),
                             ),
-                            child: const Text(
-                              'NEW',
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('⚡', style: TextStyle(fontSize: 9.5)),
+                            SizedBox(width: 3),
+                            Text(
+                              'UP TO 30% OFF',
                               style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF8E24AA),
+                                fontSize: 9.0,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF3E1E00),
+                                letterSpacing: 0.4,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Order 20 to 500+ items with tiered discounts & guaranteed kitchen slots.',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: isDark ? Colors.white70 : Colors.grey[700],
-                          height: 1.3,
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF8E24AA)),
-              ],
+                  const SizedBox(height: 8.5),
+
+                  // Row 2: Content Row - 3D Emblem + Copy + Gradient CTA Button
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // 3D Celebration Cluster Container (Harmonized Cobalt to Coral)
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(13),
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF1E3FD8), // Cobalt
+                              Color(0xFF6366F1), // Electric Indigo
+                              Color(0xFFFF6B35), // Warm Coral
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.40),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF1E3FD8).withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Text('🎉', style: TextStyle(fontSize: 22)),
+                            Positioned(
+                              top: 2,
+                              right: 3,
+                              child: Text('✨', style: TextStyle(fontSize: 8.5)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+
+                      // Text Info (Title, Subtitle, Reassurance)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Multicoloured Brand-Harmonized Title (Cobalt to Warm Coral)
+                            ShaderMask(
+                              shaderCallback: (bounds) => LinearGradient(
+                                colors: isDark
+                                    ? const [
+                                        Color(0xFF93C5FD), // Soft Electric Blue
+                                        Color(0xFFC4B5FD), // Festive Lavender
+                                        Color(0xFFFFCF40), // Enything Accent Gold
+                                      ]
+                                    : const [
+                                        Color(0xFF0F1E80), // Deep Brand Cobalt
+                                        Color(0xFF1E3FD8), // Vivid Brand Cobalt
+                                        Color(0xFFFF6B35), // Warm Brand Coral
+                                      ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ).createShader(bounds),
+                              child: Text(
+                                'Host an Event or Party? 🎊',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Bulk catering for 20 to 500+ guests',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.0,
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? Colors.white70 : const Color(0xFF475569),
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            // Feature reassurance line
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.verified_rounded,
+                                  size: 11.5,
+                                  color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A),
+                                ),
+                                const SizedBox(width: 3.5),
+                                Flexible(
+                                  child: Text(
+                                    'Chef quotes in 15 mins · Custom menus',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 10.0,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Sleek Brand Gradient Action Button (Cobalt to Coral)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7.5),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF1E3FD8), // Brand Cobalt Blue
+                              Color(0xFF4F46E5), // Indigo
+                              Color(0xFFFF6B35), // Brand Coral Orange
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF1E3FD8).withValues(alpha: 0.30),
+                              blurRadius: 7,
+                              offset: const Offset(0, 2.5),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Plan Event',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.0,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            SizedBox(width: 3),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 12.5,
+                              color: Colors.white,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -5643,9 +6022,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'sub': 'Tiered discounts · Advance slots · Fleet delivery',
         'icon': Icons.celebration_rounded,
         'colors': <Color>[
-          const Color(0xFF4A0E4E),
+          const Color(0xFF581C87),
           const Color(0xFF8E24AA),
-          const Color(0xFF673AB7),
+          const Color(0xFFE11D48),
+          const Color(0xFFEA580C),
         ],
         'accent': const Color(0xFFFFD54F),
         'emoji': '🍕🎉',

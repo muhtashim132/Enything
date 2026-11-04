@@ -112,16 +112,16 @@ void main() {
     });
 
     test('Small Cart Fee and Heavy Order Fee Aggregation in Delivery Math', () {
-      // Subtotal ₹50 (< ₹99 threshold) -> Small Cart Fee ₹15
-      // Weight 12kg (> 10kg threshold) -> Heavy Fee ₹20 * 2kg = ₹40 (or flat ₹20)
-      const smallCartFee = PaymentConfig.smallCartFee; // ₹15
+      // Subtotal ₹50 (< ₹199 threshold) -> Small Cart Fee ₹25
+      // Weight 12kg (> 10kg threshold) -> Heavy Fee ₹20
+      const smallCartFee = PaymentConfig.smallCartFee; // ₹25
       const heavyOrderFee = PaymentConfig.heavyOrderFee; // ₹20
       const baseDelivery = PaymentConfig.deliveryFee; // ₹20
-      const totalWithoutGst = baseDelivery + smallCartFee + heavyOrderFee; // ₹55
-      const totalDelivery = totalWithoutGst * (1 + 0.18); // ₹64.90
+      const totalWithoutGst = baseDelivery + smallCartFee + heavyOrderFee; // ₹65
+      const totalDelivery = totalWithoutGst * (1 + 0.18); // ₹76.70
 
-      expect(totalWithoutGst, 55.0);
-      expect(totalDelivery, closeTo(64.90, 0.01));
+      expect(totalWithoutGst, 65.0);
+      expect(totalDelivery, closeTo(76.70, 0.01));
     });
 
     test('WeightEngine parses weights across units and handles typos accurately', () {

@@ -259,7 +259,8 @@ class _PracticeOrderSimulatorModalState
     final isShopNeeded = _targetType == PracticeTargetType.specificSeller ||
         _targetType == PracticeTargetType.dual;
     final isRiderNeeded = _targetType == PracticeTargetType.specificRider ||
-        _targetType == PracticeTargetType.dual;
+        _targetType == PracticeTargetType.dual ||
+        _targetType == PracticeTargetType.bandiporaMultiShop;
 
     if (isShopNeeded && (_selectedShopId == null || _selectedShopId!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -402,7 +403,8 @@ class _PracticeOrderSimulatorModalState
     final isShopNeeded = _targetType == PracticeTargetType.specificSeller ||
         _targetType == PracticeTargetType.dual;
     final isRiderNeeded = _targetType == PracticeTargetType.specificRider ||
-        _targetType == PracticeTargetType.dual;
+        _targetType == PracticeTargetType.dual ||
+        _targetType == PracticeTargetType.bandiporaMultiShop;
 
     return Container(
       decoration: const BoxDecoration(
@@ -555,6 +557,7 @@ class _PracticeOrderSimulatorModalState
               spacing: 8,
               runSpacing: 8,
               children: [
+                _buildTargetChip(PracticeTargetType.bandiporaMultiShop, 'Bandipora 3-Shop Real Route (1km & 2km) 🗺️'),
                 _buildTargetChip(PracticeTargetType.specificSeller, 'Specific Seller 🏪'),
                 _buildTargetChip(PracticeTargetType.allSellers, 'All Sellers 🏬'),
                 _buildTargetChip(PracticeTargetType.specificRider, 'Specific Rider 🛵'),

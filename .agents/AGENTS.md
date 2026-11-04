@@ -385,3 +385,137 @@ All AI models and developers working on this project MUST adhere to the architec
    - In `CustomerHomeViewState` (`lib/pages/customer/home_page.dart`), maintain a 5-minute in-memory feed cache (`_cachedShops`, `_cachedProducts`, `_cachedProductShops`, `_cacheTimestamp`) to deliver instant 0ms renders on GPS micro-updates and navigation pop events without redundant network round trips.
 7. **Animation & Ticker Optimization**:
    - Micro-scrolling tickers (e.g., `_trendingScrollTimer`) must use intervals of >= 50ms (e.g. 60ms) rather than 30ms or unthrottled timers to prevent main thread starvation and reduce battery and CPU overhead.
+
+## 100x Forensic Edge-Case Audit & Remediation (Admin Dispatch Rider, Self-Delivery Lifecycle & Courier Exclusion Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Admin Dispatch, Rider Self-Delivery, Customer Experience, and Courier Exclusions:
+
+1. **Admin Dual-Role Acceptance Parity**: In `DispatchAdminPage` (`lib/pages/admin/modules/dispatch_admin_page.dart`), admins have full authority to accept merchant prep on behalf of stores (`admin_proxy_accept_seller`) and accept courier delivery on behalf of riders or personally deliver the order (`admin_proxy_accept_rider`).
+2. **Personal Self-Delivery Mode ("Deliver by Myself")**: When an admin selects "Deliver by Myself (Admin Delivery)", `admin_proxy_accept_rider` is called with `p_rider_id = NULL`. The backend resolves the admin's name and phone number from `admin_users` and `profiles` (with platform support fallback), automatically self-heals or provisions the admin in `delivery_partners` (verified, active), and sets `orders.is_admin_delivery = TRUE` and `orders.rider_name = 'Admin ' || adminName`.
+3. **VIP Customer Operations Dispatch Experience**: In `TrackOrderPage` (`lib/pages/customer/track_order_page.dart`), `CustomerOrderMapPage` (`lib/pages/customer/customer_order_map_page.dart`), `CustomerMainPage` floating bar, and `LiveActivityService`:
+   - When `order.isAdminDelivery == true` (or `riderName` contains "Admin"), the customer is presented with an exclusive royal purple VIP card: `"👑 Enything Operations Dispatch - [Admin Name] is personally delivering your order with priority speed & care."`
+   - The contact button dynamically updates to `"Call Admin"` with a shield icon and royal purple styling (`#7C3AED`), routing directly to the admin's phone number or platform operations desk.
+4. **Instant Courier Exclusion & Anti-Race Condition Shield**:
+   - As soon as an admin accepts an order (either for self-delivery or assigned courier), `orders.delivery_partner_id` is atomically populated with the assigned UUID.
+   - Courier radar queries (`get_nearby_unassigned_orders`) strictly require `delivery_partner_id IS NULL`, instantly excluding the order from regular riders' feeds.
+   - In `accept_order_rider`, any attempt by an external courier to accept an order where `delivery_partner_id IS NOT NULL AND delivery_partner_id != auth.uid()` is strictly rejected with `ORDER_ACCEPTED_BY_OTHER_RIDER`.
+5. **Multi-Shop Sibling Atomic Synchronization**: When proxy-accepting a multi-shop cart group (`cartGroupId != null`), `admin_proxy_accept_rider` acquires an advisory lock (`cart_group_accept_{cartGroupId}`) and updates all active sibling sub-orders in the group simultaneously, ensuring state consistency across all merchants.
+6. **Admin Active Deliveries Console ("My Deliveries 🛵" Tab)**: In `DispatchAdminPage`, a dedicated tab queries `admin_get_active_deliveries` returning active deliveries assigned to the current admin. Admins can execute the full delivery lifecycle:
+   - `📍 Arrived at Shop` (`admin_mark_arrived_at_shop`)
+   - `🛍️ Mark Picked Up` (`picked_up`)
+   - `🚀 Out for Delivery` (`out_for_delivery`)
+   - `✅ Complete Delivery` (`delivered` with 4-digit customer delivery OTP verification dialog)
+   - `🗺️ Navigate` (opens Google Maps / Apple Maps coordinates)
+   - `📞 Call Customer` and `🏪 Call Merchant`
+   - `🔄 Reassign / Release` (`admin_reassign_order_rider` to hand off to another active courier or release back to the open courier pool)
+7. **Zero Doorstep Cash Collection**: In accordance with Enything's 100% prepaid model, admin self-delivery never prompts or collects cash at doorstep. All orders are verified prepaid prior to dispatch.
+
+## 100x Forensic Edge-Case Audit & Remediation (Admin Multi-Role Authentication & Intent-Preserving Sign-up Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Admin Multi-Role Authentication and Intent-Preserving Sign-up:
+
+1. **Strict 2-Role Isolation for Admin Target Logins**: In `OtpVerifyPage` (`lib/pages/auth/otp_verify_page.dart`), when an authenticated admin initiates login or signup for a specific client role (`_requestedRole != null && _requestedRole != 'admin'`), the role picker MUST display strictly TWO role options: `[_requestedRole!, 'admin']`. The system MUST NOT dump all unrelated roles that the user holds onto the screen, preserving a clean, focused choice between their intended client role and Admin God Mode.
+2. **Dual-State Decision Engine (New User vs Existing User Deferred to Tap)**: Clicking on the requested role among the two choices dynamically determines registration state:
+   - If the user is an **existing registered user** of that role (`allRoles.contains(role)`): switches session role and routes through the welcome splash directly to that role's dashboard (checking KYC verification status).
+   - If the user is a **new user** for that role (`!allRoles.contains(role)`): routes directly to `AppRoutes.completeProfile` with `arguments: {'role': role, 'isAddingRole': true}` with user name pre-filled, transitioning seamlessly to profile details, shop/vehicle setup, and KYC.
+3. **Dynamic Role Hints & Badging**: The role card displays a prominent `[ NEW ]` badge and action-oriented subtitles (`"Sign up & Setup your Shop"`, `"Sign up as Delivery Partner"`, `"Complete Customer Profile"`) for unregistered roles, versus dashboard access hints (`"Go to Seller Dashboard"`, `"Go to Delivery Dashboard"`) for existing registered roles. Admin card displays `"Enter God Mode Control Tower"`.
+4. **Resilient Back Navigation & Multi-Role Fallback**: The role picker is guarded by `PopScope` to return cleanly to `AppRoutes.roleSelect` on hardware back press. When no specific role was requested (`_requestedRole == null`) and the user holds multiple active roles, the role picker presents all held roles.
+5. **Add Another Role Button Suppression Fortress**: The `+ Add another role` button MUST be permanently hidden whenever:
+   - The user is in the targeted 2-role admin selection flow (`_requestedRole != null`), or
+   - The user already holds all available platform client roles (`allRoles.contains('customer') && allRoles.contains('seller') && allRoles.contains('delivery_partner')`).
+   It is only displayed in a generic multi-role picker when client roles remain available to be registered.
+
+
+## 100x Forensic Edge-Case Audit & Remediation (Supermarket/Grocery Omnichannel Product Inheritance & Multi-Category Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Supermarket, Hypermarket, and Grocery store product inheritance:
+
+1. **Dual-Belonging Category Architecture**: A product stocked in an omnibus multi-department store (Supermarket, Hypermarket, Supermart, Hypermart, Grocery store) simultaneously belongs to:
+   - Its specific item category (e.g. lipstick -> `Cosmetics & Beauty`, notebook -> `Stationery`).
+   - Its parent store category (e.g. Maxx Retail -> `Supermarket / Hypermarket`, `Grocery`).
+2. **Supermarket & Grocery Feed Inclusion**: When a customer browses the Supermarket, Hypermarket, or Grocery categories (via home tabs, categorized sections, `AllListingsPage`, or `CategoryProductsPage`), the system MUST reflect and count ALL products belonging to that Supermarket or Grocery store, regardless of whether an item's specific category is Cosmetics, Stationery, or Grocery.
+3. **Zero Cross-Category Leakage Protection**: When browsing a specialty category (e.g. `Cosmetics & Beauty`, `Pharmacy`, `Footwear`), omnibus products MUST strictly match the browsing category. Groceries/staples (Atta, Dal, Produce) from a supermarket must NEVER leak into specialty category exploration pages.
+4. **Backend RPC Parity**: Both `get_feed_products` and `search_products_geospatial` RPCs enforce store-level category inheritance (`s.category` or `s.categories` matching the browsing category) alongside product-level matching.
+5. **Accurate Section Header Counting**: Section product counts and listing headers dynamically reflect all inherited products from nearby active stores within the delivery radius.
+
+## 100x Forensic Edge-Case Audit & Remediation (Customer Main Dashboard Omni-Search & Brand Discovery Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Customer Main Dashboard Search and Brand Discovery:
+
+1. **Direct Geospatial Product Omni-Search RPC**: In `lib/pages/customer/home_page.dart` (`_searchShops`), product retrieval MUST directly invoke the high-performance `search_products_geospatial` RPC. The system must NEVER bypass this RPC with an unfiltered fetch of all nearby shops, which causes URL length overflows and missing product results.
+2. **Universal Brand Discovery across all Categories**: Searching for any brand name (e.g. Garnier, Mamaearth, Nivea, L'Oreal, Amul, Nestle, Nike, Adidas, Apple, Samsung, Cipla, Himalaya) or brand + product combination (e.g. "Garnier serum", "Mamaearth face wash", "Amul milk") MUST accurately return matching products. In PostgreSQL RPC and Dart in-memory filtering, `brand` is matched alongside `name`, `description`, `category`, and `menu_category`.
+3. **Punctuation, Apostrophe & Stop-Word Sanitization**: Search query tokenization normalizes apostrophes (e.g. `L'Oreal` -> `l'oreal` / `l oreal`), special characters (`Dot & Key`), and strips conversational noise/stop-words (`for, in, of, with, and, the, a, an, at, by, to`) in multi-word queries (e.g. "serum for face" -> "serum face").
+4. **Plural/Singular Stemming**: Searches for plural terms (e.g. "serums", "lipsticks", "shampoos", "creams") automatically match singular item titles in the catalog.
+5. **PostgREST URL Length & Safe Chunking Guard**: Direct fallback queries on `products` table using `.inFilter('shop_id', ...)` MUST be chunked into safe batches of at most 25 UUIDs. Placing 100-150 shop IDs in a single GET query parameter is strictly prohibited as it triggers HTTP 414 Request-URI Too Large errors and crashes client search.
+6. **Platform-Wide Search on Empty Filter Selection**: When no category filter chip is selected (`_selectedFilterCategories.isEmpty`), `effectiveCategories` MUST be passed as `null` to `search_products_geospatial`, allowing platform-wide search across all merchant departments without artificial category lockout.
+7. **Dedicated Cosmetics & Stationery Keyword Segregation**: In `_searchKeywords`, keywords for beauty, skincare, haircare, and makeup (`serum, lipstick, moisturizer, sunscreen, shampoo, foundation, facewash`) MUST map directly to `'Cosmetics'` (`['Cosmetics & Beauty', 'Salon & Beauty']`), and stationery items to `'Stationery'`, preventing query pollution from hardware, flowers, or toys.
+8. **Soft-Delete Rule Strictness**: Every product search query MUST include `.eq('is_deleted', false)` and in SQL `p.is_deleted = false`.
+9. **Dual Display (Products & Shops)**: Shops carrying matching products are automatically added to `_searchResults` so customers discover both the specific items and the local merchants stocking them.
+10. **Zero Artificial Truncation on Search Results**: In `lib/pages/customer/home_page.dart`, search results MUST display all matching products directly in the scrollable view (`itemCount: _sortedProductResults.length`). Artificially capping search results to 3 or 6 items with accordion "See more / See less" collapse buttons is strictly prohibited. Customers searching for a product expect immediate, unhindered access to all matching results.
+
+## 100x Forensic Edge-Case Audit & Remediation (Customer Dashboard Multicoloured Host & Event Party Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Host & Event Party UI/UX on the Customer Dashboard:
+
+1. **Compact, Sleek 2-Tier Visual Architecture & Brand Harmony (>= 50% App Theme)**: In `lib/pages/customer/home_page.dart`, the Host an Event or Party card (`_buildBulkCateringCard`) MUST be rendered as a compact, ultra-sleek promotional banner (height ~95–104px, reduced from ~230px by >55%) with at least 50% theme harmony matching Enything's brand design system:
+   - **Enything Brand-Harmonized Border**: A crisp 1.5px continuous celebration border anchored by Enything's Vivid Cobalt Blue (`0xFF1E3FD8`), Warm Coral CTA (`0xFFFF6B35`), and Accent Gold (`0xFFFFB800`), blended with celebratory electric indigo (`0xFF6366F1`) and magenta (`0xFFFF007F`), paired with soft cobalt/coral ambient shadows.
+   - **Enything Brand Surface Canvas**: In light mode, uses a clean card canvas (`0xFFFFFFFF`, `0xFFF5F6FF`, `0xFFEEF0FF`) with a gentle celebratory champagne warmth (`0xFFFFF9F2`), directly matching the dashboard feed. In dark mode, uses Enything's signature dark palette (`0xFF0C0E1A`, `0xFF141626`, `0xFF1A1D30`). No foreign neon smudges.
+   - **Brand-Harmonized Header**: Row 1 uses `Row(mainAxisAlignment: MainAxisAlignment.spaceBetween)` with the category badge (`[ 🎉 HOST & EVENT PARTY ]`) in Enything Cobalt-to-Indigo (`0xFF1E3FD8` ➔ `0xFF6366F1`, wrapped in `Flexible`), and the savings badge (`[ ⚡ UP TO 30% OFF ]`) in Enything Coral-to-Gold (`0xFFFF6B35` ➔ `0xFFFFB800`).
+   - **Integrated Content & Action Row**: Row 2 combines:
+     - 44×44dp 3D Celebration Emblem (`0xFF1E3FD8`, `0xFF6366F1`, `0xFFFF6B35`) with `🎉` and sparkle `✨`.
+     - Headline (`ShaderMask`) in Enything Deep Cobalt (`0xFF0F1E80`) ➔ Vivid Cobalt (`0xFF1E3FD8`) ➔ Warm Coral (`0xFFFF6B35`).
+     - Modern gradient pill button (`"Plan Event ➔"`) in Enything Cobalt-to-Coral (`0xFF1E3FD8` ➔ `0xFF4F46E5` ➔ `0xFFFF6B35`).
+2. **Contextual Search Discovery**: In search mode, whenever a customer enters queries containing party/event terms (`party`, `event`, `cater`, `catering`, `wedding`, `birthday`, `bulk`, `gathering`, `feast`), the compact multicoloured card is dynamically surfaced at the top of search results without cluttering the product feed.
+3. **3D Perspective & Tactile Physics**: Wrapped with `PerspectiveCard` (`pressScale: 0.985`, `maxTiltAngle: 0.04`, `enableSpecular: true`, `enableHaptics: true`) providing haptic feedback via `SensoryHaptics.light()` on touch.
+4. **Responsive Overflow Immunity & Narrow Device Safety**: The header badges and content rows use `Flexible` and `TextOverflow.ellipsis`, guaranteeing zero `RenderFlex` exceptions across all mobile form factors from 320px width to large tablets, and up to 1.5x accessibility font scaling.
+5. **Route & State Preservation**: Tapping the card routes cleanly to `AppRoutes.bulkOrderDiscovery` without changing or breaking any underlying catering, bulk provider, or quote request logic.
+
+## 100x Forensic Edge-Case Audit & Remediation (Customer Explore Categories & Store-Level Product Inheritance Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Customer Explore Categories and Store-Level Product Inheritance:
+
+1. **Dual-Belonging Category Architecture**: Products belong simultaneously to:
+   - Their specific item category (`product.category`, e.g. `'Cosmetics & Beauty'`, `'Stationery'`, `'Biryani'`).
+   - Their parent store category (`shop.category`, e.g. `'Supermarket / Hypermarket'`, `'Restaurant'`, `'Pharmacy'`).
+2. **Omnibus Store-Level Product Inheritance**: When a customer clicks or browses **"Supermarket / Hypermarket"** or **"Grocery"** from Explore Categories, ALL products stocked in that Supermarket, Hypermarket, or Grocery store (e.g. Maxx Retail) MUST be included and displayed in the product feed. Customers browsing a supermarket department store expect to see the complete stocked selection (personal care, serums, shampoos, household goods, groceries) rather than only items tagged with the literal string `'Supermarket / Hypermarket'`.
+3. **Client-Side Filter Parity (`_loadData`)**: In `lib/pages/customer/home_page.dart` (`_loadData`), never drop products using rigid string equality `if (!effectiveCategories.contains(product.category)) continue;`. Instead, parse `shop = ShopModel.fromMap(p['shops'])` and evaluate using `AppCategories.matchesBrowsingCategory(productCategory: product.category, shopCategory: shop.category, targetCategories: finalCategories, shopCategories: shop.categories)`.
+4. **Backend RPC Parity across all Explore Categories**: In `public.get_feed_products` and `public.search_products_geospatial`:
+   - **Omnibus stores**: When browsing Supermarket / Hypermarket / Grocery, includes all products from omnibus stores (`s.category` or `s.categories` matching supermarket/grocery).
+   - **Specialty stores**: When browsing Food, Pharmacy, Clothing, Electronics, or More, includes products from specialty stores whose `s.category` or `s.categories` match the target category.
+   - **Zero-Leakage Specialty Protection**: Specialty store inheritance strictly excludes omnibus stores, guaranteeing that grocery/produce from a supermarket NEVER leaks into specialty feeds like Pharmacy, Food, or Clothing unless the product's item category explicitly matches.
+5. **Dedicated Category Screen Parity (`CategoryProductsPage`)**: In `lib/pages/customer/category_products_page.dart`, product filtering in both local memory and remote search MUST invoke `AppCategories.matchesBrowsingCategory` to guarantee 100% parity whether a user taps a category card in Explore Categories or navigates to the dedicated category screen via long-press or "See all".
+6. **Contextual Explore Category Section Titles & "See All" Action Parity**: When any category tab from Explore Categories is selected (`_selectedTabIndex >= 0`), section headers and bottom "See all" buttons MUST dynamically reflect that active category (e.g. `'Popular in Supermarket & Hypermarket'` and `'See all Supermarket & Hypermarket products'`, `'Popular in Food & Restaurants'` and `'See all Food & Restaurant items'`). Displaying generic labels like `"See all popular items"` or `"Popular in your area"` during category filtering is strictly prohibited. When navigating to `AllListingsPage`, the caller MUST pass `categoryFilter: finalCategories` and contextual `sectionTitle` so the catalog preserves the active category filter without leaking unrelated platform items.
+
+## 100x Forensic Edge-Case Audit & Remediation (Customer Dashboard Grid Even Row Completeness & Per-Shop Feed Limit Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Customer Dashboard Grid Row Completeness and Per-Shop Feed Limits:
+
+1. **Per-Shop Feed Limit Scaling (`p_limit_per_shop`)**: In `lib/pages/customer/home_page.dart` (`_loadData` and `_loadAllData`), `p_limit_per_shop` MUST NEVER be hardcoded to 5. In single-store or low-density merchant locations (e.g. Bandipora with only Maxx Retail), a hardcoded limit of 5 prevents the frontend from ever retrieving enough items to satisfy the 6-product dashboard preview grid (`_productsDisplayLimit = 6`), leaving an odd-numbered 5th item and a prominent empty hole in row 3 column 2. Instead, dynamically calculate:
+   `final perShopLimit = nearbyShopIds.length <= 2 ? 12 : 8;`
+   allowing single shops to return up to 12 items and guaranteeing that the 6-item dashboard grid is completely filled without empty holes.
+2. **Responsive Complete Row Invariant (`effectiveLimit`)**: In the dashboard `SliverGrid.builder`, `displayProducts` must compute `effectiveLimit`:
+   `final targetGridCount = crossAxisCount == 2 ? 6 : (crossAxisCount * 2);`
+   `final effectiveLimit = math.max(_productsDisplayLimit, targetGridCount);`
+   - On mobile (`crossAxisCount == 2`): Displays 6 items (3 full rows of 2 columns, 0 empty gaps).
+   - On tablet (`crossAxisCount == 4`): Displays 8 items (2 full rows of 4 columns, 0 empty gaps).
+   - On desktop (`crossAxisCount == 5`): Displays 10 items (2 full rows of 5 columns, 0 empty gaps).
+3. **No Premature Feed Exhaustion Confusion**: Customers browsing any category from Explore Categories see a clean, symmetrically complete grid of 6 items on mobile. Tapping the contextual `"See all [Category] products ➔"` button navigates to `AllListingsPage` to view the exhaustive catalog of all remaining items.
+
+## 100x Forensic Edge-Case Audit & Remediation (Search Relevance Scoring & Exact Name Ranking Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Search Relevance Scoring and Exact Name Prioritization:
+
+1. **Exact Name & Prefix Match Inviolability**: In search results (`HomePage`, `CategoryProductsPage`, `AllListingsPage`), products matching the exact query or whose title begins with the query followed by a word boundary (e.g. searching `"dew"` matching `"Dew 750 ml"` or `"dew 250"`) MUST ALWAYS be ranked at the very top (index 0 and 1). Never allow compound-word substrings (e.g. `"Dermadew"`) or vague description matches (e.g. `"Vaseline ... Dewy Radiance"`) to rank above direct product name matches due to ratings or recency.
+2. **Multi-Tiered Relevance Engine (`SearchRelevanceEngine`)**: Search relevance in Dart uses a deterministic, multi-tiered hierarchy:
+   - **Tier 1 (100,000 pts)**: Exact full name match (`cleanName == cleanQuery`).
+   - **Tier 2 (60,000 pts + compactness bonus)**: Name starts with query as a distinct word boundary (`cleanName.startsWith(cleanQuery + ' ')`).
+   - **Tier 3 (40,000 pts)**: Name starts with query as prefix.
+   - **Tier 4 (30,000 pts + position bonus)**: Isolated whole word in name (e.g. `"Mountain Dew"`).
+   - **Tier 5 (25,000 pts)**: Exact brand match.
+   - **Tier 6 (15,000 pts)**: Multi-token complete match / Brand prefix match.
+   - **Tier 7 (12,000 pts)**: Word in name starts with query (e.g. `"Dewy"`).
+   - **Tier 8 (4,000 pts)**: Infix / substring inside a compound word (e.g. `"Dermadew"`).
+   - **Tier 9 (1,500 pts)**: Whole-word match in description.
+   - **Tier 10 (400 pts)**: Substring match in description.
+   - **Tier 11 (200 - 300 pts)**: Category or store name match.
+   - **Rating Tie-Breaker (+0 to +50 pts)**: Rating acts solely as an intra-tier tie-breaker and never bridges tier gaps.
+3. **Database Partition & Order Relevance**: In `public.search_products_geospatial` RPC (`supabase/migrations/20290000000179_100x_search_relevance_exact_name_ranking_fortress.sql`), both `ROW_NUMBER() OVER (PARTITION BY p.shop_id)` and the outer `ORDER BY` rank by query match relevance first. This prevents shops' exact query-matching products from being truncated by `p_limit_per_shop` or displaced by unrelated 5-star items.
+
+
+
+
+
+
+

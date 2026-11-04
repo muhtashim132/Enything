@@ -548,7 +548,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       groupOrders: _groupOrders,
                       riderLocations: currentLocs,
                       shopName: _groupOrders.length > 1 ? '${_groupOrders.length} Stores' : null,
-                      riderName: _order!.riderPhone != null ? 'Delivery Partner' : null,
+                      riderName: _order!.riderName ??
+                          (_order!.riderPhone != null ? 'Delivery Partner' : null),
                     );
                   }
                 }
@@ -938,7 +939,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           groupOrders: _groupOrders,
           riderLocations: _riderLocationsNotifier.value,
           shopName: _groupOrders.length > 1 ? '${_groupOrders.length} Stores' : null,
-          riderName: _order!.riderPhone != null ? 'Delivery Partner' : null,
+          riderName: _order!.riderName ??
+              (_order!.riderPhone != null ? 'Delivery Partner' : null),
         );
       }
       if (aggStatus == 'awaiting_payment') {
@@ -3232,6 +3234,80 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 _order!.shopPhone!.isNotEmpty) ||
                             (_order!.riderPhone != null &&
                                 _order!.riderPhone!.isNotEmpty))) ...[
+                      // 👑 Enything Operations VIP Dispatch Card (when Admin delivers personally)
+                      if (_order!.isAdminDelivery ||
+                          (_order!.riderName?.toLowerCase().contains('admin') ?? false)) ...[
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isDark
+                                  ? [const Color(0xFF2E1065), const Color(0xFF1E1B4B)]
+                                  : [const Color(0xFFF3E8FF), const Color(0xFFEDE9FE)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
+                              width: 1.2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF7C3AED).withValues(alpha: isDark ? 0.3 : 0.1),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF7C3AED),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.shield_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '👑 Enything Operations Dispatch',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark
+                                            ? const Color(0xFFDDD6FE)
+                                            : const Color(0xFF5B21B6),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_order!.riderName ?? "Admin Operations"} is personally delivering your order with priority speed & care.',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 11.5,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : const Color(0xFF4C1D95),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       Row(children: [
                         if (_order!.shopPhone != null &&
                             _order!.shopPhone!.isNotEmpty)
@@ -3260,9 +3336,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                             _order!.riderPhone!.isNotEmpty)
                           Expanded(
                               child: _glassContactBtn(
-                            icon: Icons.delivery_dining_rounded,
-                            label: 'Call Rider',
-                            color: AppColors.accent,
+                            icon: (_order!.isAdminDelivery ||
+                                    (_order!.riderName?.toLowerCase().contains('admin') ?? false))
+                                ? Icons.shield_rounded
+                                : Icons.delivery_dining_rounded,
+                            label: (_order!.isAdminDelivery ||
+                                    (_order!.riderName?.toLowerCase().contains('admin') ?? false))
+                                ? 'Call Admin'
+                                : (_order!.riderName != null ? 'Call ${_order!.riderName}' : 'Call Rider'),
+                            color: (_order!.isAdminDelivery ||
+                                    (_order!.riderName?.toLowerCase().contains('admin') ?? false))
+                                ? const Color(0xFF7C3AED)
+                                : AppColors.accent,
                             isDark: isDark,
                             onTap: () => _callPhone(_order!.riderPhone!),
                           )),

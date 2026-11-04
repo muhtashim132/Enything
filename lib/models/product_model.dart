@@ -174,13 +174,23 @@ class ProductModel {
       unitType: () {
         final raw = map['unit_type']?.toString().trim().toLowerCase() ??
             map['unit']?.toString().trim().toLowerCase();
-        if (raw == null || raw.isEmpty || raw == 'piece' || raw == 'pc' || raw == 'pcs') {
+        if (raw == null ||
+            raw.isEmpty ||
+            raw == 'piece' ||
+            raw == 'pc' ||
+            raw == 'pcs') {
           return 'pieces';
         }
-        if (raw == 'g' || raw == 'gm' || raw == 'gms' || raw == 'gram') return 'grams';
-        if (raw == 'l' || raw == 'ltr' || raw == 'litre' || raw == 'litres') return 'liter';
-        if (raw == 'ml' || raw == 'milliliter' || raw == 'milliliters') return 'ml';
-        if (raw == 'kg' || raw == 'kgs' || raw == 'kilogram' || raw == 'kilograms') return 'kg';
+        if (raw == 'g' || raw == 'gm' || raw == 'gms' || raw == 'gram')
+          return 'grams';
+        if (raw == 'l' || raw == 'ltr' || raw == 'litre' || raw == 'litres')
+          return 'liter';
+        if (raw == 'ml' || raw == 'milliliter' || raw == 'milliliters')
+          return 'ml';
+        if (raw == 'kg' ||
+            raw == 'kgs' ||
+            raw == 'kilogram' ||
+            raw == 'kilograms') return 'kg';
         return raw;
       }(),
       description: map['description'],
@@ -203,7 +213,8 @@ class ProductModel {
               .toList() ??
           [],
       gstRateOverride: _parseDoubleNullable(map['gst_rate_override']),
-      bulkEligible: map['bulk_eligible'] == true || map['bulk_eligible'] == 'true',
+      bulkEligible:
+          map['bulk_eligible'] == true || map['bulk_eligible'] == 'true',
       minBulkQuantity: _parseIntNullable(map['min_bulk_quantity']),
       bulkPriceTiers: (map['bulk_price_tiers'] as List?)
               ?.map((t) => Map<String, dynamic>.from(t as Map))

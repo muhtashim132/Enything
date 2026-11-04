@@ -98,21 +98,36 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       final auth = context.read<AuthProvider>();
       final allRoles = auth.user?.activeRoles ?? [];
 
-      // ── Admin Override: Admins always get the role picker or dashboard directly ──
+      // ── Admin Override: Admins with a requested role or multiple roles get the role picker ──
       if (allRoles.contains('admin')) {
-        final Set<String> adminRolesToShow = {'admin'};
-        if (_requestedRole != null && allRoles.contains(_requestedRole)) {
-          adminRolesToShow.add(_requestedRole!);
-        }
-
-        if (adminRolesToShow.length > 1) {
+        // If the admin user explicitly initiated login/signup for a non-admin role (seller, rider, customer)
+        if (_requestedRole != null && _requestedRole != 'admin') {
+          // Strictly show only TWO roles: the requested role and admin!
+          // Do NOT dump all roles that the user holds.
           setState(() {
             _showRolePicker = true;
-            _availableRoles = adminRolesToShow.toList();
+            _availableRoles = [_requestedRole!, 'admin'];
           });
-        } else {
-          _goToWelcomeThenDashboard('admin');
+          return;
         }
+
+        // If the admin user explicitly requested admin, go straight to admin password gate
+        if (_requestedRole == 'admin') {
+          _goToWelcomeThenDashboard('admin');
+          return;
+        }
+
+        // If no specific role was requested (generic login), show role picker if multiple roles exist
+        if (allRoles.length > 1) {
+          setState(() {
+            _showRolePicker = true;
+            _availableRoles = List<String>.from(allRoles);
+          });
+          return;
+        }
+
+        // Solo admin without specific role requested: proceed directly to admin gate
+        _goToWelcomeThenDashboard('admin');
         return;
       }
 
@@ -135,7 +150,16 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
         return;
       }
 
-      // Fallback: No specific role requested, just use their active session role
+      // Fallback: No specific role requested — if user has multiple roles, show role picker
+      if (allRoles.length > 1) {
+        setState(() {
+          _showRolePicker = true;
+          _availableRoles = List<String>.from(allRoles);
+        });
+        return;
+      }
+
+      // Fallback: Single active role, use active session role
       final role = auth.user?.activeSessionRole ?? 'customer';
       _goToWelcomeThenDashboard(role);
     } else if (result == 'new') {
@@ -159,11 +183,32 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   }
 
   Future<void> _selectRole(String role) async {
-    await context.read<AuthProvider>().switchSessionRole(role);
+    final auth = context.read<AuthProvider>();
+    final allRoles = auth.user?.activeRoles ?? [];
+
     setState(() {
       _showRolePicker = false;
       _availableRoles = [];
     });
+
+    // ── 100x Forensic Decision: Is this a new user for this role or an existing user? ──
+    if (role != 'admin' && !allRoles.contains(role)) {
+      // The user is an admin (or multi-role user) who is signing up for a NEW role!
+      // Route directly to CompleteProfilePage with isAddingRole = true.
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.completeProfile,
+        arguments: {
+          'role': role,
+          'isAddingRole': true,
+        },
+      );
+      return;
+    }
+
+    // Existing user for this role (or admin) — switch session role and proceed
+    await auth.switchSessionRole(role);
+    if (!mounted) return;
     _goToWelcomeThenDashboard(role);
   }
 
@@ -358,186 +403,246 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   // ── Role Picker (multi-role users) ─────────────────────────────────────────
   Widget _buildRolePicker() {
     final auth = context.read<AuthProvider>();
+    final allRoles = auth.user?.activeRoles ?? [];
     final name = auth.user?.fullName.split(' ').first ?? 'there';
-    return Scaffold(
-      backgroundColor: const Color(0xFF02061A),
-      body: Stack(
-        children: [
-          Positioned(
-              top: -60,
-              left: -80,
-              child: _blob(280, const Color(0xFF1A35C8), 0.18)),
-          Positioned(
-              bottom: -80,
-              right: -60,
-              child: _blob(300, const Color(0xFF5E20D4), 0.16)),
-          SafeArea(
-            child: MaxWidthContainer(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 48),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() => _showRolePicker = false);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AppRoutes.roleSelect,
+          (_) => false,
+        );
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF02061A),
+        body: Stack(
+          children: [
+            Positioned(
+                top: -60,
+                left: -80,
+                child: _blob(280, const Color(0xFF1A35C8), 0.18)),
+            Positioned(
+                bottom: -80,
+                right: -60,
+                child: _blob(300, const Color(0xFF5E20D4), 0.16)),
+            SafeArea(
+              child: MaxWidthContainer(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 48),
 
-                    // Check icon
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2F9E44).withValues(alpha: 0.20),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color:
-                                const Color(0xFF51CF66).withValues(alpha: 0.50),
-                            width: 2),
+                      // Check icon
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2F9E44).withValues(alpha: 0.20),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color:
+                                  const Color(0xFF51CF66).withValues(alpha: 0.50),
+                              width: 2),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.verified_rounded,
+                              color: Color(0xFF51CF66), size: 40),
+                        ),
                       ),
-                      child: const Center(
-                        child: Icon(Icons.verified_rounded,
-                            color: Color(0xFF51CF66), size: 40),
+                      const SizedBox(height: 24),
+
+                      Text(
+                        'Verified, $name! 🎉',
+                        style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 8),
+                      Text(
+                        _availableRoles.length == 2 &&
+                                _availableRoles.contains('admin') &&
+                                _requestedRole != null &&
+                                _requestedRole != 'admin'
+                            ? 'Choose whether to continue as ${_roleLabel(_requestedRole!)} or enter God Mode Admin:'
+                            : 'You have multiple roles. Choose how\nyou want to continue today:',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                            color: Colors.white54, fontSize: 14, height: 1.5),
+                      ),
+                      const SizedBox(height: 36),
 
-                    Text(
-                      'Verified, $name! 🎉',
-                      style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'You have multiple roles. Choose how\nyou want to continue today:',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.outfit(
-                          color: Colors.white54, fontSize: 14, height: 1.5),
-                    ),
-                    const SizedBox(height: 36),
-
-                    // Role option cards
-                    ..._availableRoles.map((role) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: GestureDetector(
-                            onTap: () => _selectRole(role),
-                            child: Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: _roleColor(role).withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: _roleColor(role)
-                                        .withValues(alpha: 0.35),
-                                    width: 1.5),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 56,
-                                    height: 56,
-                                    decoration: BoxDecoration(
+                      // Role option cards
+                      ..._availableRoles.map((role) {
+                        final isNew = !allRoles.contains(role) && role != 'admin';
+                        return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: GestureDetector(
+                              onTap: () => _selectRole(role),
+                              child: Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: _roleColor(role).withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
                                       color: _roleColor(role)
-                                          .withValues(alpha: 0.18),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                          color: _roleColor(role)
-                                              .withValues(alpha: 0.40)),
+                                          .withValues(alpha: 0.35),
+                                      width: 1.5),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        color: _roleColor(role)
+                                            .withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                            color: _roleColor(role)
+                                                .withValues(alpha: 0.40)),
+                                      ),
+                                      child: Center(
+                                        child: Text(_roleEmoji(role),
+                                            style: const TextStyle(fontSize: 26)),
+                                      ),
                                     ),
-                                    child: Center(
-                                      child: Text(_roleEmoji(role),
-                                          style: const TextStyle(fontSize: 26)),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _roleLabel(role),
-                                          style: GoogleFonts.outfit(
-                                            color: Colors.white,
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Text(
+                                                _roleLabel(role),
+                                                style: GoogleFonts.outfit(
+                                                  color: Colors.white,
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              if (isNew) ...[
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 7, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF4C542)
+                                                        .withValues(alpha: 0.20),
+                                                    borderRadius:
+                                                        BorderRadius.circular(6),
+                                                    border: Border.all(
+                                                      color: const Color(0xFFF4C542)
+                                                          .withValues(alpha: 0.50),
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    'NEW',
+                                                    style: GoogleFonts.outfit(
+                                                      color: const Color(0xFFF4C542),
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          _roleDashboardHint(role),
-                                          style: GoogleFonts.outfit(
-                                              color: Colors.white38,
-                                              fontSize: 12),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            _roleDashboardHint(role),
+                                            style: GoogleFonts.outfit(
+                                                color: Colors.white38,
+                                                fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  Icon(Icons.arrow_forward_ios_rounded,
-                                      color: _roleColor(role), size: 18),
-                                ],
+                                    Icon(Icons.arrow_forward_ios_rounded,
+                                        color: _roleColor(role), size: 18),
+                                  ],
+                                ),
                               ),
+                            ),
+                          );
+                      }),
+
+                      // Add new role option (suppressed during targeted 2-role flow or when all client roles are already held)
+                      if (_requestedRole == null &&
+                          !(allRoles.contains('customer') &&
+                              allRoles.contains('seller') &&
+                              allRoles.contains('delivery_partner'))) ...[
+                        const SizedBox(height: 16),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() => _showRolePicker = false);
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              AppRoutes.roleSelect,
+                              (_) => false,
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.10)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.add_circle_outline,
+                                    color: Color(0xFFF4C542), size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Add another role',
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFFF4C542),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        )),
-
-                    const SizedBox(height: 16),
-
-                    // Add new role option
-                    GestureDetector(
-                      onTap: () {
-                        setState(() => _showRolePicker = false);
-                        Navigator.pushNamedAndRemoveUntil(
-                          context,
-                          AppRoutes.roleSelect,
-                          (_) => false,
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.10)),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.add_circle_outline,
-                                color: Color(0xFFF4C542), size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Add another role',
-                              style: GoogleFonts.outfit(
-                                color: const Color(0xFFF4C542),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+                      ],
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   String _roleDashboardHint(String r) {
+    final auth = context.read<AuthProvider>();
+    final allRoles = auth.user?.activeRoles ?? [];
+    final isNew = !allRoles.contains(r);
+
     switch (r) {
       case 'seller':
-        return 'Go to Seller Dashboard';
+        return isNew ? 'Sign up & Setup your Shop' : 'Go to Seller Dashboard';
       case 'delivery_partner':
-        return 'Go to Delivery Dashboard';
+        return isNew ? 'Sign up as Delivery Partner' : 'Go to Delivery Dashboard';
       case 'admin':
         return 'Enter God Mode Control Tower';
       default:
-        return 'Go to Customer Home';
+        return isNew ? 'Complete Customer Profile' : 'Go to Customer Home';
     }
   }
 

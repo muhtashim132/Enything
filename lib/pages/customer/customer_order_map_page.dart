@@ -1137,7 +1137,10 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                         ),
                                         const SizedBox(width: 5),
                                         Text(
-                                          'Live rider',
+                                          (order.isAdminDelivery ||
+                                                  (order.riderName?.toLowerCase().contains('admin') ?? false))
+                                              ? (order.riderName ?? '👑 Admin Dispatch')
+                                              : (order.riderName ?? 'Live rider'),
                                           style: GoogleFonts.outfit(
                                             fontSize: 12,
                                             color: _kRiderMarkerColor,
@@ -1255,17 +1258,31 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                 Expanded(
                                   child: OutlinedButton.icon(
                                     onPressed: () => _call(order.riderPhone!),
-                                    icon: const Icon(
-                                        Icons.delivery_dining_outlined,
+                                    icon: Icon(
+                                        (order.isAdminDelivery ||
+                                                (order.riderName?.toLowerCase().contains('admin') ?? false))
+                                            ? Icons.shield_rounded
+                                            : Icons.delivery_dining_outlined,
                                         size: 16),
-                                    label: Text('Call Rider',
+                                    label: Text(
+                                        (order.isAdminDelivery ||
+                                                (order.riderName?.toLowerCase().contains('admin') ?? false))
+                                            ? 'Call Admin'
+                                            : (order.riderName != null ? 'Call ${order.riderName}' : 'Call Rider'),
+                                        overflow: TextOverflow.ellipsis,
                                         style: GoogleFonts.outfit(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w700)),
                                     style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.accent,
-                                      side: const BorderSide(
-                                          color: AppColors.accent),
+                                      foregroundColor: (order.isAdminDelivery ||
+                                              (order.riderName?.toLowerCase().contains('admin') ?? false))
+                                          ? const Color(0xFF7C3AED)
+                                          : AppColors.accent,
+                                      side: BorderSide(
+                                          color: (order.isAdminDelivery ||
+                                                  (order.riderName?.toLowerCase().contains('admin') ?? false))
+                                              ? const Color(0xFF7C3AED)
+                                              : AppColors.accent),
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 12),
                                       shape: RoundedRectangleBorder(

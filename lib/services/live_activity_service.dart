@@ -195,7 +195,7 @@ class LiveActivityService {
     bool isRiderReassigning = false;
 
     // Rider name resolution
-    final activeRider = riderName ?? (order.riderPhone != null ? 'Assigned Partner' : null);
+    final activeRider = riderName ?? order.riderName ?? (order.riderPhone != null ? 'Assigned Partner' : null);
 
     final category = OrderMessagingHelper.resolveCategory(order, groupOrders);
 
