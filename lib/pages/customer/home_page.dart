@@ -2863,7 +2863,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             children: [
                               Expanded(
                                 child: GestureDetector(
-                                  onTap: () => showAddressPickerSheet(context),
+                                  onTap: () async {
+                                    await showAddressPickerSheet(context);
+                                    if (mounted) {
+                                      _locationDebounceTimer?.cancel();
+                                      if (_selectedTabIndex < 0) {
+                                        _loadAllData();
+                                      } else {
+                                        _loadData(_categories[_selectedTabIndex]
+                                            ['name']! as String);
+                                      }
+                                    }
+                                  },
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: Container(
@@ -2923,13 +2934,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           Flexible(
                                             child: Text(
                                               locationProvider.hasLocation
-                                                  ? locationProvider
+                                                  ? (locationProvider
                                                           .currentAddress
                                                           .isNotEmpty
                                                       ? locationProvider
                                                           .currentAddress
-                                                      : 'Current Location'
-                                                  : 'Set location...',
+                                                      : 'Current Location')
+                                                  : (locationProvider.isLoading
+                                                      ? 'Locating... 📍'
+                                                      : 'Set location...'),
                                               style: GoogleFonts.outfit(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w900,
@@ -3792,8 +3805,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           if (_selectedTabIndex < 0) ...[
                             // 1. Food & Restaurants (Premier Showcase)
                             if (_sortedFoodProducts.isNotEmpty) ...[
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 24)),
+                              Builder(builder: (ctx) {
+                                final recentProv =
+                                    ctx.watch<RecentlyViewedProvider>();
+                                final hasRecent = recentProv.hasItems &&
+                                    recentProv.products.any((p) {
+                                      final shop = _productShops[p.id];
+                                      return shop != null && shop.isActive;
+                                    });
+                                // Symmetrical Vertical Spacing Fortress:
+                                // If Recently Viewed is shown, it already provides its own 24dp bottom spacer.
+                                // If Recently Viewed is empty, add 8dp to pair with the card's 12dp bottom margin
+                                // to yield an exact 20dp gap below, perfectly mirroring the 20dp gap above!
+                                return SliverToBoxAdapter(
+                                  child: SizedBox(height: hasRecent ? 0 : 8),
+                                );
+                              }),
                               SliverToBoxAdapter(
                                 child: _buildDepartmentSectionHeader(
                                   title: 'Food & Restaurants',
@@ -4465,7 +4492,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           ],
                           SliverToBoxAdapter(
                             child: SizedBox(
-                              height: 120 + MediaQuery.paddingOf(context).bottom,
+                              // Symmetrical Bottom Nav Clearance Fortress:
+                              // Calibrated to 72dp + safe area to provide exact 16-20dp optical breathing room
+                              // above the 68dp floating bottom navigation bar, eliminating the previous 68dp dead void.
+                              height: 72 + MediaQuery.paddingOf(context).bottom,
                             ),
                           ),
                         ],
@@ -4877,7 +4907,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   Widget _buildBulkCateringCard(bool isDark) {
     return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      margin: const EdgeInsets.only(top: 12, bottom: 12),
       child: PerspectiveCard(
         borderRadius: 20,
         pressScale: 0.985,
@@ -4941,7 +4971,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -5027,7 +5057,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8.5),
+                  const SizedBox(height: 8.0),
 
                   // Row 2: Content Row - 3D Emblem + Copy + Gradient CTA Button
                   Row(
@@ -7938,7 +7968,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             },
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 4),
       ],
     );
   }

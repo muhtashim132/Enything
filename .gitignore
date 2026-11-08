@@ -108,6 +108,8 @@ test_mockup.png
 /shelf*.jpeg
 /Shelf*.jpeg
 /g*.jpeg
+/b*.jpg
+/AA*.pdf
 /IMG_*.pdf
 scripts/auto_upload/data/product_images/
 scripts/auto_upload/data/*_pages/

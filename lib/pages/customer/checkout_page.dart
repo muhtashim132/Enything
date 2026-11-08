@@ -18,6 +18,7 @@ import '../../config/tax_config.dart';
 import '../../providers/platform_config_provider.dart';
 import '../../widgets/address_picker_sheet.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/app_toast.dart';
 import '../../services/image_compression_service.dart';
 import '../../utils/delivery_calculator.dart';
 import '../../providers/coupon_provider.dart';
@@ -453,15 +454,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final config = context.read<PlatformConfigProvider>();
 
     if (config.isMaintenanceMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(config.maintenanceMessage),
-          backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+      AppToast.show(
+        context,
+        title: 'Platform Maintenance 🛠️',
+        message: config.maintenanceMessage,
+        type: ToastType.warning,
+        icon: Icons.construction_rounded,
       );
       _isCreatingOrder = false;
       _isProcessing.value = false;
@@ -469,15 +467,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     if (cart.items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Your cart is empty!'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+      AppToast.show(
+        context,
+        title: 'Cart is Empty 🛍️',
+        message: 'Please add items to your cart before proceeding to checkout.',
+        type: ToastType.warning,
+        icon: Icons.shopping_bag_outlined,
       );
       _isCreatingOrder = false;
       _isProcessing.value = false;
@@ -486,35 +481,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     // ── 100x Multi-Shop Prescription Guard ─────────────────────────────────
     final rxShops = cart.shops.where((s) {
-      return cart.getItemsForShop(s.id).any((i) => i.product.requiresPrescription);
+      return cart
+          .getItemsForShop(s.id)
+          .any((i) => i.product.requiresPrescription);
     }).toList();
 
     if (rxShops.isNotEmpty) {
       for (final s in rxShops) {
         final list = _getPrescriptionsForShop(s.id);
         if (list.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Please upload a prescription for ${s.name} to proceed.',
-                      style: GoogleFonts.outfit(
-                          color: Colors.white, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: AppColors.danger,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              duration: const Duration(seconds: 4),
-            ),
+          AppToast.showMissingField(
+            context,
+            fieldName: 'Doctor Prescription',
+            actionMessage:
+                'Please upload a valid doctor\'s prescription for ${s.name} to dispense these medicines.',
+            icon: Icons.medication_rounded,
           );
           _isCreatingOrder = false;
           _isProcessing.value = false;
@@ -524,17 +505,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     if (!location.hasLocation ||
-        location.currentLocation?.latitude == null ||
-        location.currentLocation?.longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please set a valid delivery location first.'),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+        !LocationProvider.isValidCoordinates(location.currentLocation)) {
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Delivery Location',
+        actionMessage:
+            'Please select or pinpoint your delivery address before placing order.',
+        icon: Icons.location_on_rounded,
       );
       _isCreatingOrder = false;
       _isProcessing.value = false;
@@ -546,16 +523,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (e) {
       debugPrint('Order placement error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_classifyCheckoutError(e.toString())),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 5),
-            margin: const EdgeInsets.all(16),
-          ),
+        AppToast.showError(
+          context,
+          title: 'Checkout Incomplete',
+          message: _classifyCheckoutError(e.toString()),
         );
         _isCreatingOrder = false;
         _isProcessing.value = false;
@@ -616,9 +587,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     // 100x PRELAUNCH FIX: Delivery coordinates guard
-    if (location.currentLocation == null ||
-        location.currentLocation?.latitude == null ||
-        location.currentLocation?.longitude == null ||
+    if (!LocationProvider.isValidCoordinates(location.currentLocation) ||
         location.currentAddress.trim().isEmpty) {
       throw Exception('Please set your delivery address before placing an order.');
     }
@@ -1457,20 +1426,40 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final total =
         (gstBreakdown.grandTotal - couponDiscount).clamp(0.0, double.infinity);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-          title: Text('Checkout',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.w700))),
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: MaxWidthContainer(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+    return ValueListenableBuilder<bool>(
+      valueListenable: _isProcessing,
+      builder: (context, isProcessingVal, _) {
+        final isOrderSubmitting = _isCreatingOrder || isProcessingVal;
+        return PopScope(
+          canPop: !isOrderSubmitting,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && (_isCreatingOrder || isProcessingVal)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Placing your order... Please do not exit.',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                  backgroundColor: AppColors.primary,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          },
+          child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+            title: Text('Checkout',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700))),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: MaxWidthContainer(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // Delivery Address
                 _sectionCard(
                   title: 'Delivery Address',
@@ -2012,6 +2001,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
         ),
       ),
+    ),
+  );
+      },
     );
   }
 

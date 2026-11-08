@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/responsive_layout.dart';
 import '../../config/routes.dart';
 import '../../utils/haptic_utils.dart';
+import '../../utils/app_toast.dart';
 import '../../services/product_storage_service.dart';
 
 class ManageProductsPage extends StatefulWidget {
@@ -368,12 +369,11 @@ class _ManageProductsPageState extends State<ManageProductsPage> {
 
   void _showSnack(String msg, {required bool isError}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor: isError ? AppColors.danger : AppColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+    if (isError) {
+      AppToast.showError(context, message: msg);
+    } else {
+      AppToast.showSuccess(context, message: msg);
+    }
   }
 
   @override

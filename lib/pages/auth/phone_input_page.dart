@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/app_toast.dart';
 
 class PhoneAuthPage extends StatefulWidget {
   const PhoneAuthPage({super.key});
@@ -53,11 +54,44 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
 
   Future<void> _sendOtp() async {
     if (_loading) return;
-    final phone = _phoneCtrl.text.trim();
-    if (phone.length < 10) {
-      _showSnack('Enter a valid 10-digit number', isError: true);
+
+    if (!_agreedToTerms) {
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Terms & Policy',
+        actionMessage:
+            'Please accept the Terms & Conditions and Privacy Policy to continue.',
+        icon: Icons.gpp_maybe_rounded,
+      );
       return;
     }
+
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Mobile Number',
+        actionMessage:
+            'Please enter your 10-digit mobile number to receive an OTP.',
+        focusNode: _phoneFocusNode,
+        icon: Icons.phone_android_rounded,
+      );
+      return;
+    }
+
+    if (phone.length < 10) {
+      AppToast.show(
+        context,
+        title: 'Incomplete Phone Number',
+        message:
+            'Mobile number must be exactly 10 digits (entered ${phone.length}/10).',
+        type: ToastType.error,
+        icon: Icons.phone_android_rounded,
+        focusNode: _phoneFocusNode,
+      );
+      return;
+    }
+
     setState(() => _loading = true);
     final fullPhone = '$_countryCode$phone';
 
@@ -65,8 +99,18 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
     if (!mounted) return;
     setState(() => _loading = false);
     if (err != null) {
-      _showSnack(err, isError: true);
+      AppToast.showError(
+        context,
+        title: 'Unable to Send OTP',
+        message: err,
+        focusNode: _phoneFocusNode,
+      );
     } else {
+      AppToast.showSuccess(
+        context,
+        title: 'OTP Sent! 📩',
+        message: 'A 6-digit verification code was sent to $fullPhone',
+      );
       Navigator.pushNamed(
         context,
         AppRoutes.otpVerify,
@@ -76,17 +120,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
         },
       );
     }
-  }
-
-  void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor:
-          isError ? const Color(0xFFE03131) : const Color(0xFF2F9E44),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
   }
 
   String get _roleLabel {
@@ -482,7 +515,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
 
                       // CTA Button
                       GestureDetector(
-                        onTap: (_loading || !_agreedToTerms) ? null : _sendOtp,
+                        onTap: _loading ? null : _sendOtp,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           width: double.infinity,

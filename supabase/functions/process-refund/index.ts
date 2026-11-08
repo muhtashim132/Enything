@@ -85,9 +85,12 @@ Deno.serve(async (req) => {
         return new Response("Refund skipped: No Razorpay payment ID.", { status: 200 });
       }
 
-      // 3. Skip if already refunded
-      if (freshOrder?.refund_status === "processed" || freshOrder?.refund_id || record.refund_id) {
-        return new Response("Refund skipped: Already processed.", { status: 200 });
+      const hasPendingItemRefund = freshOrder?.pending_refund_amount != null && Number(freshOrder.pending_refund_amount) > 0;
+
+      // 3. Skip if already fully refunded (unless there is a new pending item refund or the order status newly changed to terminal)
+      const isAlreadyFullyProcessed = freshOrder?.refund_status === "processed" && !hasPendingItemRefund && !statusChanged;
+      if (isAlreadyFullyProcessed) {
+        return new Response("Refund skipped: Already fully processed.", { status: 200 });
       }
 
       // 4. Call Razorpay API to issue the refund
@@ -99,12 +102,16 @@ Deno.serve(async (req) => {
       }
       const razorpayAuth = btoa(`${keyId}:${keySecret}`);
 
-      const hasPendingItemRefund = freshOrder?.pending_refund_amount != null && Number(freshOrder.pending_refund_amount) > 0;
-      const collectedAmount = hasPendingItemRefund
-        ? Number(freshOrder.pending_refund_amount)
-        : (freshOrder?.grand_total_collected != null 
-            ? Number(freshOrder.grand_total_collected) 
-            : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0));
+      // 100x ARCHITECTURAL FIX:
+      // If the entire order is terminal/cancelled, refund the remaining collected amount PLUS any pending item refunds.
+      // If the order is still active and only item-level partial decline refund is processing, refund pending_refund_amount.
+      const collectedAmount = isRefundableState
+        ? (Number(freshOrder?.grand_total_collected || record.grand_total_collected || 0) + (hasPendingItemRefund ? Number(freshOrder.pending_refund_amount) : 0))
+        : (hasPendingItemRefund
+            ? Number(freshOrder.pending_refund_amount)
+            : (freshOrder?.grand_total_collected != null 
+                ? Number(freshOrder.grand_total_collected) 
+                : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0)));
       let amountInPaise = Math.round(collectedAmount * 100);
 
       if (amountInPaise <= 0) {
@@ -134,9 +141,11 @@ Deno.serve(async (req) => {
 
           if (maxRefundablePaise <= 0) {
             console.log(`Payment ${paymentId} already fully refunded (${alreadyRefundedPaise} paise). Marking order ${record.id} as refunded internally.`);
+            const existingRefId = freshOrder?.refund_id || record.refund_id;
             await supabaseAdmin.from("orders").update({
               refund_status: "processed",
-              refund_id: `already_refunded_via_sibling`
+              refund_id: existingRefId ? `${existingRefId},already_refunded_via_sibling` : `already_refunded_via_sibling`,
+              pending_refund_amount: 0.00
             }).eq("id", record.id);
             return new Response("Refund skipped: Payment already fully refunded.", { status: 200 });
           }
@@ -180,10 +189,15 @@ Deno.serve(async (req) => {
       }
 
       // 5. Update the Database with the Refund ID & reset pending_refund_amount
+      const existingRefundId = freshOrder?.refund_id || record.refund_id;
+      const combinedRefundId = existingRefundId && !existingRefundId.includes(refundData.id)
+        ? `${existingRefundId},${refundData.id}`
+        : refundData.id;
+
       await supabaseAdmin.from("orders").update({
-        refund_id: refundData.id,
+        refund_id: combinedRefundId,
         refund_status: "processed",
-        total_refunded: (Number(freshOrder?.total_refunded) || 0) + collectedAmount,
+        total_refunded: (Number(freshOrder?.total_refunded) || 0) + (amountInPaise / 100.0),
         pending_refund_amount: 0.00
       }).eq("id", record.id);
 

@@ -47,7 +47,10 @@ class SavedAddress {
       case 'Home':
         return '🏠';
       case 'Office':
+      case 'Work':
         return '💼';
+      case 'Shop':
+        return '🏪';
       case 'Hotel':
         return '🏨';
       case 'Hospital':
@@ -67,8 +70,14 @@ class SavedAddress {
     return parts.join(', ');
   }
 
-  /// Whether the GPS coordinates are valid (not 0,0 placeholder)
-  bool get hasValidCoordinates => latitude != 0 || longitude != 0;
+  /// Whether the GPS coordinates are valid (not 0,0 placeholder and within geographic bounds)
+  bool get hasValidCoordinates =>
+      latitude != 0.0 &&
+      longitude != 0.0 &&
+      !latitude.isNaN &&
+      !longitude.isNaN &&
+      latitude.abs() <= 90.0 &&
+      longitude.abs() <= 180.0;
 
   static double _parseDouble(dynamic value) {
     if (value == null) return 0.0;

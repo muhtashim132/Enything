@@ -13,6 +13,7 @@ import '../../providers/location_provider.dart';
 import '../../utils/responsive_layout.dart';
 import '../../config/tax_config.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/app_toast.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -249,13 +250,11 @@ class CartPage extends StatelessWidget {
             final err = cart.addItem(item.product, item.shop,
                 selectedVariant: item.selectedVariant);
             if (err != null) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(err),
-                backgroundColor: AppColors.danger,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ));
+              AppToast.showWarning(
+                context,
+                title: 'Cart Notice 🛒',
+                message: err,
+              );
             }
           }, isDark),
         ],
@@ -587,15 +586,11 @@ class CartPage extends StatelessWidget {
 
                       if (auth.currentUserId == null) {
                         Navigator.pushNamed(context, AppRoutes.login);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Please login to continue checkout.',
-                                style: GoogleFonts.outfit(color: Colors.white)),
-                            backgroundColor: AppColors.primary,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
+                        AppToast.showInfo(
+                          context,
+                          title: 'Sign In Required 🔐',
+                          message:
+                              'Please sign in or create an account to proceed with your order.',
                         );
                       } else {
                         Navigator.pushNamed(context, AppRoutes.checkout);

@@ -579,7 +579,7 @@ class OrderModel {
           case 'timeout':
             return 'Order Expired';
           case 'customer':
-            return 'Cancelled by You';
+            return 'Cancelled by Customer';
           case 'shop_dispute':
             return 'Cancelled — Shop Issue';
           default:

@@ -27,6 +27,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/notification_service.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/app_toast.dart';
 import 'package:collection/collection.dart';
 import '../../utils/delivery_calculator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -237,6 +238,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
     _riderLocationsNotifier.dispose();
     _decisionSecondsLeft.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -279,21 +281,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
   Future<void> _checkStackedDelivery(String riderId, String myGroupId) async {
     try {
-      final res = await _supabase
-          .from('orders')
-          .select('id, cart_group_id')
-          .eq('delivery_partner_id', riderId)
-          .inFilter('status', [
-            'confirmed',
-            'preparing',
-            'ready_for_pickup',
-            'picked_up',
-            'out_for_delivery'
-          ]);
-      final distinctGroups = (res as List)
-          .map((r) => (r['cart_group_id'] as String?) ?? (r['id'] as String))
-          .toSet();
-      final hasOtherOrders = distinctGroups.any((gid) => gid != myGroupId);
+      final res = await _supabase.rpc('check_rider_has_stacked_orders', params: {
+        'p_rider_id': riderId,
+        'p_my_cart_group_id': myGroupId,
+        'p_my_order_id': _order?.id,
+      });
+      final hasOtherOrders = res == true;
       if (mounted && hasOtherOrders != _isStackedDelivery) {
         setState(() {
           _isStackedDelivery = hasOtherOrders;
@@ -915,7 +908,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     // POINT 4: Start timer abruptly on partial rejection, independent of aggregate status change
     if (_hasPartialRejection && !_wasPartialRejectionTimerStarted) {
       if (_aggregateStatus == 'awaiting_payment' ||
-          _aggregateStatus == 'awaiting_acceptance') {
+          _aggregateStatus == 'awaiting_acceptance' ||
+          _aggregateStatus == 'confirmed' ||
+          _aggregateStatus == 'preparing') {
         _startDecisionCountdown();
         if (!_partnersNotifiedOfHolding) {
           _notifyPartnersOfHolding();
@@ -1133,12 +1128,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       return;
     }
 
-    final unhandledRejections = _groupOrders
+    final unhandledShopRejections = _groupOrders
         .where((o) =>
             _terminalRejectionStatuses.contains(o.status) &&
             !(o.cancelledReason?.startsWith('customer') ?? false))
         .toList();
-    if (unhandledRejections.isEmpty) {
+    final unhandledRejections = unhandledShopRejections;
+    final hasActiveItemRejections = _groupOrders.any((o) =>
+        !_terminalRejectionStatuses.contains(o.status) && o.hasDeclinedItems);
+
+    if (unhandledShopRejections.isEmpty && !hasActiveItemRejections) {
       _partialRejectionResolved = true;
       _decisionCountdownTimer = null;
       return;
@@ -1682,6 +1681,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       if (mounted && _order != null) {
         final notifProv = context.read<NotificationProvider>();
         final shopsToNotify = targetOrders;
+        final notifiedRiders = <String>{};
+        final notifiedSellers = <String>{};
 
         for (final o in shopsToNotify) {
           // Notify seller
@@ -1693,25 +1694,34 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 .maybeSingle()
                 .then((shopData) {
               if (shopData != null && shopData['seller_id'] != null) {
-                notifProv.sendBackgroundPush(
-                  targetUserId: shopData['seller_id'] as String,
-                  title: '❌ Order Cancelled by Customer',
-                  body:
-                      'The customer cancelled their order. No further action needed.',
-                  data: {'order_id': o.id, 'role': 'seller'},
-                );
+                final sId = shopData['seller_id'] as String;
+                if (!notifiedSellers.contains(sId)) {
+                  notifiedSellers.add(sId);
+                  notifProv.sendBackgroundPush(
+                    targetUserId: sId,
+                    title: '❌ Order Cancelled by Customer',
+                    body:
+                        'The customer cancelled their order. No further action needed.',
+                    data: {'order_id': o.id, 'role': 'seller'},
+                  );
+                }
               }
             });
           }
 
-          // Notify assigned rider (if any)
-          if (o.deliveryPartnerId != null) {
+          // Notify assigned rider (deduplicated across multi-shop cart groups)
+          if (o.deliveryPartnerId != null && !notifiedRiders.contains(o.deliveryPartnerId)) {
+            notifiedRiders.add(o.deliveryPartnerId!);
             notifProv.sendBackgroundPush(
               targetUserId: o.deliveryPartnerId!,
               title: '❌ Order Cancelled by Customer',
               body:
                   'The customer cancelled their order. You are free for new deliveries.',
-              data: {'order_id': o.id, 'role': 'rider'},
+              data: {
+                'order_id': o.id,
+                if (o.cartGroupId != null) 'cart_group_id': o.cartGroupId!,
+                'role': 'rider'
+              },
             );
           }
         }
@@ -2566,9 +2576,16 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
         // Notify seller(s) and rider of confirmed payment
         final notifProv = context.read<NotificationProvider>();
-        final ordersToNotify = _groupOrders.isNotEmpty
+        final ordersToNotify = (_groupOrders.isNotEmpty
             ? _groupOrders
-            : (_order != null ? [_order!] : <OrderModel>[]);
+            : (_order != null ? [_order!] : <OrderModel>[]))
+            .where((o) =>
+                o.status == 'confirmed' ||
+                o.status == 'awaiting_payment' ||
+                o.status == 'preparing')
+            .toList();
+        final notifiedRiders = <String>{};
+        final notifiedSellers = <String>{};
         for (final o in ordersToNotify) {
           if (o.shopId != null) {
             _supabase
@@ -2578,21 +2595,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 .maybeSingle()
                 .then((shopData) {
               if (shopData != null && shopData['seller_id'] != null) {
-                notifProv.sendBackgroundPush(
-                  targetUserId: shopData['seller_id'] as String,
-                  title: '💳 Payment Received! Start Preparing 👨‍🍳',
-                  body:
-                      'Customer payment confirmed for Order. Pack the items now!',
-                  data: {
-                    'order_id': o.id,
-                    'role': 'seller',
-                    'action': 'start_preparing',
-                  },
-                );
+                final sId = shopData['seller_id'] as String;
+                if (!notifiedSellers.contains(sId)) {
+                  notifiedSellers.add(sId);
+                  notifProv.sendBackgroundPush(
+                    targetUserId: sId,
+                    title: '💳 Payment Received! Start Preparing 👨‍🍳',
+                    body:
+                        'Customer payment confirmed for Order. Pack the items now!',
+                    data: {
+                      'order_id': o.id,
+                      'role': 'seller',
+                      'action': 'start_preparing',
+                    },
+                  );
+                }
               }
             }).catchError((_) => null);
           }
-          if (o.deliveryPartnerId != null) {
+          if (o.deliveryPartnerId != null && !notifiedRiders.contains(o.deliveryPartnerId)) {
+            notifiedRiders.add(o.deliveryPartnerId!);
             notifProv.sendBackgroundPush(
               targetUserId: o.deliveryPartnerId!,
               title: '💳 Payment Done! Go Pick Up 🛵',
@@ -2600,6 +2622,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                   'Customer payment is complete. Head to the shop to pick up the order!',
               data: {
                 'order_id': o.id,
+                if (o.cartGroupId != null) 'cart_group_id': o.cartGroupId!,
                 'role': 'delivery',
                 'action': 'pickup_order',
               },
@@ -3495,9 +3518,26 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                   )),
                             ]),
                             const SizedBox(height: 16),
-                            _billRow('Item Subtotal',
-                                '₹${_computeGroupTotalAmount().toStringAsFixed(0)}',
-                                isDark: isDark),
+                            if (_computeGroupRefundDelta() > 0) ...[
+                              _billRow('Original Items Subtotal',
+                                  '₹${(_computeGroupTotalAmount() + _computeGroupRefundDelta()).toStringAsFixed(0)}',
+                                  isDark: isDark),
+                              const SizedBox(height: 8),
+                              _billRow(
+                                'Unavailable Items (Refunded)',
+                                '-₹${_computeGroupRefundDelta().toStringAsFixed(0)}',
+                                isDark: isDark,
+                                valueColor: AppColors.success,
+                              ),
+                              const SizedBox(height: 8),
+                              _billRow('Net Items Subtotal',
+                                  '₹${_computeGroupTotalAmount().toStringAsFixed(0)}',
+                                  isDark: isDark),
+                            ] else ...[
+                              _billRow('Item Subtotal',
+                                  '₹${_computeGroupTotalAmount().toStringAsFixed(0)}',
+                                  isDark: isDark),
+                            ],
                             const SizedBox(height: 8),
                             _billRow('Delivery Fee',
                                 '₹${_computeGroupBaseDeliveryFee().toStringAsFixed(0)}',
@@ -3553,16 +3593,6 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                 isDark: isDark,
                                 onTap: () =>
                                     _showTaxBreakdownSheet(context, isDark),
-                              ),
-                            ],
-                            if (_groupOrders.any((o) => o.hasDeclinedItems) ||
-                                (_order != null && _order!.hasDeclinedItems)) ...[
-                              const SizedBox(height: 8),
-                              _billRow(
-                                'Refund Processing (Unavailable)',
-                                '-₹${_computeGroupRefundDelta().toStringAsFixed(0)}',
-                                isDark: isDark,
-                                valueColor: AppColors.success,
                               ),
                             ],
                             Divider(
@@ -6042,27 +6072,34 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     final firstWord = item.productName.split(' ').first;
                     final twoWords =
                         item.productName.split(' ').take(2).join(' ');
+                    final bool isShopRejected = _terminalRejectionStatuses.contains(rejectedOrder.status);
+
                     // Try 2-word search first (more precise)
-                    final precise = await _supabase
+                    var preciseQuery = _supabase
                         .from('products')
                         .select('*, shops(*)')
                         .eq('is_deleted', false)
                         .ilike('name', '%$twoWords%')
-                        .eq('is_available', true)
-                        .neq('shop_id', rejectedOrder.shopId ?? '')
-                        .limit(10);
+                        .eq('is_available', true);
+                    if (isShopRejected && rejectedOrder.shopId != null) {
+                      preciseQuery = preciseQuery.neq('shop_id', rejectedOrder.shopId!);
+                    }
+                    final precise = await preciseQuery.limit(10);
                     if ((precise as List).isNotEmpty) {
                       return precise as List<dynamic>;
                     }
+
                     // Fallback: single first-word search (broader)
-                    final broad = await _supabase
+                    var broadQuery = _supabase
                         .from('products')
                         .select('*, shops(*)')
                         .eq('is_deleted', false)
                         .ilike('name', '%$firstWord%')
-                        .eq('is_available', true)
-                        .neq('shop_id', rejectedOrder.shopId ?? '')
-                        .limit(10);
+                        .eq('is_available', true);
+                    if (isShopRejected && rejectedOrder.shopId != null) {
+                      broadQuery = broadQuery.neq('shop_id', rejectedOrder.shopId!);
+                    }
+                    final broad = await broadQuery.limit(10);
                     return broad as List<dynamic>;
                   })(),
                   builder: (ctx, snapshot) {
@@ -6301,6 +6338,45 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     final cart = context.read<CartProvider>();
     final productModel = ProductModel.fromMap(newProduct);
     final shopModel = ShopModel.fromMap(newProduct['shops']);
+
+    // 100x IN-ORDER SAME-SHOP ATOMIC SWAP
+    // If the replacement is from the same active shop and doesn't require extra upfront payment,
+    // swap line item directly in-place without forcing the customer through a full checkout loop.
+    final bool isSameShop = productModel.shopId == rejectedOrder.shopId;
+    final bool isPartialItemDecline =
+        !_terminalRejectionStatuses.contains(rejectedOrder.status);
+
+    if (isSameShop && isPartialItemDecline) {
+      final oldSubtotal = oldItem.price * oldItem.quantity;
+      final newSubtotal = productModel.price * oldItem.quantity;
+
+      if (newSubtotal <= oldSubtotal || rejectedOrder.paymentStatus != 'captured') {
+        try {
+          await _supabase.rpc('customer_swap_order_item', params: {
+            'p_order_id': rejectedOrder.id,
+            'p_declined_item_id': oldItem.id,
+            'p_replacement_product_id': productModel.id,
+            'p_replacement_variant_name': null,
+            'p_quantity': oldItem.quantity,
+          });
+
+          if (mounted) {
+            AppToast.show(
+              context,
+              title: 'Item Swapped! 🎉',
+              message:
+                  'Swapped ${oldItem.productName} with ${productModel.name} in your order.',
+              type: ToastType.success,
+              icon: Icons.check_circle_rounded,
+            );
+            _fetchOrder();
+            return;
+          }
+        } catch (e) {
+          debugPrint('In-order swap RPC error: $e');
+        }
+      }
+    }
 
     // 100x Logic: Bump the payment deadline of the remaining orders so they don't expire
     if (_order?.cartGroupId != null) {

@@ -546,11 +546,13 @@ class NotificationProvider extends ChangeNotifier {
             ));
             // If user is also an admin or receives priority alerts while in customer view:
             if (title.contains('Catering Quote') ||
-                title.contains('Quote Accepted') ||
-                title.contains('New Rider KYC')) {
+                title.contains('Quote Accepted')) {
               final trackId = orderId ?? notifKey;
               if (trackId.isNotEmpty) {
-                BellAlertService.instance.addPendingOrder(trackId);
+                BellAlertService.instance.addPendingOrder(
+                  trackId,
+                  expiration: DateTime.now().add(const Duration(minutes: 1)),
+                );
               }
             }
           },
@@ -959,7 +961,10 @@ class NotificationProvider extends ChangeNotifier {
                   '$customerName requested catering for $guests guests ($eventName). 📞 $phone',
             ));
             if (quoteId != null) {
-              BellAlertService.instance.addPendingOrder('quote_$quoteId');
+              BellAlertService.instance.addPendingOrder(
+                'quote_$quoteId',
+                expiration: DateTime.now().add(const Duration(seconds: 60)),
+              );
             }
           },
         )
@@ -987,8 +992,10 @@ class NotificationProvider extends ChangeNotifier {
                     '$customerName accepted ₹$amount for $eventName. 📞 $phone',
               ));
               if (quoteId != null) {
-                BellAlertService.instance
-                    .addPendingOrder('quote_accepted_$quoteId');
+                BellAlertService.instance.addPendingOrder(
+                  'quote_accepted_$quoteId',
+                  expiration: DateTime.now().add(const Duration(seconds: 60)),
+                );
               }
             }
           },
@@ -1018,11 +1025,13 @@ class NotificationProvider extends ChangeNotifier {
             ));
             if (title.contains('Catering Quote') ||
                 title.contains('Quote Accepted') ||
-                title.contains('New Order') ||
-                title.contains('New Rider KYC')) {
+                title.contains('New Order')) {
               final trackId = orderId ?? notifKey;
               if (trackId.isNotEmpty) {
-                BellAlertService.instance.addPendingOrder(trackId);
+                BellAlertService.instance.addPendingOrder(
+                  trackId,
+                  expiration: DateTime.now().add(const Duration(minutes: 1)),
+                );
               }
             }
           },

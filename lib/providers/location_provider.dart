@@ -18,6 +18,76 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   LocationProvider() {
     WidgetsBinding.instance.addObserver(this);
+    initFromCache();
+  }
+
+  /// 100x Strict Validation: Rejects Null Island (0,0), NaN, out-of-range coordinates
+  static bool isValidCoordinates(LatLng? loc) {
+    if (loc == null) return false;
+    return loc.latitude != 0.0 &&
+        loc.longitude != 0.0 &&
+        !loc.latitude.isNaN &&
+        !loc.longitude.isNaN &&
+        loc.latitude.abs() <= 90.0 &&
+        loc.longitude.abs() <= 180.0;
+  }
+
+  /// Fast-path cold start initialization from persistent SharedPreferences cache
+  Future<void> initFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedAddr = prefs.getString('cached_delivery_address');
+      final cachedLat = prefs.getDouble('cached_delivery_lat');
+      final cachedLng = prefs.getDouble('cached_delivery_lng');
+      final cachedHouse = prefs.getString('cached_delivery_house');
+      final cachedMark = prefs.getString('cached_delivery_landmark');
+      final cachedPin = prefs.getString('cached_delivery_pincode');
+
+      if (_currentLocation == null &&
+          cachedLat != null &&
+          cachedLng != null &&
+          cachedLat != 0.0 &&
+          cachedLng != 0.0) {
+        final loc = LatLng(cachedLat, cachedLng);
+        if (isValidCoordinates(loc)) {
+          _currentLocation = loc;
+          if (cachedAddr != null && cachedAddr.isNotEmpty) {
+            _currentAddress = cachedAddr;
+          }
+          if (cachedHouse != null) _houseNumber = cachedHouse;
+          if (cachedMark != null) _landmark = cachedMark;
+          if (cachedPin != null) _pincode = cachedPin;
+          safeNotifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('initFromCache error: $e');
+    }
+  }
+
+  /// Persists current location details to SharedPreferences for 0ms cold-start restoration
+  Future<void> _cacheCurrentState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_currentAddress.isNotEmpty &&
+          _currentAddress != 'Locating...' &&
+          _currentAddress != 'Fetching address...') {
+        await prefs.setString('cached_delivery_address', _currentAddress);
+      }
+      if (isValidCoordinates(_currentLocation)) {
+        await prefs.setDouble('cached_delivery_lat', _currentLocation!.latitude);
+        await prefs.setDouble('cached_delivery_lng', _currentLocation!.longitude);
+      }
+      if (_houseNumber.isNotEmpty) {
+        await prefs.setString('cached_delivery_house', _houseNumber);
+      }
+      if (_landmark.isNotEmpty) {
+        await prefs.setString('cached_delivery_landmark', _landmark);
+      }
+      if (_pincode.isNotEmpty) {
+        await prefs.setString('cached_delivery_pincode', _pincode);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -43,8 +113,9 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
-        if (!_permissionGranted || _currentLocation == null) {
-          requestLocation();
+        // Automatically refresh live GPS location on app resume if user has not explicitly locked a manual address
+        if (_selectedAddress == null) {
+          requestLocation(isUserAction: false);
         }
       }
     } catch (e) {
@@ -113,7 +184,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   bool get isLoading => _isLoading;
   bool get permissionGranted => _permissionGranted;
-  bool get hasLocation => _currentLocation != null;
+  bool get hasLocation => isValidCoordinates(_currentLocation);
 
   void clear() {
     _currentLocation = null;
@@ -223,36 +294,56 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
-        Position? position;
+        // ── Fast-path Tier 1: Instant Last-Known Position (< 50ms) ───────────
+        // Immediately place the user in their neighborhood / city while
+        // high-accuracy satellite lock warms up in the background.
+        try {
+          final lastKnown = await Geolocator.getLastKnownPosition();
+          if (lastKnown != null && _currentLocation == null) {
+            _currentLocation = LatLng(lastKnown.latitude, lastKnown.longitude);
+            _permissionGranted = true;
+            _currentAddress = 'Locating...';
+            _autoMatchSavedAddress();
+            safeNotifyListeners();
+            // Start early background reverse-geocode
+            updateAddress();
+          }
+        } catch (e) {
+          debugPrint('Fast-path lastKnown error: $e');
+        }
 
-        // Try high accuracy first, fall back to last known position
+        // ── Tier 2: Refined High-Accuracy Live Fix ────────────────────────────
+        Position? position;
         try {
           position = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
               accuracy: LocationAccuracy.high,
-              timeLimit: Duration(seconds: 15),
+              timeLimit: Duration(seconds: 10),
             ),
           );
         } catch (_) {
-          // Fallback: last known position (works on emulators)
-          position = await Geolocator.getLastKnownPosition();
+          if (_currentLocation == null) {
+            position = await Geolocator.getLastKnownPosition();
+          }
         }
 
-        if (position == null) {
+        if (position != null) {
+          _currentLocation = LatLng(position.latitude, position.longitude);
+          _permissionGranted = true;
+          _autoMatchSavedAddress();
           _isLoading = false;
           safeNotifyListeners();
-          return false;
+          await updateAddress();
+          return true;
+        } else if (_currentLocation != null) {
+          _isLoading = false;
+          safeNotifyListeners();
+          return true;
         }
 
-        _currentLocation = LatLng(position.latitude, position.longitude);
-        _permissionGranted = true;
-        _currentAddress = 'Fetching address...';
         _isLoading = false;
         safeNotifyListeners();
-
-        // Reverse geocode in background
-        await updateAddress();
-        return true;
+        return false;
       }
     } catch (e) {
       debugPrint('Location error: $e');
@@ -275,7 +366,14 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     _landmark = addr.landmark ?? '';
     _pincode = addr.pincode ?? '';
     _permissionGranted = true;
+    _cacheCurrentState();
     safeNotifyListeners();
+
+    // 100x Automatic Sync: Keep database profile synchronized with active selection
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId != null) {
+      syncLocationToDatabase('customer', userId);
+    }
   }
 
   /// Clear any manual selection (revert to GPS-based auto-match)
@@ -431,6 +529,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void setManualLocation(LatLng location, String address,
       {String? house, String? mark}) {
+    if (!isValidCoordinates(location)) return;
     _currentLocation = location;
     _currentAddress = address;
     if (house != null && house.isNotEmpty) _houseNumber = house;
@@ -438,7 +537,13 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     _permissionGranted = true;
     _selectedAddress = null; // Clear manual selection on GPS update
     _autoMatchSavedAddress();
+    _cacheCurrentState();
     safeNotifyListeners();
+
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId != null) {
+      syncLocationToDatabase('customer', userId);
+    }
   }
 
   void setLocalAddressDetails(
@@ -511,13 +616,15 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   double distanceTo(LatLng target) {
-    if (_currentLocation == null) return -1.0;
+    if (!isValidCoordinates(_currentLocation) || !isValidCoordinates(target)) {
+      return -1.0;
+    }
     const distance = Distance();
     return distance(_currentLocation!, target) / 1000;
   }
 
   Future<void> updateAddress() async {
-    if (_currentLocation == null) return;
+    if (!isValidCoordinates(_currentLocation)) return;
 
     try {
       final response = await http.get(
@@ -525,7 +632,8 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=${_currentLocation!.latitude}&lon=${_currentLocation!.longitude}',
         ),
         headers: {
-          'User-Agent': 'EnythingMobileApp/1.0',
+          'User-Agent':
+              'Enything-Food-Delivery-App/1.0 (contact: support@enything.in)',
         },
       ).timeout(const Duration(seconds: 10));
 
@@ -550,11 +658,18 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         } else {
           _currentAddress = data['display_name'] ?? 'Your current location';
         }
+        _cacheCurrentState();
         safeNotifyListeners();
+
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId != null) {
+          syncLocationToDatabase('customer', userId);
+        }
       }
     } catch (e) {
       debugPrint('Reverse geocoding error: $e');
       _currentAddress = 'Current Location';
+      _cacheCurrentState();
       safeNotifyListeners();
     }
     // After reverse geocode completes, check for proximity matches
@@ -563,12 +678,16 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Returns a formatted address string for the current coordinates
   Future<String> getAddressForLocation(LatLng location) async {
+    if (!isValidCoordinates(location)) return '';
     try {
       final response = await http.get(
         Uri.parse(
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}',
         ),
-        headers: {'User-Agent': 'EnythingMobileApp/1.0'},
+        headers: {
+          'User-Agent':
+              'Enything-Food-Delivery-App/1.0 (contact: support@enything.in)',
+        },
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

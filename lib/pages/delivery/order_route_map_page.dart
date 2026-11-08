@@ -25,6 +25,23 @@ const _kShopPickedUpMarker = Color(0xFF3498DB);
 const _kShopCancelledMarker = Color(0xFF95A5A6);
 const _kCustomerMarker = Color(0xFF00B4D8); // cyan
 
+const Set<String> _kTerminalStatuses = {
+  'delivered',
+  'cancelled',
+  'seller_rejected',
+  'partner_rejected',
+  'rider_rejected',
+  'shop_dispute_cancel',
+  'timeout',
+  'failed',
+  'returned',
+  'refunded',
+  'verification_failed',
+  'no_rider',
+  'payment_failed',
+  'rejected',
+};
+
 /// 100x Architecture: Aggregated Physical Shop Stop.
 /// Clusters multiple sub-orders (even from different customers) at the same physical store.
 class UnifiedShopStop {
@@ -43,12 +60,7 @@ class UnifiedShopStop {
   });
 
   String get aggregateStatus {
-    final active = orders.where((o) =>
-        o.status != 'rejected' &&
-        o.status != 'cancelled' &&
-        o.status != 'seller_rejected' &&
-        o.status != 'partner_rejected' &&
-        o.status != 'shop_dispute_cancel').toList();
+    final active = orders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
     if (active.isEmpty) return 'cancelled';
     if (active.every((o) =>
         o.status == 'picked_up' ||
@@ -98,6 +110,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   List<OrderModel> _orders = [];
   List<LatLng> _pickupRoute = [];
   List<LatLng> _deliveryRoute = [];
+  List<OrderGroup> _orderedCustomerGroups = [];
   bool _loadingRoutes = true;
   double? _totalKm;
 
@@ -107,6 +120,49 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   // 100x FIX (Edge Case 6): Support multiple realtime channels for multi-customer routes
   final List<RealtimeChannel> _orderChannels = [];
   LatLng? _lastRouteFetchPos;
+  DateTime? _lastForegroundBroadcastTime;
+  LatLng? _lastForegroundBroadcastPos;
+
+  Future<void> _broadcastForegroundLocation(LatLng pos) async {
+    final now = DateTime.now();
+    if (_lastForegroundBroadcastTime != null &&
+        now.difference(_lastForegroundBroadcastTime!).inSeconds < 10) {
+      if (_lastForegroundBroadcastPos != null &&
+          const Distance()(_lastForegroundBroadcastPos!, pos) < 25) {
+        return;
+      }
+    }
+    _lastForegroundBroadcastTime = now;
+    _lastForegroundBroadcastPos = pos;
+
+    try {
+      await _supabase.rpc('update_rider_location', params: {
+        'p_lat': pos.latitude,
+        'p_lng': pos.longitude,
+      });
+
+      // Also cascade rider coordinates to current active in-flight orders
+      final activeOrderIds = _orders
+          .where((o) =>
+              o.status == 'awaiting_payment' ||
+              o.status == 'confirmed' ||
+              o.status == 'preparing' ||
+              o.status == 'ready_for_pickup' ||
+              o.status == 'picked_up' ||
+              o.status == 'out_for_delivery')
+          .map((o) => o.id)
+          .toList();
+
+      if (activeOrderIds.isNotEmpty) {
+        await _supabase.from('orders').update({
+          'rider_lat': pos.latitude,
+          'rider_lng': pos.longitude,
+        }).inFilter('id', activeOrderIds);
+      }
+    } catch (e) {
+      debugPrint('Foreground rider location sync error: $e');
+    }
+  }
 
   int _selectedStopIndex = 0;
 
@@ -139,6 +195,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           prevPos.latitude != newPos.latitude ||
           prevPos.longitude != newPos.longitude) {
         _riderPositionNotifier.value = newPos;
+        _broadcastForegroundLocation(newPos);
 
         // Dynamically re-evaluate routes if rider moved > 60m along the trip
         if (_lastRouteFetchPos == null ||
@@ -216,12 +273,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
               }
 
               final activeOrders = _orders
-                  .where((o) =>
-                      o.status != 'rejected' &&
-                      o.status != 'cancelled' &&
-                      o.status != 'seller_rejected' &&
-                      o.status != 'partner_rejected' &&
-                      o.status != 'shop_dispute_cancel')
+                  .where((o) => !_kTerminalStatuses.contains(o.status))
                   .toList();
 
               // If a stop was cancelled/disputed
@@ -255,7 +307,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
               // 100x FIX (Edge Case 3): Clamp selected stop index to prevent RangeError crash
               final totalStops =
-                  _effectiveShopStops.length + _activeCustomerGroups.length;
+                  _effectiveShopStops.length + _effectiveCustomerGroups.length;
               if (_selectedStopIndex >= totalStops) {
                 setState(() {
                   _selectedStopIndex = math.max(0, totalStops - 1);
@@ -281,6 +333,21 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     }).toList();
   }
 
+  /// 100x FIX: Customer groups ordered strictly by TSP route sequence.
+  List<OrderGroup> get _effectiveCustomerGroups {
+    if (_orderedCustomerGroups.isNotEmpty) {
+      final active = _activeCustomerGroups;
+      final activeIds = active.map((g) => g.groupId).toSet();
+      final list = _orderedCustomerGroups.where((g) => activeIds.contains(g.groupId)).toList();
+      final presentIds = list.map((g) => g.groupId).toSet();
+      for (final g in active) {
+        if (!presentIds.contains(g.groupId)) list.add(g);
+      }
+      return list;
+    }
+    return _activeCustomerGroups;
+  }
+
   /// 100x FIX: True only if all sub-orders of this group are terminal cancelled/rejected.
   bool _isGroupCancelled(OrderGroup g) {
     final groupOrders = _orders.where((o) =>
@@ -301,12 +368,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
         (o.cartGroupId == null && o.id == g.primaryOrder.id)).toList();
     if (groupOrders.isEmpty) return false;
-    final active = groupOrders.where((o) =>
-        o.status != 'rejected' &&
-        o.status != 'cancelled' &&
-        o.status != 'seller_rejected' &&
-        o.status != 'partner_rejected' &&
-        o.status != 'shop_dispute_cancel').toList();
+    final active = groupOrders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
     if (active.isEmpty) return false; // If all were cancelled, it's NOT delivered!
     return active.every((o) => o.status == 'delivered');
   }
@@ -315,12 +377,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   /// Deduplicates co-located shops across multiple customer cart groups.
   List<UnifiedShopStop> get _effectiveShopStops {
     final activeOrders = _orders
-        .where((o) =>
-            o.status != 'rejected' &&
-            o.status != 'cancelled' &&
-            o.status != 'seller_rejected' &&
-            o.status != 'partner_rejected' &&
-            o.status != 'shop_dispute_cancel')
+        .where((o) => !_kTerminalStatuses.contains(o.status))
         .toList();
 
     final targetOrders = activeOrders.isNotEmpty ? activeOrders : _orders;
@@ -377,12 +434,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     double totalKm = 0;
 
     final shops = _effectiveShopStops;
-    // 100x FIX: Use aggregate status whitelist for unpicked shops
+    // 100x FIX: Include all non-terminal unpicked shops
     final unpickedShops = shops
-        .where((s) =>
-            s.aggregateStatus == 'confirmed' ||
-            s.aggregateStatus == 'preparing' ||
-            s.aggregateStatus == 'ready_for_pickup')
+        .where((s) => !s.isPickedUp && !s.isCancelled)
         .toList();
 
     List<LatLng> shopPts = [];
@@ -410,6 +464,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     final undeliveredGroups =
         _activeCustomerGroups.where((g) => !_isGroupDelivered(g)).toList();
     List<LatLng> customerPts = [];
+    List<OrderGroup> sortedGroups = [];
     if (undeliveredGroups.isNotEmpty) {
       final unvisitedGroups = List<OrderGroup>.from(undeliveredGroups);
       final riderPos = _riderPositionNotifier.value;
@@ -434,6 +489,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
           return distA.compareTo(distB);
         });
         final nearest = unvisitedGroups.removeAt(0);
+        sortedGroups.add(nearest);
         customerPts.add(LatLng(nearest.deliveryLat!, nearest.deliveryLng!));
         dropRef = LatLng(nearest.deliveryLat!, nearest.deliveryLng!);
       }
@@ -470,6 +526,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       setState(() {
         _pickupRoute = pickupRoute;
         _deliveryRoute = deliveryRoute;
+        _orderedCustomerGroups = sortedGroups;
         _totalKm = totalKm > 0 ? totalKm : null;
         _loadingRoutes = false;
       });
@@ -482,7 +539,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   void _fitMapBounds() {
     final riderPos = _riderPositionNotifier.value;
     final activeShops = _effectiveShopStops;
-    final activeGroups = _activeCustomerGroups;
+    final activeGroups = _effectiveCustomerGroups;
 
     final customerPts = activeGroups
         .where((g) => g.deliveryLat != null && g.deliveryLat != 0.0)
@@ -513,10 +570,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     final riderPos = _riderPositionNotifier.value;
     final shops = _effectiveShopStops;
     final unpickedShops = shops
-        .where((s) =>
-            s.aggregateStatus == 'confirmed' ||
-            s.aggregateStatus == 'preparing' ||
-            s.aggregateStatus == 'ready_for_pickup')
+        .where((s) => !s.isPickedUp && !s.isCancelled)
         .toList();
 
     final origin = (riderPos != null && riderPos.latitude != 0.0)
@@ -527,7 +581,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
     // 100x FIX: Greedy TSP customer drop-offs for external map
     final undeliveredGroups =
-        _activeCustomerGroups.where((g) => !_isGroupDelivered(g)).toList();
+        _effectiveCustomerGroups.where((g) => !_isGroupDelivered(g)).toList();
     final orderedCustomerPts = <String>[];
     if (undeliveredGroups.isNotEmpty) {
       final unvisited = List<OrderGroup>.from(undeliveredGroups);
@@ -571,11 +625,20 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     ];
 
     // 100x FIX (Edge Case 6): Cap waypoints to max 8 immediate stops to prevent Google Maps URL overflow
-    final safeWaypoints = waypoints.take(8).toList();
-    final waypointsParam =
-        safeWaypoints.isNotEmpty ? '&waypoints=${safeWaypoints.join('|')}' : '';
+    // and avoid leapfrogging intermediate drop-offs
+    String finalDestination = destination;
+    List<String> finalWaypoints = waypoints;
+
+    if (waypoints.length > 8) {
+      finalDestination = waypoints[8];
+      finalWaypoints = waypoints.sublist(0, 8);
+    }
+
+    final waypointsParam = finalWaypoints.isNotEmpty
+        ? '&waypoints=${finalWaypoints.map(Uri.encodeComponent).join('%7C')}'
+        : '';
     final uri = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination$waypointsParam');
+        'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$finalDestination$waypointsParam');
 
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
@@ -645,7 +708,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final shops = _effectiveShopStops;
-    final activeGroups = _activeCustomerGroups;
+    final activeGroups = _effectiveCustomerGroups;
     final isMulti = shops.length > 1;
     final primaryOrder = widget.group.primaryOrder;
 

@@ -22,6 +22,7 @@ import '../../services/gst_recommendation_engine.dart';
 import '../../services/master_catalog_service.dart';
 import '../../utils/haptic_utils.dart';
 import '../../utils/demographic_utils.dart';
+import '../../utils/app_toast.dart';
 
 /// 100x Unified Image Item for Product Gallery
 /// Preserves exact drag-and-drop repositioning sequence across remote CDN URLs and local files.
@@ -1710,33 +1711,35 @@ class _AddProductPageState extends State<AddProductPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_menuCategoryController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Menu Category is required. Please enter or select a category.'),
-          backgroundColor: AppColors.danger,
-        ),
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Menu Category',
+        actionMessage:
+            'Please enter or select a category for this item before saving.',
+        icon: Icons.category_rounded,
       );
       return;
     }
 
     // C1: Require at least 1 product image
     if (_productImages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one product image.'),
-          backgroundColor: AppColors.danger,
-        ),
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Product Image',
+        actionMessage:
+            'Please upload at least one clear photo of this product.',
+        icon: Icons.add_photo_alternate_rounded,
       );
       return;
     }
 
     if (AppCategories.requiresVariant(_productCategory) && _variants.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Please add at least one variant/size for this category.'),
-          backgroundColor: AppColors.danger,
-        ),
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Variant / Size',
+        actionMessage:
+            'Please add at least one size or variant for this product category.',
+        icon: Icons.format_list_bulleted_rounded,
       );
       return;
     }
@@ -1755,10 +1758,13 @@ class _AddProductPageState extends State<AddProductPage> {
         final originalPrice =
             double.tryParse(_originalPriceController.text) ?? 0.0;
         if (originalPrice <= finalPrice) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    'Original Price (MRP) must be greater than Selling Price')),
+          AppToast.show(
+            context,
+            title: 'Price Verification Required 💰',
+            message:
+                'Original Price (MRP) must be greater than your selling price.',
+            type: ToastType.warning,
+            icon: Icons.price_change_rounded,
           );
           return;
         }
@@ -1769,14 +1775,16 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     if (_shopId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No shop found. Create a shop first.')),
+      AppToast.showError(
+        context,
+        title: 'Store Not Found',
+        message:
+            'No active shop registered for your account. Please create a shop first.',
       );
       return;
     }
 
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
       List<String> uploadedUrls = [];
@@ -1908,24 +1916,23 @@ class _AddProductPageState extends State<AddProductPage> {
 
       if (!mounted) return;
       // I4: Success feedback before popping
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(widget.existingProduct != null
-              ? 'Product updated successfully!'
-              : 'Product added successfully!'),
-          backgroundColor: const Color(0xFF00C853),
-          duration: const Duration(seconds: 2),
-        ),
+      AppToast.showSuccess(
+        context,
+        title: widget.existingProduct != null
+            ? 'Product Updated! 🛍️'
+            : 'Product Added! 🛍️',
+        message: widget.existingProduct != null
+            ? '${_nameController.text.trim()} was updated successfully.'
+            : '${_nameController.text.trim()} is now listed in your shop.',
       );
       _isDirty = false; // Prevent PopScope guard on successful save
       navigator.pop(true);
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: AppColors.danger,
-        ),
+      AppToast.showError(
+        context,
+        title: 'Save Failed',
+        message: 'Could not save product: $e',
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);

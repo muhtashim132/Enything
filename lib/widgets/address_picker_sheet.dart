@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/location_provider.dart';
 import '../pages/settings/profile_settings_dialogs.dart';
+import '../utils/app_toast.dart';
 
 bool _isAddressPickerOpen = false;
 
 /// Swiggy/Zomato-style address picker bottom sheet.
 /// Shows saved addresses, current GPS option, and lets users add new addresses.
-void showAddressPickerSheet(BuildContext context) {
+Future<void> showAddressPickerSheet(BuildContext context) async {
   if (_isAddressPickerOpen) return;
 
   final auth = context.read<AuthProvider>();
@@ -18,20 +20,22 @@ void showAddressPickerSheet(BuildContext context) {
 
   _isAddressPickerOpen = true;
 
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder:  (ctx) => _AddressPickerContent(
-      userId: userId,
-      // Pass the PARENT (scaffold) context so showAddEditAddressDialog
-      // is called with a context that remains mounted after the sheet
-      // closes — fixes the silent bug where Step 2 was skipped.
-      rootContext: context,
-    ),
-  ).then((_) {
+  try {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _AddressPickerContent(
+        userId: userId,
+        // Pass the PARENT (scaffold) context so showAddEditAddressDialog
+        // is called with a context that remains mounted after the sheet
+        // closes — fixes the silent bug where Step 2 was skipped.
+        rootContext: context,
+      ),
+    );
+  } finally {
     _isAddressPickerOpen = false;
-  });
+  }
 }
 
 class _AddressPickerContent extends StatefulWidget {
@@ -55,10 +59,31 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
   @override
   void initState() {
     super.initState();
-    // Ensure saved addresses are loaded
+    // Ensure saved addresses are loaded and auto-refresh live GPS
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LocationProvider>().loadSavedAddresses(widget.userId);
+      final locProv = context.read<LocationProvider>();
+      locProv.loadSavedAddresses(widget.userId);
+      _autoFetchLiveLocation(locProv);
     });
+  }
+
+  Future<void> _autoFetchLiveLocation(LocationProvider locProv) async {
+    // If the customer has explicitly chosen a saved address, do not let background GPS clobber their selection
+    if (locProv.selectedAddress != null) return;
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.whileInUse ||
+          perm == LocationPermission.always) {
+        if (mounted) setState(() => _isLocating = true);
+        await locProv.requestLocation(isUserAction: false);
+        if (mounted) setState(() => _isLocating = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLocating = false);
+    }
   }
 
   @override
@@ -301,13 +326,14 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
                     child: OutlinedButton.icon(
                       onPressed: locProv.savedAddresses.length >= 4
                           ? () {
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(const SnackBar(
-                                content: Text(
-                                    'Maximum 4 addresses allowed. Please edit or delete an existing one.'),
-                                backgroundColor: Colors.red,
-                                behavior: SnackBarBehavior.floating,
-                              ));
+                              AppToast.show(
+                                context,
+                                title: 'Address Limit Reached ⚠️',
+                                message:
+                                    'Maximum 4 addresses allowed. Please edit or delete an existing one to add a new address.',
+                                type: ToastType.warning,
+                                icon: Icons.warning_amber_rounded,
+                              );
                             }
                           : () {
                               // Use rootContext (parent scaffold context) for the same
@@ -346,6 +372,9 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
   }
 
   Widget _buildUseCurrentLocation(bool isDark, LocationProvider locProv) {
+    final hasGpsLocation = locProv.hasLocation;
+    final isAutoLocating = _isLocating || locProv.isLoading;
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Container(
@@ -355,7 +384,7 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
           color: Theme.of(context).primaryColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: _isLocating
+        child: isAutoLocating && !hasGpsLocation
             ? const Padding(
                 padding: EdgeInsets.all(10),
                 child: CircularProgressIndicator(strokeWidth: 2),
@@ -372,7 +401,14 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
         ),
       ),
       subtitle: Text(
-        locProv.hasLocation ? locProv.rawAddress : 'Using GPS',
+        isAutoLocating && !hasGpsLocation
+            ? 'Detecting live location... 📍'
+            : (hasGpsLocation
+                ? (locProv.rawAddress.isNotEmpty &&
+                        locProv.rawAddress != 'Fetching address...'
+                    ? locProv.rawAddress
+                    : 'Live GPS location')
+                : 'Using GPS'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: GoogleFonts.outfit(
@@ -381,8 +417,6 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
         ),
       ),
       onTap: () async {
-        // Capture rootContext before any async gap (lint: use_build_context_synchronously)
-        final navContext = widget.rootContext;
         setState(() => _isLocating = true);
         locProv.clearSelectedAddress();
         await locProv.requestLocation(isUserAction: true);
@@ -391,11 +425,6 @@ class _AddressPickerContentState extends State<_AddressPickerContent> {
           Navigator.pop(context);
           if (locProv.matchedAddress != null) {
             locProv.selectSavedAddress(locProv.matchedAddress!);
-          } else {
-            // Safe: navContext is the parent scaffold context (rootContext),
-            // not the sheet's own context — it remains mounted after the sheet closes.
-            // ignore: use_build_context_synchronously
-            showAddEditAddressDialog(navContext);
           }
         }
       },

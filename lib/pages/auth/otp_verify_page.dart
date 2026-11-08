@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/app_toast.dart';
 
 class OtpVerifyPage extends StatefulWidget {
   const OtpVerifyPage({super.key});
@@ -80,8 +81,20 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
   String get _otp => _ctrl.text;
 
   Future<void> _verify() async {
-    if (_otp.length < 6) return;
     if (_loading) return;
+    if (_otp.length < 6) {
+      _shakeCtrl.forward(from: 0);
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Verification Code',
+        actionMessage: _otp.isEmpty
+            ? 'Please enter the 6-digit OTP code sent to your phone.'
+            : 'Incomplete OTP: please enter all 6 digits (${_otp.length}/6 entered).',
+        focusNode: _focusNode,
+        icon: Icons.pin_rounded,
+      );
+      return;
+    }
     setState(() => _loading = true);
     FocusScope.of(context).unfocus();
 
@@ -177,8 +190,13 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
       _ctrl.clear();
       _focusNode.requestFocus();
       final err =
-          context.read<AuthProvider>().error ?? 'Invalid OTP. Try again.';
-      _showSnack(err, isError: true);
+          context.read<AuthProvider>().error ?? 'Invalid OTP code. Please try again.';
+      AppToast.showError(
+        context,
+        title: 'Incorrect Code',
+        message: err,
+        focusNode: _focusNode,
+      );
     }
   }
 
@@ -285,17 +303,11 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
     _startTimer();
     _ctrl.clear();
     _focusNode.requestFocus();
-  }
-
-  void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor:
-          isError ? const Color(0xFFE03131) : const Color(0xFF2F9E44),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
+    AppToast.showSuccess(
+      context,
+      title: 'New Code Sent! 📩',
+      message: 'A fresh 6-digit OTP has been sent to your phone.',
+    );
   }
 
   String _roleLabel(String r) {

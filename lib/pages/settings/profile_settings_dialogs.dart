@@ -8,6 +8,7 @@ import '../../providers/location_provider.dart';
 import '../../models/saved_address_model.dart';
 import '../../widgets/address_picker_sheet.dart';
 import '../../widgets/map_pin_picker_page.dart';
+import '../../utils/app_toast.dart';
 import '../../services/bell_alert_service.dart';
 import '../../services/bell_settings_service.dart';
 
@@ -53,6 +54,8 @@ void showAddEditAddressDialog(BuildContext context,
             : 'Select Your Location',
         confirmLabel: 'Confirm Location',
         tooltip: 'Place the pin to your exact location',
+        autoFetchLiveLocation: existingAddress == null,
+        isEditingExisting: existingAddress != null,
       ),
     ),
   );
@@ -105,10 +108,12 @@ void _showAddressDetailSheet(
   // Address text comes from the map — shown read-only
   final pickedAddressDisplay = pickedAddress;
 
-  final labels = ['Home', 'Office', 'Hotel', 'Hospital', 'Other'];
+  final labels = ['Home', 'Office', 'Work', 'Shop', 'Hotel', 'Hospital', 'Other'];
   final labelIcons = {
     'Home': '🏠',
     'Office': '💼',
+    'Work': '💼',
+    'Shop': '🏪',
     'Hotel': '🏨',
     'Hospital': '🏥',
     'Other': '📍',
@@ -376,7 +381,8 @@ void _showAddressDetailSheet(
                             pincode: pincodeCtrl.text.trim(),
                             latitude: pickedLocation.latitude,
                             longitude: pickedLocation.longitude,
-                            isDefault: locProv.savedAddresses.isEmpty,
+                            isDefault: existingAddress?.isDefault ??
+                                locProv.savedAddresses.isEmpty,
                           );
 
                           String? error;
@@ -388,12 +394,7 @@ void _showAddressDetailSheet(
 
                           if (ctx.mounted) {
                             if (error != null) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(
-                                  content: Text(error),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
+                              AppToast.showError(ctx, message: error);
                             } else {
                               locProv.setLocalAddressDetails(
                                 house: flatCtrl.text.trim(),
@@ -401,35 +402,13 @@ void _showAddressDetailSheet(
                                 pin: pincodeCtrl.text.trim(),
                                 addressText: pickedAddressDisplay,
                               );
-                              final messenger = ScaffoldMessenger.of(ctx);
                               Navigator.pop(ctx);
-
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  behavior: SnackBarBehavior.floating,
-                                  margin: const EdgeInsets.only(
-                                      bottom: 24, left: 16, right: 16),
-                                  backgroundColor: Colors.green.shade700,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                  content: Row(
-                                    children: [
-                                      const Icon(Icons.check_circle_outline,
-                                          color: Colors.white),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          existingAddress != null
-                                              ? 'Address updated successfully!'
-                                              : 'Address saved successfully!',
-                                          style: GoogleFonts.outfit(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w500),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              AppToast.showSuccess(
+                                context,
+                                title: 'Address Saved! 🏠',
+                                message: existingAddress != null
+                                    ? 'Your address details have been updated.'
+                                    : 'New delivery address added successfully.',
                               );
                             }
                           }

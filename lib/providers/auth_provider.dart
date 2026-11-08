@@ -1215,12 +1215,16 @@ class AuthProvider extends ChangeNotifier {
             .limit(1)
             .maybeSingle();
         if (existing == null) {
+          final shopInsertData = additionalData != null
+              ? Map<String, dynamic>.from(additionalData)
+              : <String, dynamic>{};
+          shopInsertData.remove('shop_id');
           final res = await _supabase
               .from('shops')
               .insert({
                 'seller_id': userId,
                 'is_active': false, // shops are inactive pending KYC
-                if (additionalData != null) ...additionalData,
+                ...shopInsertData,
               })
               .select('id')
               .single();
@@ -1228,11 +1232,15 @@ class AuthProvider extends ChangeNotifier {
             additionalData['shop_id'] = res['id'];
           }
         } else if (additionalData != null) {
+          final shopUpdateData = Map<String, dynamic>.from(additionalData);
+          shopUpdateData.remove('shop_id');
+          if (shopUpdateData.isNotEmpty) {
+            await _supabase
+                .from('shops')
+                .update(shopUpdateData)
+                .eq('id', existing['id']);
+          }
           additionalData['shop_id'] = existing['id'];
-          await _supabase
-              .from('shops')
-              .update(additionalData)
-              .eq('id', existing['id']);
         }
       } else if (role == 'delivery_partner') {
         final existing = await _supabase

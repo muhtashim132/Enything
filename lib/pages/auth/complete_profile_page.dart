@@ -12,6 +12,7 @@ import '../../config/app_categories.dart';
 import '../../widgets/seller/category_extra_fields.dart';
 import '../../widgets/seller/seller_deductible_card.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/app_toast.dart';
 import '../../widgets/map_pin_picker_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -69,6 +70,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         duration: const Duration(milliseconds: 400), vsync: this)
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+
+    // Pre-emptively warm up GPS and last-known location so coordinates are ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<LocationProvider>().requestLocation(isUserAction: false);
+      }
+    });
   }
 
   @override
@@ -160,14 +168,39 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       final seedAddr =
           targetCtrl.text.trim().isNotEmpty ? targetCtrl.text.trim() : null;
 
+      final isEditing = targetCtrl.text.trim().isNotEmpty;
+      final isSeller = _role == _Role.seller;
+      final isRider = _role == _Role.delivery;
+      final mapTitle = isSeller
+          ? 'Select Shop Location'
+          : (isRider ? 'Select Base Location' : 'Select Delivery Address');
+      final confirmBtnLabel = isSeller
+          ? 'Confirm Shop Location'
+          : (isRider ? 'Confirm Base Location' : 'Confirm Delivery Address');
+      final pinTooltip = isSeller
+          ? 'Place the pin at your shop entrance'
+          : (isRider
+              ? 'Place the pin at your home or operating base'
+              : 'Place the pin at your exact doorstep');
+
       final result = await Navigator.push<MapPickResult?>(
         context,
         MaterialPageRoute(
           builder: (_) => MapPinPickerPage(
             initialLocation: seedLoc,
             initialAddress: seedAddr,
-            title: 'Select Location',
-            confirmLabel: 'Confirm Location',
+            initialHouseNumber: _houseNumberCtrl.text.trim().isNotEmpty
+                ? _houseNumberCtrl.text.trim()
+                : null,
+            initialLandmark: _landmarkCtrl.text.trim().isNotEmpty
+                ? _landmarkCtrl.text.trim()
+                : null,
+            title: mapTitle,
+            confirmLabel: confirmBtnLabel,
+            tooltip: pinTooltip,
+            autoFetchLiveLocation: !isEditing,
+            isEditingExisting: isEditing,
+            isBusinessLocation: isSeller,
           ),
         ),
       );
@@ -199,7 +232,12 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
 
   Future<void> _submit() async {
     if (_nameCtrl.text.trim().isEmpty) {
-      _showSnack('Please enter your full name', isError: true);
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Full Name',
+        actionMessage: 'Please enter your full name to set up your profile.',
+        icon: Icons.person_outline_rounded,
+      );
       return;
     }
     setState(() => _loading = true);
@@ -221,9 +259,14 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
       locationPoint =
           'POINT(${locProv.currentLocation!.longitude} ${locProv.currentLocation!.latitude})';
     } else {
-      _showSnack(
-          'Could not fetch your location automatically. Please tap the 📍 icon in the address field to set your exact location',
-          isError: true);
+      AppToast.show(
+        context,
+        title: 'Location Required 📍',
+        message:
+            'Could not detect your GPS location automatically. Please tap the 📍 icon to pinpoint your exact address on the map.',
+        type: ToastType.error,
+        icon: Icons.location_on_rounded,
+      );
       setState(() => _loading = false);
       return;
     }
@@ -232,7 +275,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     if (pincode.isEmpty ||
         pincode.length != 6 ||
         int.tryParse(pincode) == null) {
-      _showSnack('Please enter a valid 6-digit Pincode', isError: true);
+      AppToast.show(
+        context,
+        title: 'Valid Pincode Required 📮',
+        message: 'Please enter a valid 6-digit postal pincode.',
+        type: ToastType.error,
+        icon: Icons.markunread_mailbox_rounded,
+      );
       setState(() => _loading = false);
       return;
     }
@@ -240,7 +289,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     switch (_role) {
       case _Role.customer:
         if (_addressCtrl.text.trim().isEmpty) {
-          _showSnack('Please provide a delivery address', isError: true);
+          AppToast.showMissingField(
+            context,
+            fieldName: 'Delivery Address',
+            actionMessage:
+                'Please enter your street address or tap the map icon to pick your location.',
+            icon: Icons.home_rounded,
+          );
           setState(() => _loading = false);
           return;
         }
@@ -255,14 +310,20 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         break;
       case _Role.seller:
         if (_shopAddressCtrl.text.trim().isEmpty) {
-          _showSnack('Please provide a shop address', isError: true);
+          AppToast.showMissingField(
+            context,
+            fieldName: 'Shop Address',
+            actionMessage:
+                'Please enter your store address or tap the map icon to set your storefront entrance.',
+            icon: Icons.storefront_rounded,
+          );
           setState(() => _loading = false);
           return;
         }
         // Validate category-specific required fields
         final extraValidationError = _extraFieldsKey.currentState?.validate();
         if (extraValidationError != null) {
-          _showSnack(extraValidationError, isError: true);
+          AppToast.showError(context, message: extraValidationError);
           setState(() => _loading = false);
           return;
         }
@@ -300,12 +361,24 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
         break;
       case _Role.delivery:
         if (_vehicleTypeCtrl.text.trim().isEmpty) {
-          _showSnack('Please enter your vehicle type', isError: true);
+          AppToast.showMissingField(
+            context,
+            fieldName: 'Vehicle Type',
+            actionMessage:
+                'Please specify your delivery vehicle (Bike, Scooter, Bicycle, etc.).',
+            icon: Icons.two_wheeler_rounded,
+          );
           setState(() => _loading = false);
           return;
         }
         if (_vehicleRegCtrl.text.trim().isEmpty) {
-          _showSnack('Please fill vehicle registration', isError: true);
+          AppToast.showMissingField(
+            context,
+            fieldName: 'Vehicle Registration',
+            actionMessage:
+                'Please enter your vehicle registration number (RC) to proceed.',
+            icon: Icons.badge_rounded,
+          );
           setState(() => _loading = false);
           return;
         }
@@ -335,7 +408,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
     setState(() => _loading = false);
 
     if (err != null) {
-      _showSnack(err, isError: true);
+      AppToast.showError(
+        context,
+        title: 'Profile Setup Error',
+        message: err,
+      );
       return;
     }
 
@@ -391,14 +468,11 @@ class _CompleteProfilePageState extends State<CompleteProfilePage>
   }
 
   void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor:
-          isError ? const Color(0xFFE03131) : const Color(0xFF2F9E44),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
+    if (isError) {
+      AppToast.showError(context, message: msg);
+    } else {
+      AppToast.showSuccess(context, message: msg);
+    }
   }
 
   void _handleBack() {

@@ -102,22 +102,13 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     if (riderId == null || riderId.isEmpty) return;
 
     try {
-      final res = await _supabase
-          .from('orders')
-          .select('id, cart_group_id')
-          .eq('delivery_partner_id', riderId)
-          .inFilter('status', [
-            'confirmed',
-            'preparing',
-            'ready_for_pickup',
-            'picked_up',
-            'out_for_delivery'
-          ]);
       final myGroupId = _currentOrder.cartGroupId ?? _currentOrder.id;
-      final distinctGroups = (res as List)
-          .map((r) => (r['cart_group_id'] as String?) ?? (r['id'] as String))
-          .toSet();
-      final hasOtherOrders = distinctGroups.any((gid) => gid != myGroupId);
+      final res = await _supabase.rpc('check_rider_has_stacked_orders', params: {
+        'p_rider_id': riderId,
+        'p_my_cart_group_id': myGroupId,
+        'p_my_order_id': _currentOrder.id,
+      });
+      final hasOtherOrders = res == true;
       if (mounted && hasOtherOrders != _isStackedDelivery) {
         setState(() {
           _isStackedDelivery = hasOtherOrders;
@@ -203,6 +194,7 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
       _isIntentionalDisconnect = true;
       _supabase.removeChannel(_channel!);
     }
+    _mapCtrl.dispose();
     super.dispose();
   }
 
@@ -347,7 +339,11 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                             LengthUnit.Meter, _lastPickupFetchPos!, newLoc) >
                         50) {
                   _lastPickupFetchPos = newLoc;
-                  if (_currentOrder.status == 'out_for_delivery') {
+                  final allShopsPickedUp = _currentGroupOrders.every((o) =>
+                      o.status == 'picked_up' ||
+                      o.status == 'out_for_delivery' ||
+                      _kTerminalStatuses.contains(o.status));
+                  if (_currentOrder.status == 'out_for_delivery' || allShopsPickedUp) {
                     _refreshDeliveryRoute(newLoc);
                   } else {
                     _refreshPickupRoute(newLoc);
@@ -509,10 +505,12 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     final custPt =
         LatLng(_currentOrder.deliveryLat!, _currentOrder.deliveryLng!);
     final newDeliveryRoute = await GeoUtils.fetchRoadRoute(riderPos, custPt);
+    final updatedKm = GeoUtils.calculateRouteDistanceKm(newDeliveryRoute);
     if (mounted) {
       setState(() {
         _deliveryRoutes = [newDeliveryRoute];
         _pickupRoute = [];
+        if (updatedKm > 0) _deliveryKm = updatedKm;
       });
     }
   }

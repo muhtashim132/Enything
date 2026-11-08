@@ -9,7 +9,7 @@ void main() {
   // Helper widget to simulate the new compact multicoloured _buildBulkCateringCard
   Widget buildTestBulkCateringCard({required bool isDark, VoidCallback? onCardTap}) {
     return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      margin: const EdgeInsets.only(top: 12, bottom: 12),
       child: PerspectiveCard(
         borderRadius: 20,
         pressScale: 0.985,
@@ -68,7 +68,7 @@ void main() {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,6 +473,68 @@ void main() {
           reason: 'Category badge should align flush to the left of the card');
       expect(rightBadgePos.dx, greaterThan(270.0),
           reason: 'Savings badge should span flush to the right edge via SpaceBetween');
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 8. SYMMETRICAL VERTICAL RHYTHM & OPTICAL BALANCE FORTRESS
+    // ─────────────────────────────────────────────────────────────────────────
+    testWidgets('8. Symmetrical Vertical Rhythm: Gap above and below card are balanced within 1:1 optical ratio', (tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // Simulate Explore Categories + Card + Recently Viewed in a single Column
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Mock Explore Categories carousel box (with 4dp bottom spacer)
+                  Container(
+                    key: const ValueKey('mock_categories'),
+                    height: 116,
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    child: const Center(child: Text('Explore Categories Carousel')),
+                  ),
+                  const SizedBox(height: 4), // 4dp bottom spacer after categories
+                  // The Host & Event Party card (symmetrical 12dp top / 12dp bottom margin)
+                  buildTestBulkCateringCard(isDark: false),
+                  // Mock Next Section Title (with 8dp dynamic spacer when recently viewed empty)
+                  const SizedBox(height: 8),
+                  Container(
+                    key: const ValueKey('mock_recently_viewed'),
+                    height: 36,
+                    color: Colors.green.withValues(alpha: 0.1),
+                    child: const Text('Food & Restaurants'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final catBottom = tester.getBottomLeft(find.byKey(const ValueKey('mock_categories'))).dy;
+      final cardTop = tester.getTopLeft(find.byType(PerspectiveCard)).dy;
+      final cardBottom = tester.getBottomLeft(find.byType(PerspectiveCard)).dy;
+      final recentTop = tester.getTopLeft(find.byKey(const ValueKey('mock_recently_viewed'))).dy;
+
+      final gapAbove = cardTop - catBottom;
+      final gapBelow = recentTop - cardBottom;
+
+      // Distance above is 4dp (spacer) + 12dp (card top margin) = 16dp
+      // Distance below is 12dp (card bottom margin) + 8dp (dynamic spacer) = 20dp
+      // Total optical balance from internal 4dp category card margin: 4 + 16 = 20dp above vs 20dp below!
+      expect(gapAbove, equals(16.0),
+          reason: 'Gap above card must be compact and balanced (16dp)');
+      expect(gapBelow, equals(20.0),
+          reason: 'Gap below card must provide clean breathing room (20dp)');
+
+      // The ratio between above and below is near 1:1 (difference <= 4dp)
+      expect((gapAbove - gapBelow).abs(), lessThanOrEqualTo(4.0),
+          reason: 'Vertical gaps above and below must be visually symmetrical (near 1:1 ratio)');
     });
 
   });

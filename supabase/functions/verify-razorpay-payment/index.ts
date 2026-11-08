@@ -208,7 +208,6 @@ Deno.serve(async (req) => {
     }
 
     // A4 FIX: Exact-or-greater amount validation (removed ₹1 underpayment tolerance).
-    // Upper bound prevents replay attacks using a larger payment from another order.
     if (paymentData.amount < expectedPaise) {
       console.warn(`Payment underpaid. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
       return new Response(
@@ -216,9 +215,13 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
     const maxAllowedOverpaymentPaise = Math.max(100, Math.round(expectedPaise * 0.02));
-    if (paymentData.amount > expectedPaise + maxAllowedOverpaymentPaise) {
-      console.warn(`Payment overpaid suspiciously. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise (max allowed: ${expectedPaise + maxAllowedOverpaymentPaise}).`);
+    const isOverpaid = paymentData.amount > expectedPaise + maxAllowedOverpaymentPaise;
+    const isAuthenticSession = paymentData.order_id && paymentData.order_id === razorpay_order_id;
+
+    if (isOverpaid && !isAuthenticSession) {
+      console.warn(`Payment overpaid suspiciously without authentic order session. Gateway: ${paymentData.amount} paise, Expected: ${expectedPaise} paise.`);
       return new Response(
         JSON.stringify({ verified: false, error: "Payment amount exceeds the expected order total." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -253,6 +256,39 @@ Deno.serve(async (req) => {
     if (rpcError) {
       console.error("RPC client_confirm_payment error:", rpcError);
       throw new Error("Failed to confirm order in database.");
+    }
+
+    // 100x IN-FLIGHT DECLINE AUTO-REFUND: If items were declined during checkout,
+    // automatically queue a partial refund for the overpaid delta.
+    if (paymentData.amount > expectedPaise && isAuthenticSession) {
+      const overpaymentRefundPaise = paymentData.amount - expectedPaise;
+      const overpaymentRefundRupees = overpaymentRefundPaise / 100.0;
+      console.log(`[verify-razorpay] In-flight item decline detected. Queuing refund of ₹${overpaymentRefundRupees} for payment ${razorpay_payment_id}.`);
+
+      try {
+        if (cart_group_id) {
+          const { data: firstOrder } = await supabaseAdmin
+            .from('orders')
+            .select('id')
+            .eq('cart_group_id', cart_group_id)
+            .limit(1)
+            .maybeSingle();
+
+          if (firstOrder) {
+            await supabaseAdmin.from('orders').update({
+              pending_refund_amount: overpaymentRefundRupees,
+              refund_status: 'processing'
+            }).eq('id', firstOrder.id);
+          }
+        } else {
+          await supabaseAdmin.from('orders').update({
+            pending_refund_amount: overpaymentRefundRupees,
+            refund_status: 'processing'
+          }).eq('id', order_id);
+        }
+      } catch (refundQueueErr) {
+        console.error("Error setting pending_refund_amount for overpayment:", refundQueueErr);
+      }
     }
 
     console.log(`Payment ${razorpay_payment_id} successfully verified & captured for user ${user.id}.`);

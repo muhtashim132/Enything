@@ -25,6 +25,7 @@ import '../../services/practice_order_service.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/time_utils.dart';
 import '../../utils/delivery_calculator.dart';
+import '../../utils/app_toast.dart';
 
 class SellerOrdersPage extends StatefulWidget {
   const SellerOrdersPage({super.key});
@@ -799,12 +800,51 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
       final partnerId = order.deliveryPartnerId;
       if (mounted && partnerId != null) {
-        context.read<NotificationProvider>().sendBackgroundPush(
-          targetUserId: partnerId,
-          title: '📦 Order Item Update',
-          body: '"${item.productName}" marked out of stock. Do not collect this item.',
-          data: {'order_id': order.id, 'role': 'rider'},
-        );
+        if (allDeclined) {
+          bool hasOtherActiveOrders = false;
+          if (order.cartGroupId != null && order.cartGroupId!.isNotEmpty) {
+            try {
+              final activeSiblings = await _supabase
+                  .from('orders')
+                  .select('id')
+                  .eq('cart_group_id', order.cartGroupId!)
+                  .neq('id', order.id)
+                  .inFilter('status', [
+                    'awaiting_acceptance',
+                    'pending',
+                    'awaiting_payment',
+                    'confirmed',
+                    'preparing',
+                    'ready_for_pickup',
+                    'picked_up',
+                    'out_for_delivery'
+                  ]);
+              if ((activeSiblings as List).isNotEmpty) {
+                hasOtherActiveOrders = true;
+              }
+            } catch (_) {}
+          }
+
+          if (mounted) {
+            context.read<NotificationProvider>().sendBackgroundPush(
+              targetUserId: partnerId,
+              title: hasOtherActiveOrders
+                  ? '⚠️ Store Declined Items'
+                  : '❌ Order Cancelled by Shop',
+              body: hasOtherActiveOrders
+                  ? 'A store declined their part of the order. You are still delivering the remaining store(s).'
+                  : 'The shop declined the order. You are free for new deliveries.',
+              data: {'order_id': order.id, 'role': 'rider'},
+            );
+          }
+        } else {
+          context.read<NotificationProvider>().sendBackgroundPush(
+            targetUserId: partnerId,
+            title: '📦 Order Item Update',
+            body: '"${item.productName}" marked out of stock. Do not collect this item.',
+            data: {'order_id': order.id, 'role': 'rider'},
+          );
+        }
       }
 
       _loadOrders();
@@ -1181,10 +1221,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 .inFilter('status', [
                   'awaiting_acceptance',
                   'pending',
+                  'awaiting_payment',
                   'confirmed',
                   'preparing',
                   'ready_for_pickup',
-                  'picked_up'
+                  'picked_up',
+                  'out_for_delivery'
                 ]);
             if ((activeSiblings as List).isNotEmpty) {
               hasOtherActiveOrders = true;
@@ -1444,12 +1486,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
   void _showSnack(String msg, {required bool isError}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor: isError ? AppColors.danger : AppColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+    if (isError) {
+      AppToast.showError(context, message: msg);
+    } else {
+      AppToast.showSuccess(context, message: msg);
+    }
   }
 
   void _showSellerRatingFlow(OrderModel order) {

@@ -13,6 +13,7 @@ import '../../providers/platform_config_provider.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../services/image_compression_service.dart';
 import '../../widgets/map_pin_picker_page.dart';
+import '../../utils/app_toast.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
 class ShopManagementPage extends StatefulWidget {
@@ -31,6 +32,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   String? _shopId;
   bool _isActive = false;
   String? _currentAddress;
+  String? _houseNumber;
   bool _adminSuspended = false;
 
   double? _shopLat;
@@ -121,7 +123,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       final shopsResp = await _supabase
           .from('shops')
           .select(
-              'id, name, is_active, is_accepting_orders, banner_url, open_time, close_time, address, category, categories, accepts_bulk_orders, max_bulk_items_per_slot, min_bulk_lead_time_hours, max_bulk_lead_time_hours, bulk_slot_duration_minutes')
+              'id, name, is_active, is_accepting_orders, banner_url, open_time, close_time, address, house_number, category, categories, accepts_bulk_orders, max_bulk_items_per_slot, min_bulk_lead_time_hours, max_bulk_lead_time_hours, bulk_slot_duration_minutes')
           .eq('seller_id', auth.currentUserId!);
 
       final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
@@ -145,6 +147,7 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         _adminSuspended = resp['is_active'] == false;
         _isActive = resp['is_accepting_orders'] ?? false;
         _currentAddress = resp['address'];
+        _houseNumber = resp['house_number'];
         _bannerCtrl.text = resp['banner_url'] ?? '';
         _openTimeCtrl.text = resp['open_time'] ?? '09:00';
         _closeTimeCtrl.text = resp['close_time'] ?? '21:00';
@@ -250,12 +253,11 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor: isError ? AppColors.danger : AppColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+    if (isError) {
+      AppToast.showError(context, message: msg);
+    } else {
+      AppToast.showSuccess(context, message: msg);
+    }
   }
 
   Future<void> _pickTime(TextEditingController ctrl) async {
@@ -278,7 +280,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
     // Determine seed location: previously confirmed coords → else GPS
     final locProv = context.read<LocationProvider>();
-    final seedLoc = (_shopLat != null && _shopLng != null)
+    final hasShopCoords = _shopLat != null && _shopLng != null;
+    final seedLoc = hasShopCoords
         ? _buildLatLng(_shopLat!, _shopLng!)
         : locProv.currentLocation;
 
@@ -288,9 +291,13 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         builder: (_) => MapPinPickerPage(
           initialLocation: seedLoc,
           initialAddress: _currentAddress,
+          initialHouseNumber: _houseNumber,
           title: 'Set Shop Location',
           confirmLabel: 'Confirm Shop Location',
           tooltip: 'Place the pin exactly at your shop entrance',
+          autoFetchLiveLocation: !hasShopCoords,
+          isEditingExisting: hasShopCoords,
+          isBusinessLocation: true,
         ),
       ),
     );
@@ -303,10 +310,12 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
       await _supabase.from('shops').update({
         'location': point,
         'address': result.address,
+        if (result.houseNumber.isNotEmpty) 'house_number': result.houseNumber,
       }).eq('id', _shopId!);
       if (!mounted) return;
       setState(() {
         _currentAddress = result.address;
+        _houseNumber = result.houseNumber;
         _shopLat = result.location.latitude;
         _shopLng = result.location.longitude;
       });

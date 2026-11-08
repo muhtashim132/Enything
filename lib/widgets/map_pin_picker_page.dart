@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../theme/app_colors.dart';
 import '../utils/permission_utils.dart';
+import '../utils/app_toast.dart';
 // ─── Result model ─────────────────────────────────────────────────────────────
 
 /// Returned by [MapPinPickerPage] when the user confirms a location.
@@ -66,6 +67,16 @@ class MapPinPickerPage extends StatefulWidget {
   /// Tooltip shown above the pin.  Pass `null` to hide it entirely.
   final String? tooltip;
 
+  /// When true, automatically retrieves live GPS position and centers the map
+  /// unless user is editing an existing saved address. Defaults to true.
+  final bool autoFetchLiveLocation;
+
+  /// Whether the user is editing an existing address or shop location.
+  final bool isEditingExisting;
+
+  /// When true, tailors labels and prompts for merchant storefronts / stalls
+  final bool isBusinessLocation;
+
   const MapPinPickerPage({
     super.key,
     this.initialLocation,
@@ -75,6 +86,9 @@ class MapPinPickerPage extends StatefulWidget {
     this.title = 'Select Your Location',
     this.confirmLabel = 'Confirm Location',
     this.tooltip = 'Place the pin to your exact location',
+    this.autoFetchLiveLocation = true,
+    this.isEditingExisting = false,
+    this.isBusinessLocation = false,
   });
 
   @override
@@ -107,7 +121,25 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
   bool _isGeocoding = false;
   bool _isDragging = false;
   bool _isFetchingGps = false;
+  bool _hasUserPannedMap = false;
   Timer? _geocodeDebounce;
+
+  // ── Safe Map Controller Movement ──────────────────────────────────────────
+
+  void _safeMoveMap(LatLng loc, double zoom) {
+    if (!mounted) return;
+    try {
+      _mapController.move(loc, zoom);
+    } catch (_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          try {
+            _mapController.move(loc, zoom);
+          } catch (_) {}
+        }
+      });
+    }
+  }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -141,10 +173,14 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         WidgetsBinding.instance
             .addPostFrameCallback((_) => _reverseGeocode(_center, force: true));
       }
+      if (widget.autoFetchLiveLocation && !widget.isEditingExisting) {
+        WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _goToCurrentLocation(isAutoTrigger: true));
+      }
     } else {
-      // No seed location → try GPS
+      // No seed location → automatically fetch live GPS
       WidgetsBinding.instance
-          .addPostFrameCallback((_) => _goToCurrentLocation());
+          .addPostFrameCallback((_) => _goToCurrentLocation(isAutoTrigger: true));
     }
   }
 
@@ -175,6 +211,7 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
   void _onPositionChanged(MapCamera camera, bool hasGesture) {
     _center = camera.center;
     if (hasGesture) {
+      _hasUserPannedMap = true;
       if (!_isDragging) {
         setState(() {
           _isDragging = true;
@@ -213,7 +250,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         '&addressdetails=1',
       );
       final resp = await http.get(uri, headers: {
-        'User-Agent': 'EnythingMobileApp/1.0'
+        'User-Agent':
+            'Enything-Food-Delivery-App/1.0 (contact: support@enything.in)'
       }).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
@@ -297,7 +335,8 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
         '&addressdetails=1',
       );
       final resp = await http.get(uri, headers: {
-        'User-Agent': 'EnythingMobileApp/1.0'
+        'User-Agent':
+            'Enything-Food-Delivery-App/1.0 (contact: support@enything.in)'
       }).timeout(const Duration(seconds: 8));
 
       if (!mounted) return;
@@ -337,10 +376,26 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   // ── My Location ──────────────────────────────────────────────────────────────
 
-  Future<void> _goToCurrentLocation() async {
+  Future<void> _goToCurrentLocation({bool isAutoTrigger = false}) async {
     if (!mounted) return;
     setState(() => _isFetchingGps = true);
     try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!isAutoTrigger && mounted) {
+          final shouldOpen = await PermissionUtils.showOpenSettingsDialog(
+            title: 'Location Services Off',
+            message:
+                'Please enable location services in your device settings to pinpoint your address.',
+          );
+          if (shouldOpen) {
+            await Geolocator.openLocationSettings();
+          }
+        }
+        if (mounted) setState(() => _isFetchingGps = false);
+        return;
+      }
+
       LocationPermission perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await PermissionUtils.requestLocationPermissionWithDisclosure(
@@ -348,11 +403,42 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
               'Enything needs location access to pinpoint your exact delivery address on the map.',
         );
       }
-      if (perm == LocationPermission.deniedForever) {
+      if (perm == LocationPermission.deniedForever ||
+          perm == LocationPermission.denied) {
+        if (!isAutoTrigger &&
+            perm == LocationPermission.deniedForever &&
+            mounted) {
+          final shouldOpen = await PermissionUtils.showOpenSettingsDialog(
+            title: 'Location Permission Required',
+            message:
+                'Please enable location permission in App Settings so we can pinpoint your address.',
+          );
+          if (shouldOpen) {
+            await Geolocator.openAppSettings();
+          }
+        }
         if (mounted) setState(() => _isFetchingGps = false);
         return;
       }
 
+      // Fast-path Tier 1: Instant Last-Known Position (< 50ms)
+      try {
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null && !_hasUserPannedMap && mounted) {
+          final fastLoc = LatLng(lastKnown.latitude, lastKnown.longitude);
+          _safeMoveMap(fastLoc, 16);
+          setState(() {
+            _center = fastLoc;
+          });
+          if (_address.isEmpty) {
+            _reverseGeocode(fastLoc);
+          }
+        }
+      } catch (e) {
+        debugPrint('Fast-path lastKnown error: $e');
+      }
+
+      // Tier 2: Refined High-Accuracy Live Fix
       Position? pos;
       try {
         pos = await Geolocator.getCurrentPosition(
@@ -362,21 +448,26 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
           ),
         );
       } catch (_) {
-        pos = await Geolocator.getLastKnownPosition();
+        if (!_hasUserPannedMap) {
+          pos = await Geolocator.getLastKnownPosition();
+        }
       }
 
       if (!mounted) return;
-      if (pos == null) {
+      if (pos != null && !_hasUserPannedMap) {
+        final loc = LatLng(pos.latitude, pos.longitude);
+        _safeMoveMap(loc, 17);
+        setState(() {
+          _center = loc;
+          _isFetchingGps = false;
+        });
+        _pinAnim.forward().then((_) {
+          if (mounted) _pinAnim.reverse();
+        });
+        await _reverseGeocode(loc, force: true);
+      } else {
         setState(() => _isFetchingGps = false);
-        return;
       }
-      final loc = LatLng(pos.latitude, pos.longitude);
-      _mapController.move(loc, 16);
-      setState(() {
-        _center = loc;
-        _isFetchingGps = false;
-      });
-      await _reverseGeocode(loc);
     } catch (_) {
       if (mounted) setState(() => _isFetchingGps = false);
     }
@@ -386,45 +477,51 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
 
   Future<void> _confirm() async {
     if (_isGeocoding) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text('Finding address, please wait…', style: GoogleFonts.outfit()),
-        backgroundColor: Colors.orange,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.show(
+        context,
+        title: 'Finding Address ⏳',
+        message: 'Resolving street coordinates, please wait a moment…',
+        type: ToastType.warning,
+        icon: Icons.hourglass_top_rounded,
+      );
       return;
     }
     if (_address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Move the map to set your location first',
-            style: GoogleFonts.outfit()),
-        backgroundColor: Colors.orange,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.show(
+        context,
+        title: 'Location Pin Missing 📍',
+        message: 'Please drag the map to place the pin on your exact doorstep.',
+        type: ToastType.warning,
+        icon: Icons.location_on_rounded,
+      );
       return;
     }
-    // Mandatory: House / Building name
+    // Mandatory: House / Building / Shop name
     if (_houseCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please enter your House No. / Building Name',
-            style: GoogleFonts.outfit()),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.showMissingField(
+        context,
+        fieldName: widget.isBusinessLocation
+            ? 'Shop No. / Stall / Floor'
+            : 'Flat / Building Name',
+        actionMessage: widget.isBusinessLocation
+            ? 'Please enter your shop or stall number.'
+            : 'Please enter your flat or building name for delivery.',
+        icon: widget.isBusinessLocation
+            ? Icons.storefront_rounded
+            : Icons.home_work_rounded,
+      );
       return;
     }
     // Mandatory: Landmark
     if (_landmarkCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please enter a Landmark for easy delivery',
-            style: GoogleFonts.outfit()),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      AppToast.showMissingField(
+        context,
+        fieldName: 'Nearby Landmark',
+        actionMessage: widget.isBusinessLocation
+            ? 'Please enter a nearby landmark so customers and partners easily find your shop.'
+            : 'Please enter a landmark so delivery partners easily find you.',
+        icon: Icons.flag_rounded,
+      );
       return;
     }
     if (mounted) {
@@ -501,7 +598,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Text(
-                            widget.tooltip!,
+                            _isFetchingGps && _address.isEmpty
+                                ? '📍 Pinpointing your live location...'
+                                : widget.tooltip!,
                             style: GoogleFonts.outfit(
                               color: Colors.white,
                               fontSize: 12,
@@ -702,7 +801,12 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
               heroTag: 'mapPickerMyLocation',
               backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
               elevation: 6,
-              onPressed: _isFetchingGps ? null : _goToCurrentLocation,
+              onPressed: _isFetchingGps
+                  ? null
+                  : () {
+                      _hasUserPannedMap = false;
+                      _goToCurrentLocation(isAutoTrigger: false);
+                    },
               child: _isFetchingGps
                   ? const SizedBox(
                       width: 16,
@@ -762,16 +866,36 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                                 ],
                               )
                             : _address.isEmpty
-                                ? Text(
-                                    'Drag the map to place the pin',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black54,
-                                    ),
-                                  )
+                                ? (_isFetchingGps
+                                    ? Row(
+                                        children: [
+                                          const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Text(
+                                            'Locating your live position... 📍',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 13,
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : Text(
+                                        'Drag the map to place the pin',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? Colors.white70
+                                              : Colors.black54,
+                                        ),
+                                      ))
                                 : Text(
                                     _address,
                                     style: GoogleFonts.outfit(
@@ -802,7 +926,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           child: Text(
-                            'ADD DELIVERY DETAILS',
+                            widget.isBusinessLocation
+                                ? 'ADD SHOP DETAILS'
+                                : 'ADD DELIVERY DETAILS',
                             style: GoogleFonts.outfit(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -824,9 +950,15 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                     // House / Building Name (mandatory)
                     _buildDetailField(
                       controller: _houseCtrl,
-                      label: 'House No. / Building Name *',
-                      hint: 'e.g. H-12, Green Valley Apartments',
-                      icon: Icons.home_outlined,
+                      label: widget.isBusinessLocation
+                          ? 'Shop No. / Floor / Stall *'
+                          : 'House No. / Building Name *',
+                      hint: widget.isBusinessLocation
+                          ? 'e.g. Shop #4, Ground Floor, Central Mall'
+                          : 'e.g. H-12, Green Valley Apartments',
+                      icon: widget.isBusinessLocation
+                          ? Icons.storefront_outlined
+                          : Icons.home_outlined,
                       isDark: isDark,
                     ),
                     const SizedBox(height: 10),
@@ -834,7 +966,9 @@ class _MapPinPickerPageState extends State<MapPinPickerPage>
                     _buildDetailField(
                       controller: _landmarkCtrl,
                       label: 'Landmark *',
-                      hint: 'e.g. Near City Mall, Opp. Police Station',
+                      hint: widget.isBusinessLocation
+                          ? 'e.g. Opp. City Hospital, Near Main Gate'
+                          : 'e.g. Near City Mall, Opp. Police Station',
                       icon: Icons.flag_outlined,
                       isDark: isDark,
                     ),

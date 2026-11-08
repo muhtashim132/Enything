@@ -32,6 +32,7 @@ import '../../services/notification_service.dart';
 import '../../services/bell_alert_service.dart';
 import '../../services/practice_order_service.dart';
 import '../../utils/permission_utils.dart';
+import '../../utils/app_toast.dart';
 
 class DeliveryDashboardPage extends StatefulWidget {
   const DeliveryDashboardPage({super.key});
@@ -121,7 +122,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       curve: Curves.easeInOut,
     );
 
-    _loadOrders();
+    _loadOrders(isInitial: true);
     _initNotifications();
   }
 
@@ -230,7 +231,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       isError: true);
                 }
               }
-              _loadOrders();
+              _loadOrders(isInitial: true);
             }
           },
         )
@@ -286,6 +287,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     // foreground notification "Enything is tracking your location" stays
     // visible after the rider has left the delivery screen.
     RiderBackgroundService.instance.stopService();
+    BellAlertService.instance.clearAll();
     _bgCtrl.dispose();
     _locationGlowCtrl.dispose();
     _scrollController.dispose();
@@ -388,6 +390,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   // Starts pushing GPS location to DB with dynamic intervals
   void _startLocationBroadcast() {
     _locationBroadcastTimer?.cancel();
+    _broadcastLocationRoutine();
     _scheduleNextBroadcast();
   }
 
@@ -488,7 +491,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         pos = await Geolocator.getLastKnownPosition();
       }
 
-      if (pos != null) {
+      if (pos != null &&
+          pos.latitude != 0.0 &&
+          pos.longitude != 0.0 &&
+          !pos.latitude.isNaN &&
+          !pos.longitude.isNaN) {
         _riderLat = pos.latitude;
         _riderLng = pos.longitude;
         return true;
@@ -512,7 +519,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     return groups.values.toList();
   }
 
-  Future<void> _loadOrders() async {
+  Future<void> _loadOrders({bool isInitial = false}) async {
     // C2: Debounce guard — prevent concurrent load calls but queue the event
     if (_isOrdersLoadInProgress) {
       _needsReload = true;
@@ -529,7 +536,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
     _isOrdersLoadInProgress = true;
     _needsReload = false;
-    if (mounted) setState(() => _isLoading = true);
+    if (mounted && (isInitial || (_availableGroups.isEmpty && _myGroups.isEmpty))) {
+      setState(() => _isLoading = true);
+    }
     final auth = context.read<AuthProvider>();
     try {
       if (!mounted) return;
@@ -595,7 +604,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       final myOrders = await _supabase
           .from('orders')
-          .select('*, order_items(*)')
+          .select('*, order_items(*), shops!shop_id(id, name, location)')
           .eq('delivery_partner_id', auth.currentUserId ?? '')
           // 100x FIX (Edge Case 4): Exclude ALL terminal statuses to prevent
           // zombie groups from appearing in active deliveries.
@@ -615,9 +624,24 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (!mounted) return;
 
-      // Populate _shopInfoCache from the joined shop data
+      // Populate _shopInfoCache from the joined shop data across available and assigned orders
       _shopInfoCache.clear();
       for (final o in available) {
+        final shopMap = o['shops'] as Map<String, dynamic>?;
+        if (shopMap != null) {
+          try {
+            final sm = ShopModel.fromMap(shopMap);
+            if (sm.location.latitude != 0.0 || sm.location.longitude != 0.0) {
+              _shopInfoCache[sm.id] = (
+                lat: sm.location.latitude,
+                lng: sm.location.longitude,
+                name: sm.name,
+              );
+            }
+          } catch (_) {}
+        }
+      }
+      for (final o in myOrders) {
         final shopMap = o['shops'] as Map<String, dynamic>?;
         if (shopMap != null) {
           try {
@@ -818,7 +842,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       riderLng: _riderLng,
     );
     if (orderId != null) {
-      _loadOrders();
+      _loadOrders(isInitial: true);
     }
   }
 
@@ -865,22 +889,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             .select('status, payment_status')
             .inFilter('id', orderIds);
 
-        bool allShopsAccepted = true;
-        bool isAlreadyPaid = false;
-        for (final o in groupStatusData) {
+        final isAlreadyPaid = groupStatusData.any((o) {
           final st = o['status'] as String?;
           final paySt = o['payment_status'] as String?;
-          if (paySt == 'captured' ||
+          return paySt == 'captured' ||
               st == 'confirmed' ||
               st == 'preparing' ||
-              st == 'ready_for_pickup') {
-            isAlreadyPaid = true;
-          }
-          if (st == 'pending' || st == 'awaiting_acceptance') {
-            allShopsAccepted = false;
-            break;
-          }
-        }
+              st == 'ready_for_pickup';
+        });
+        final allShopsAccepted = !groupStatusData.any((o) {
+          final st = o['status'] as String?;
+          return st == 'pending' || st == 'awaiting_acceptance';
+        });
 
         if (!mounted) return;
         final notifProv = context.read<NotificationProvider>();
@@ -926,8 +946,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           );
         }
 
-        // Notify sellers across all distinct shops in this group
-        final distinctShopIds = group.orders
+        // Notify sellers across all distinct active shops in this group
+        final distinctShopIds = group.activeOrders
             .map((o) => o.shopId)
             .where((id) => id != null)
             .cast<String>()
@@ -943,7 +963,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               notifProv.sendBackgroundPush(
                 targetUserId: shopData['seller_id'],
                 title: '🛵 Rider Assigned!',
-                body: 'A rider has accepted the delivery and is on standby.',
+                body: isAlreadyPaid
+                    ? 'A new rider has accepted the order and is on their way to pick up.'
+                    : 'A rider has accepted the delivery and is on standby.',
                 data: {
                   'role': 'seller',
                   'group_id': group.groupId,
@@ -965,7 +987,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
         isError: true,
       );
     }
-    _loadOrders();
+    _loadOrders(isInitial: true);
   }
 
   Future<bool> _acceptOrder(OrderModel order,
@@ -1009,8 +1031,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       final currentStatus = latest?['status'] as String?;
       final currentPaymentStatus = latest?['payment_status'] as String?;
 
+      final isReassignedPaid = currentPaymentStatus == 'captured' &&
+          (currentStatus == 'confirmed' ||
+              currentStatus == 'preparing' ||
+              currentStatus == 'ready_for_pickup');
       if (currentStatus != 'awaiting_acceptance' &&
-          currentStatus != 'pending') {
+          currentStatus != 'pending' &&
+          !isReassignedPaid) {
         if (mounted) {
           _showSnack('⚠️ This order is no longer available to accept.',
               isError: true);
@@ -1376,7 +1403,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             });
           }
         }
-        _loadOrders();
+        _loadOrders(isInitial: true);
         return true;
       } else if (status == 'delivered') {
         await _supabase.rpc('update_order_status', params: {
@@ -1686,7 +1713,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   _showSnack(
                       'Wait time disputed. Status reverted to Preparing.',
                       isError: false);
-                  _loadOrders();
+                  _loadOrders(isInitial: true);
                 } catch (e) {
                   _showSnack('Error disputing wait time: $e', isError: true);
                 }
@@ -1715,12 +1742,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.outfit()),
-      backgroundColor: isError ? AppColors.danger : AppColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+    if (isError) {
+      AppToast.showError(context, message: msg);
+    } else {
+      AppToast.showSuccess(context, message: msg);
+    }
   }
 
   // ── Route Map Launcher ─────────────────────────────────────────────────────
@@ -2974,7 +3000,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       Expanded(
                         child: Builder(builder: (context) {
                           // 100x FIX (Domain 2): Hoarding Limit UI Lockout (Max 3 Cart Groups)
-                          final isAtCapacity = _myGroups.length >= 3;
+                          final isLinkedAddon = _myGroups.any((g) =>
+                              g.groupId == group.groupId ||
+                              (group.orders.isNotEmpty &&
+                                  g.orders.any((o) =>
+                                      o.customerId == group.orders.first.customerId)));
+                          final isAtCapacity = _myGroups.length >= 3 && !isLinkedAddon;
                           return ElevatedButton(
                             onPressed: (_isLoading ||
                                     isExpired ||
@@ -3301,7 +3332,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               o, 'out_for_delivery',
                               skipReload: true, notifyCustomer: shouldNotify);
                         }
-                        _loadOrders();
+                        _loadOrders(isInitial: true);
                       },
                       icon: const Icon(Icons.rocket_launch, size: 18),
                       label: Text('Mark All Out for Delivery',
@@ -3355,13 +3386,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                   (g) => g.groupId == group.groupId);
                             });
                           }
-                          _loadOrders();
+                          _loadOrders(isInitial: true);
                           if (mounted) {
                             _showGroupDeliveryRatingFlow(group);
                           }
                         } else {
                           // If failed, reload to ensure correct state
-                          _loadOrders();
+                          _loadOrders(isInitial: true);
                         }
                       },
                       icon: const Icon(Icons.check_circle_outline, size: 18),
@@ -4214,7 +4245,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 ? '🎉 Parcel successfully delivered!'
                 : 'Status updated to $newStatus'),
       );
-      _loadOrders();
+      _loadOrders(isInitial: true);
     } catch (e) {
       debugPrint('Error updating bulk dispatch status: $e');
       _showSnack('Status update failed: $e', isError: true);
