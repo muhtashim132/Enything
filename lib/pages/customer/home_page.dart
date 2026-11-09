@@ -991,6 +991,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         'grad': [Color(0xFF4C6EF5), Color(0xFF364FC7)]
       },
       {
+        'name': 'Cosmetics & Beauty',
+        'emoji': '💄',
+        'grad': [Color(0xFFE91E8C), Color(0xFFFF6FB5)]
+      },
+      {
         'name': 'Clothing',
         'emoji': '👕',
         'grad': [Color(0xFFFF8C42), Color(0xFFE8590C)]
@@ -1042,6 +1047,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         return (
           sectionTitle: 'Popular in Pharmacy & Healthcare',
           buttonLabel: 'See all Pharmacy & Healthcare products',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Cosmetics & Beauty' || tabName == 'Cosmetics') {
+        return (
+          sectionTitle: 'Popular in Cosmetics & Beauty',
+          buttonLabel: 'See all Cosmetics & Beauty products',
           categoryFilter: finalCategories,
         );
       } else if (tabName == 'Clothing') {
@@ -1149,6 +1160,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         return (
           sectionTitle: 'Pharmacies & Medical Stores near you',
           buttonLabel: 'See all pharmacies & medical stores',
+          categoryFilter: finalCategories,
+        );
+      } else if (tabName == 'Cosmetics & Beauty' || tabName == 'Cosmetics') {
+        return (
+          sectionTitle: 'Cosmetics & Beauty Stores near you',
+          buttonLabel: 'See all cosmetics & beauty stores',
           categoryFilter: finalCategories,
         );
       } else if (tabName == 'Clothing') {
@@ -1641,19 +1658,22 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // It tokenizes query, matches product name, brand, description, category,
         // sub_category, menu_category, special tags, and parent shop name with
         // PostGIS geospatial ST_DWithin and partitions by shop.
+        final demoIntent = DemographicUtils.detectDemographicIntent(cleanQuery);
         debugPrint(
-            '[Search] Step 2/4: search_products_geospatial q="$query"');
+            '[Search] Step 2/4: search_products_geospatial q="$query" (demo: ${demoIntent.hasDemographicIntent ? demoIntent.canonicalDemographic : "none"})');
         List<dynamic> rawProductsByName = [];
         try {
           final rpcProducts =
               await _supabase.rpc('search_products_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
-            'p_query': query,
+            'p_query': demoIntent.hasDemographicIntent && !demoIntent.isPureDemographic
+                ? demoIntent.strippedProductQuery
+                : query,
             'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
             'p_limit': 150,
-            'p_limit_per_shop': 10,
+            'p_limit_per_shop': 100,
             'p_special_tag': _selectedSearchDemographic != 'All'
                 ? _selectedSearchDemographic
                 : null,
@@ -1666,6 +1686,47 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         } catch (e) {
           debugPrint(
               '[Search] Step 2/4 search_products_geospatial RPC failed: $e');
+        }
+
+        // ── 100x Semantic Demographic Catalog Expansion ────────────────────
+        // When searching a demographic persona ("women", "men", "girls", "boys", "kids"),
+        // never starve the customer with just literal substring matches!
+        // Proactively retrieve available lifestyle, beauty, and apparel products from nearby stores.
+        if (demoIntent.hasDemographicIntent && shopsByName.isNotEmpty) {
+          try {
+            final nearbyShopIds = shopsByName.map((s) => s['id'] as String).toList();
+            final existingIds = rawProductsByName.map((p) => p['id']).toSet();
+
+            for (int i = 0; i < nearbyShopIds.length; i += 25) {
+              final chunk = nearbyShopIds.sublist(i, math.min(i + 25, nearbyShopIds.length));
+              var q = _supabase
+                  .from('products')
+                  .select()
+                  .eq('is_deleted', false)
+                  .eq('is_available', true)
+                  .inFilter('shop_id', chunk);
+
+              if (demoIntent.isPureDemographic) {
+                q = q.not('category', 'in',
+                    '("Food","Restaurant","Fast Food","Bakery","Sweets & Mithai","Butcher","Fish & Seafood","Dairy & Eggs","Fruits & Vegs","Grocery","Grocerylm","Grocery (Low Margin)","Ice Cream","Paan Shop","Beverages")');
+              } else if (demoIntent.strippedProductQuery.isNotEmpty) {
+                final sq = demoIntent.strippedProductQuery;
+                q = q.or('name.ilike.%$sq%,description.ilike.%$sq%,brand.ilike.%$sq%,category.ilike.%$sq%');
+              }
+
+              final extraProds = await q.order('rating', ascending: false).limit(150);
+              for (final ep in extraProds) {
+                if (!existingIds.contains(ep['id'])) {
+                  rawProductsByName.add(ep);
+                  existingIds.add(ep['id']);
+                }
+              }
+            }
+            debugPrint(
+                '[Search] Demographic expansion added products, total: ${rawProductsByName.length}');
+          } catch (e) {
+            debugPrint('[Search] Demographic catalog expansion error: $e');
+          }
         }
 
         // Store-Name Match Supplementation:
@@ -1740,11 +1801,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   .eq('is_available', true)
                   .inFilter('shop_id', chunk);
 
-              for (final term in terms) {
-                if (!DemographicUtils.isDemographicKeyword(term)) {
-                  q = q.or(
-                    'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,medicine_type.ilike.%$term%',
-                  );
+              final demoIntent =
+                  DemographicUtils.detectDemographicIntent(cleanQuery);
+              if (demoIntent.hasDemographicIntent &&
+                  demoIntent.isPureDemographic) {
+                q = q.not('category', 'in',
+                    '("Food","Restaurant","Fast Food","Bakery","Sweets & Mithai","Butcher","Fish & Seafood","Dairy & Eggs","Fruits & Vegs","Grocery","Grocerylm","Grocery (Low Margin)","Ice Cream","Paan Shop","Beverages")');
+              } else {
+                for (final term in terms) {
+                  if (!DemographicUtils.isDemographicKeyword(term)) {
+                    q = q.or(
+                      'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,medicine_type.ilike.%$term%',
+                    );
+                  }
                 }
               }
 
@@ -1839,11 +1908,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     .eq('is_available', true)
                     .inFilter('shop_id', chunk);
 
-                for (final term in terms) {
-                  if (!DemographicUtils.isDemographicKeyword(term)) {
-                    q = q.or(
-                      'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,medicine_type.ilike.%$term%',
-                    );
+                final demoIntent =
+                    DemographicUtils.detectDemographicIntent(cleanQuery);
+                if (demoIntent.hasDemographicIntent &&
+                    demoIntent.isPureDemographic) {
+                  q = q.not('category', 'in',
+                      '("Food","Restaurant","Fast Food","Bakery","Sweets & Mithai","Butcher","Fish & Seafood","Dairy & Eggs","Fruits & Vegs","Grocery","Grocerylm","Grocery (Low Margin)","Ice Cream","Paan Shop","Beverages")');
+                } else {
+                  for (final term in terms) {
+                    if (!DemographicUtils.isDemographicKeyword(term)) {
+                      q = q.or(
+                        'name.ilike.%$term%,description.ilike.%$term%,brand.ilike.%$term%,category.ilike.%$term%,menu_category.ilike.%$term%,sub_category.ilike.%$term%,medicine_type.ilike.%$term%',
+                      );
+                    }
                   }
                 }
 
@@ -2139,6 +2216,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
     'Cosmetics': ['Cosmetics & Beauty', 'Salon & Beauty'],
+    'Cosmetics & Beauty': ['Cosmetics & Beauty', 'Salon & Beauty'],
     'Supermarket': [
       'Supermarket / Hypermarket',
       'Grocery',
@@ -2296,8 +2374,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         final lowerTargets =
             targetCats.map((c) => c.trim().toLowerCase()).toSet();
         if (lowerTargets.contains(s.category.trim().toLowerCase())) return true;
-        return s.categories
-            .any((c) => lowerTargets.contains(c.trim().toLowerCase()));
+        if (s.categories
+            .any((c) => lowerTargets.contains(c.trim().toLowerCase()))) {
+          return true;
+        }
+        // 100x Multi-department omnibus store check: Supermarkets & Hypermarkets carry cosmetics departments
+        if (lowerTargets.any((t) => t.contains('cosmetic') || t.contains('beauty'))) {
+          final sCat = s.category.trim().toLowerCase();
+          if (sCat.contains('supermarket') ||
+              sCat.contains('hypermarket') ||
+              sCat.contains('departmental')) {
+            return true;
+          }
+        }
+        return false;
       }
 
       // Stratified sampling: ensure all dedicated homepage department sections
@@ -2400,6 +2490,51 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           prods.add(product);
           prodShops[product.id] = shop;
         }
+
+        // ── 100x Multi-Department Guaranteed Representation Fortress ──────────
+        // If a dedicated department (e.g. Cosmetics & Beauty) has nearby stores
+        // but was starved out by another department's high-volume items in a multi-department store,
+        // proactively fetch a dedicated department sample so the showcase carousel always renders!
+        final cosmeticCats = _tabCategories['Cosmetics & Beauty'] ?? ['Cosmetics & Beauty'];
+        final hasCosmeticsInFeed = prods.any((p) =>
+            AppCategories.matchesBrowsingCategory(
+              productCategory: p.category,
+              shopCategory: prodShops[p.id]?.category,
+              targetCategories: cosmeticCats,
+              shopCategories: prodShops[p.id]?.categories,
+            ));
+
+        if (!hasCosmeticsInFeed && cosmeticsShops.isNotEmpty) {
+          try {
+            final cosShopIds = cosmeticsShops.map((s) => s.id).toList();
+            final cosResp = await _supabase.rpc('get_feed_products', params: {
+              'p_shop_ids': cosShopIds,
+              'p_limit_per_shop': 8,
+              'p_categories': cosmeticCats,
+            }).select('*, shops(*)');
+
+            for (final p in (cosResp as List)) {
+              if (p['shops'] == null) continue;
+              final shop = ShopModel.fromMap(p['shops']);
+              if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+              final product = ProductModel.fromMap(p);
+              if (!config.isActiveCategory(product.category)) continue;
+
+              if (locationProvider.hasLocation) {
+                if (shop.location.latitude != 0 && shop.location.longitude != 0) {
+                  final d = locationProvider.distanceTo(shop.location);
+                  if (!DeliveryCalculator.isWithinRange(d)) continue;
+                }
+              }
+
+              prods.add(product);
+              prodShops[product.id] = shop;
+            }
+          } catch (e) {
+            debugPrint('_loadAllData: Cosmetics department backfill error: $e');
+          }
+        }
+
         prods.sort((a, b) {
           final sA = prodShops[a.id];
           final sB = prodShops[b.id];
@@ -6657,8 +6792,20 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final lowerCats = categories.map((c) => c.trim().toLowerCase()).toSet();
     final matchingShops = _shops.where((s) {
       if (lowerCats.contains(s.category.trim().toLowerCase())) return true;
-      return s.categories
-          .any((c) => lowerCats.contains(c.trim().toLowerCase()));
+      if (s.categories
+          .any((c) => lowerCats.contains(c.trim().toLowerCase()))) {
+        return true;
+      }
+      // 100x Multi-department omnibus store check: Supermarkets & Hypermarkets carry cosmetics & grocery
+      if (lowerCats.any((t) => t.contains('cosmetic') || t.contains('beauty') || t.contains('grocery'))) {
+        final sCat = s.category.trim().toLowerCase();
+        if (sCat.contains('supermarket') ||
+            sCat.contains('hypermarket') ||
+            sCat.contains('departmental')) {
+          return true;
+        }
+      }
+      return false;
     }).toList();
     Navigator.pushNamed(
       context,
@@ -7602,13 +7749,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   // ── Shop by Category Section ────────────────────────────────────────────────
-  // 5 main categories + a "See More" card, horizontally swipable.
+  // Primary department categories + a "See More" card, horizontally swipable.
   // Tap: filter home page in-place (same logic as old upper chips).
   // Long-press: navigate to dedicated CategoryProductsPage.
   Widget _buildCategorySection(bool isDark) {
-    // First 5 entries from the already-existing _categories list
-    final mainCats = _categories.take(5).toList();
-    final remainingCount = _categories.length > 5 ? _categories.length - 5 : 29;
+    // Primary department categories (excluding 'More' which is represented by the dedicated See All card)
+    final mainCats = _categories.where((c) => c['name'] != 'More').toList();
+    final config = context.read<PlatformConfigProvider>();
+    final activeCount = config.activeCategoryMaps.length;
+    final remainingCount = math.max(0, activeCount - mainCats.length);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

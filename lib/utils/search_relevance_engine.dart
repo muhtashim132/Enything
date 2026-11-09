@@ -1,15 +1,19 @@
 import 'dart:math' as math;
 import '../models/product_model.dart';
 import '../models/shop_model.dart';
+import 'demographic_utils.dart';
 
 /// 100x Forensic Search Relevance Engine for Enything Platform.
 ///
 /// Implements deterministic, multi-tiered search scoring across product name,
-/// brand, tokens, medicine salts, description, and metadata.
+/// brand, tokens, medicine salts, description, metadata, and human-like
+/// semantic demographic intelligence.
 ///
 /// Score Tiers:
+/// - Demographic Inherent Tier 1 (90,000 - 100,000+): Exact persona match (e.g. lipstick/saree for "woman").
 /// - Tier 1 (100,000+): Exact product name match.
 /// - Tier 2 (60,000 - 80,000): Name starts with query as a distinct word/boundary (e.g. "Dew 750 ml", "dew 250").
+/// - Demographic Unisex Tier 2 (45,000 - 55,000): Unisex lifestyle products (e.g. sunscreen/sneakers for "woman").
 /// - Tier 3 (40,000): Name starts with query without space (e.g. "Dewdrop").
 /// - Tier 4 (30,000): Query is an isolated distinct word within title (e.g. "Mountain Dew 750ml").
 /// - Tier 5 (25,000): Exact brand match.
@@ -20,9 +24,10 @@ import '../models/shop_model.dart';
 /// - Tier 10 (400): Description substring match.
 /// - Tier 11 (200 - 300): Category / Store name match.
 /// - Tie-breaker (+0 to +50): Rating and compactness bonus.
+/// - Disqualification (-1,000,000): Opposite-gender products or Food items in pure demographic searches.
 class SearchRelevanceEngine {
   /// Computes a comprehensive relevance score for [product] relative to [query].
-  /// Higher score = more relevant.
+  /// Higher score = more relevant. Score < 0 = disqualified / excluded.
   static double computeScore({
     required ProductModel product,
     required String query,
@@ -31,6 +36,95 @@ class SearchRelevanceEngine {
     final cleanQuery = query.trim().toLowerCase();
     if (cleanQuery.isEmpty) return product.rating;
 
+    // ── 0. DEMOGRAPHIC INTENT EVALUATION ─────────────────────────────────────
+    final demoIntent = DemographicUtils.detectDemographicIntent(cleanQuery);
+    if (demoIntent.hasDemographicIntent) {
+      final isCompatible = DemographicUtils.isCompatibleWithDemographic(
+        product: product,
+        targetDemographic: demoIntent.canonicalDemographic!,
+        isPureDemographic: demoIntent.isPureDemographic,
+      );
+      if (!isCompatible) {
+        return -1000000.0; // Strictly disqualified
+      }
+
+      final classification = DemographicUtils.classifyProduct(product);
+
+      // Pure Demographic Search (e.g. user typed "woman", "women", "men", "boy", "girl")
+      if (demoIntent.isPureDemographic) {
+        if (classification == ProductDemographicType.food) {
+          return -1000000.0; // Food strictly excluded on lifestyle persona query
+        }
+
+        final target = demoIntent.canonicalDemographic!.toLowerCase();
+        final isPrimaryTarget =
+            (target == 'women' && classification == ProductDemographicType.women) ||
+            (target == 'men' && classification == ProductDemographicType.men) ||
+            (target == 'girls' && classification == ProductDemographicType.girls) ||
+            (target == 'boys' && classification == ProductDemographicType.boys) ||
+            (target == 'kids' && classification == ProductDemographicType.kids);
+
+        if (isPrimaryTarget) {
+          double score = 90000.0;
+          score += (product.rating * 100.0);
+          if (product.isAvailable) score += 500.0;
+          return score;
+        }
+
+        if (classification == ProductDemographicType.unisex) {
+          double score = 45000.0;
+          score += (product.rating * 100.0);
+          if (product.isAvailable) score += 500.0;
+          return score;
+        }
+
+        double score = 20000.0;
+        score += (product.rating * 100.0);
+        return score;
+      }
+
+      // Compound Demographic Query (e.g. "women perfume", "shoes for men")
+      final productQuery = demoIntent.strippedProductQuery;
+      if (productQuery.isNotEmpty) {
+        final textScore = _computeTextRelevance(
+          product: product,
+          cleanQuery: productQuery,
+          shop: shop,
+        );
+
+        if (textScore <= 0.0) return 0.0;
+
+        final target = demoIntent.canonicalDemographic!.toLowerCase();
+        final isPrimaryTarget =
+            (target == 'women' && classification == ProductDemographicType.women) ||
+            (target == 'men' && classification == ProductDemographicType.men) ||
+            (target == 'girls' && classification == ProductDemographicType.girls) ||
+            (target == 'boys' && classification == ProductDemographicType.boys) ||
+            (target == 'kids' && classification == ProductDemographicType.kids);
+
+        if (isPrimaryTarget) {
+          return textScore + 50000.0;
+        } else if (classification == ProductDemographicType.unisex) {
+          return textScore + 20000.0;
+        }
+        return textScore;
+      }
+    }
+
+    // ── STANDARD TEXT RELEVANCE COMPUTATION ────────────────────────────────────
+    return _computeTextRelevance(
+      product: product,
+      cleanQuery: cleanQuery,
+      shop: shop,
+    );
+  }
+
+  /// Internal deterministic 11-tier text relevance calculator.
+  static double _computeTextRelevance({
+    required ProductModel product,
+    required String cleanQuery,
+    ShopModel? shop,
+  }) {
     final cleanName = product.name.trim().toLowerCase();
     final cleanBrand = (product.brand ?? '').trim().toLowerCase();
     final cleanDesc = (product.description ?? '').trim().toLowerCase();
@@ -130,6 +224,13 @@ class SearchRelevanceEngine {
       score += 4000.0;
     }
 
+    // ── 7B. COMMON SYNONYMS (e.g. "perfume" <-> "parfum", "pants" <-> "trousers") ───
+    if (cleanQuery == 'perfume' && (cleanName.contains('parfum') || cleanDesc.contains('parfum'))) {
+      score += 25000.0;
+    } else if (cleanQuery == 'parfum' && (cleanName.contains('perfume') || cleanDesc.contains('perfume'))) {
+      score += 25000.0;
+    }
+
     // ── 8. MEDICINE SALT / COMPOSITION MATCH ──────────────────────────────────
     if (cleanMedType.isNotEmpty) {
       if (cleanMedType == cleanQuery || cleanMedType.startsWith(cleanQuery)) {
@@ -170,6 +271,7 @@ class SearchRelevanceEngine {
   }
 
   /// Sorts a list of [ProductModel] by query relevance in-place and returns it.
+  /// Automatically filters out disqualified items (negative score) for demographic queries.
   static List<ProductModel> sortProducts({
     required List<ProductModel> products,
     required String query,
@@ -189,6 +291,12 @@ class SearchRelevanceEngine {
           shop: shops?[p.id],
         ),
       );
+    }
+
+    // Filter out strictly disqualified items (score < 0) when query has demographic intent
+    final hasDemo = DemographicUtils.detectDemographicIntent(cleanQuery).hasDemographicIntent;
+    if (hasDemo) {
+      products.removeWhere((p) => getCachedScore(p) < 0);
     }
 
     products.sort((a, b) {

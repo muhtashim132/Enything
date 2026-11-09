@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Load Gateway Secrets ───────────────────────────────────────────────
-    const keyId     = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
+    const keyId = (Deno.env.get("RAZORPAY_KEY_ID") ?? "").trim();
     const keySecret = (Deno.env.get("RAZORPAY_KEY_SECRET") ?? "").trim();
 
     if (!keyId || !keySecret) {

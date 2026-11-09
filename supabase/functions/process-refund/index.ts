@@ -47,9 +47,9 @@ Deno.serve(async (req) => {
     const newRefundStatus = record?.refund_status;
 
     // Detect if order transitioned into a cancelled/rejected state
-    const isRefundableState = 
-      newStatus === "verification_failed" || 
-      newStatus === "seller_rejected" || 
+    const isRefundableState =
+      newStatus === "verification_failed" ||
+      newStatus === "seller_rejected" ||
       newStatus === "partner_rejected" ||
       newStatus === "rider_rejected" ||
       newStatus === "cancelled" ||
@@ -108,10 +108,10 @@ Deno.serve(async (req) => {
       const collectedAmount = isRefundableState
         ? (Number(freshOrder?.grand_total_collected || record.grand_total_collected || 0) + (hasPendingItemRefund ? Number(freshOrder.pending_refund_amount) : 0))
         : (hasPendingItemRefund
-            ? Number(freshOrder.pending_refund_amount)
-            : (freshOrder?.grand_total_collected != null 
-                ? Number(freshOrder.grand_total_collected) 
-                : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0)));
+          ? Number(freshOrder.pending_refund_amount)
+          : (freshOrder?.grand_total_collected != null
+            ? Number(freshOrder.grand_total_collected)
+            : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0)));
       let amountInPaise = Math.round(collectedAmount * 100);
 
       if (amountInPaise <= 0) {
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
 
       if (!refundResponse.ok) {
         console.error("Razorpay refund failed:", refundData);
-        
+
         // 100x FIX: Prevent webhook 500 error loops by marking as failed in DB
         await supabaseAdmin.from("orders").update({
           refund_status: "failed",

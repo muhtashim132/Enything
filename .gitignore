@@ -109,6 +109,9 @@ test_mockup.png
 /Shelf*.jpeg
 /g*.jpeg
 /b*.jpg
+/l*.jpg
+/l*.jpeg
+/edited_pictures/
 /AA*.pdf
 /IMG_*.pdf
 scripts/auto_upload/data/product_images/

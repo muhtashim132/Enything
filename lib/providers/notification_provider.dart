@@ -382,19 +382,39 @@ class NotificationProvider extends ChangeNotifier {
             var (title, body) = _customerStatusMessage(newStatus, orderId);
             final otp = payload.newRecord['delivery_otp'] as String?;
             final orderType = payload.newRecord['order_type'] as String?;
-            if (newStatus == 'bulk_dispatched' && otp != null && otp.isNotEmpty) {
-              final isSupplies = (payload.newRecord['address_label']?.toString().toLowerCase().contains('supplies') ?? false) ||
-                  (payload.newRecord['address_label']?.toString().toLowerCase().contains('rental') ?? false) ||
-                  (payload.newRecord['address_label']?.toString().toLowerCase().contains('equipment') ?? false);
+            if (newStatus == 'bulk_dispatched' &&
+                otp != null &&
+                otp.isNotEmpty) {
+              final isSupplies = (payload.newRecord['address_label']
+                          ?.toString()
+                          .toLowerCase()
+                          .contains('supplies') ??
+                      false) ||
+                  (payload.newRecord['address_label']
+                          ?.toString()
+                          .toLowerCase()
+                          .contains('rental') ??
+                      false) ||
+                  (payload.newRecord['address_label']
+                          ?.toString()
+                          .toLowerCase()
+                          .contains('equipment') ??
+                      false);
               body = isSupplies
                   ? 'Your event supplies are en route with our in-house delivery team! Handover OTP: $otp'
                   : 'Your event order is en route with our in-house delivery team! Handover OTP: $otp';
-            } else if (newStatus == 'delivered' && (orderType == 'bulk' || orderType == 'manual_quote')) {
-              final eventLabel = payload.newRecord['address_label'] as String? ?? 'Event Catering';
-              final isSupplies = eventLabel.toLowerCase().contains('supplies') ||
-                  eventLabel.toLowerCase().contains('rental') ||
-                  eventLabel.toLowerCase().contains('equipment');
-              title = isSupplies ? '🎉 Event Supplies Delivered!' : '🎉 Catering Order Delivered!';
+            } else if (newStatus == 'delivered' &&
+                (orderType == 'bulk' || orderType == 'manual_quote')) {
+              final eventLabel =
+                  payload.newRecord['address_label'] as String? ??
+                      'Event Catering';
+              final isSupplies =
+                  eventLabel.toLowerCase().contains('supplies') ||
+                      eventLabel.toLowerCase().contains('rental') ||
+                      eventLabel.toLowerCase().contains('equipment');
+              title = isSupplies
+                  ? '🎉 Event Supplies Delivered!'
+                  : '🎉 Catering Order Delivered!';
               body = (otp != null && otp.isNotEmpty)
                   ? 'Delivery handover verified with OTP for "$eventLabel". Have a wonderful event celebration! 🎉'
                   : 'Your order for "$eventLabel" has been delivered. Enjoy your celebration! 🎉';
@@ -405,11 +425,12 @@ class NotificationProvider extends ChangeNotifier {
                   newStatus == 'out_for_delivery' ||
                   newStatus == 'delivered' ||
                   newStatus == 'cancelled';
-              final notifId = (orderType == 'bulk' || orderType == 'manual_quote')
-                  ? 'bulk_delivered_$orderId'
-                  : ((isGroupStatus && cartGroupId != null)
-                      ? '${cartGroupId}_$newStatus'
-                      : '${orderId}_$newStatus');
+              final notifId =
+                  (orderType == 'bulk' || orderType == 'manual_quote')
+                      ? 'bulk_delivered_$orderId'
+                      : ((isGroupStatus && cartGroupId != null)
+                          ? '${cartGroupId}_$newStatus'
+                          : '${orderId}_$newStatus');
 
               _add(AppNotification(
                 id: notifId,
@@ -1145,7 +1166,9 @@ class NotificationProvider extends ChangeNotifier {
           (n.orderId == notification.orderId &&
               (n.title == notification.title ||
                   (n.title.toLowerCase().contains('new order') &&
-                      notification.title.toLowerCase().contains('new order'))) &&
+                      notification.title
+                          .toLowerCase()
+                          .contains('new order'))) &&
               DateTime.now().difference(n.createdAt).inSeconds.abs() < 60));
       if (isDuplicate) {
         debugPrint(

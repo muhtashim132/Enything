@@ -153,6 +153,40 @@ class _AllListingsPageState extends State<AllListingsPage> {
       'outfit',
       'all clothes',
     ],
+    'Cosmetics': [
+      'cosmetics',
+      'cosmetic',
+      'beauty',
+      'makeup',
+      'skincare',
+      'skin care',
+      'lipstick',
+      'lipsticks',
+      'lip balm',
+      'eyeliner',
+      'kajal',
+      'mascara',
+      'foundation',
+      'cream',
+      'face cream',
+      'lotion',
+      'body lotion',
+      'serum',
+      'serums',
+      'perfume',
+      'perfumes',
+      'deodorant',
+      'deodorants',
+      'body spray',
+      'shampoo',
+      'conditioner',
+      'hair oil',
+      'cleanser',
+      'toner',
+      'body wash',
+      'all cosmetics',
+      'all beauty',
+    ],
     'Food': [
       'food',
       'restaurant',
@@ -984,6 +1018,19 @@ class _AllListingsPageState extends State<AllListingsPage> {
             searchableText: searchable,
           ));
         }).toList();
+
+        // 100x Disqualification Purge: Filter out negative score items for demographic queries
+        final demoIntent = DemographicUtils.detectDemographicIntent(_searchQuery);
+        if (demoIntent.hasDemographicIntent) {
+          list = list.where((p) {
+            final s = _allProductShops[p.id] ?? _shopsMap[p.shopId];
+            return SearchRelevanceEngine.computeScore(
+              product: p,
+              query: _searchQuery,
+              shop: s,
+            ) >= 0;
+          }).toList();
+        }
       }
     }
 

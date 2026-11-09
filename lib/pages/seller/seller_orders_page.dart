@@ -288,7 +288,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         vName.isNotEmpty &&
                         vImg != null &&
                         vImg.isNotEmpty) {
-                      _productImageCache['${pid}_${vName.toLowerCase()}'] = vImg;
+                      _productImageCache['${pid}_${vName.toLowerCase()}'] =
+                          vImg;
                     }
                   }
                 }
@@ -307,8 +308,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           if (item.imageUrl == null || item.imageUrl!.isEmpty) {
             final variantKey =
                 '${item.productId}_${(item.variantName ?? '').trim().toLowerCase()}';
-            final resolvedImg =
-                _productImageCache[variantKey] ?? _productImageCache[item.productId];
+            final resolvedImg = _productImageCache[variantKey] ??
+                _productImageCache[item.productId];
             if (resolvedImg != null) {
               order.items[idx] = item.copyWith(imageUrl: resolvedImg);
             }
@@ -316,7 +317,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         }
       }
 
-      final bulkOrderIds = ordersList.where((o) => o.isBulkOrder).map((o) => o.id).toList();
+      final bulkOrderIds =
+          ordersList.where((o) => o.isBulkOrder).map((o) => o.id).toList();
       final Map<String, BulkOrderModel> bulkMetaMap = {};
       if (bulkOrderIds.isNotEmpty) {
         try {
@@ -474,7 +476,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 title: '✅ Shop & Rider Ready! Pay Now 💳',
                 body:
                     'Both the shop(s) and rider accepted your order. Complete payment within 10 minutes.',
-                data: {'order_id': order.id, 'action': 'pay', 'role': 'customer'},
+                data: {
+                  'order_id': order.id,
+                  'action': 'pay',
+                  'role': 'customer'
+                },
               ).then((err) {
                 if (err != null && mounted) _showSnack(err, isError: true);
               });
@@ -508,8 +514,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               notifProv.sendBackgroundPush(
                 targetUserId: riderIdToNotify,
                 title: '🏪 Shop Confirmed & Packing!',
-                body:
-                    'The shop accepted and is packing the items.',
+                body: 'The shop accepted and is packing the items.',
                 data: {'order_id': order.id, 'role': 'rider'},
               );
             } else {
@@ -531,8 +536,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           notifProv.sendBroadcastToAudience(
             audience: 'Riders',
             title: '🛵 Order Ready to Accept!',
-            body:
-                'A shop accepted an order. Tap to accept delivery now!',
+            body: 'A shop accepted an order. Tap to accept delivery now!',
             data: {
               'role': 'delivery',
               'action': 'new_order',
@@ -561,7 +565,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       if (e.toString().contains('ORDER_CANCELLED')) {
         _showSnack('The customer just cancelled this order.', isError: true);
       } else if (e.toString().contains('SHOP_SUSPENDED')) {
-        _showSnack('Your shop has been suspended by administration.', isError: true);
+        _showSnack('Your shop has been suspended by administration.',
+            isError: true);
       } else if (e.toString().contains('Invalid state transition') ||
           e.toString().contains('no longer available')) {
         _showSnack('Order is no longer available to accept.', isError: true);
@@ -606,7 +611,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     color: AppColors.danger.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.inventory_2_outlined, color: AppColors.danger, size: 22),
+                  child: const Icon(Icons.inventory_2_outlined,
+                      color: AppColors.danger, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -651,7 +657,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         width: 44,
                         height: 44,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => const Icon(Icons.fastfood, color: Colors.white38),
+                        errorWidget: (_, __, ___) =>
+                            const Icon(Icons.fastfood, color: Colors.white38),
                       ),
                     )
                   else
@@ -679,11 +686,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (item.variantName != null && item.variantName!.isNotEmpty)
+                        if (item.variantName != null &&
+                            item.variantName!.isNotEmpty)
                           Text('Variant: ${item.variantName}',
-                              style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11)),
-                        Text('${item.quantity}x · ₹${item.totalPrice.toStringAsFixed(0)}',
-                            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                              style: GoogleFonts.outfit(
+                                  color: AppColors.primary, fontSize: 11)),
+                        Text(
+                            '${item.quantity}x · ₹${item.totalPrice.toStringAsFixed(0)}',
+                            style: GoogleFonts.outfit(
+                                color: Colors.white70, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -696,18 +707,21 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               decoration: BoxDecoration(
                 color: const Color(0xFF2E1A1A),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                border:
+                    Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.check_circle_outline, color: AppColors.danger, size: 16),
+                      const Icon(Icons.check_circle_outline,
+                          color: AppColors.danger, size: 16),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Product will be marked Out of Stock in your store inventory.',
-                          style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                          style: GoogleFonts.outfit(
+                              color: Colors.white70, fontSize: 12),
                         ),
                       ),
                     ],
@@ -715,12 +729,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.check_circle_outline, color: AppColors.danger, size: 16),
+                      const Icon(Icons.check_circle_outline,
+                          color: AppColors.danger, size: 16),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Order total will be recalculated for the remaining active items.',
-                          style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                          style: GoogleFonts.outfit(
+                              color: Colors.white70, fontSize: 12),
                         ),
                       ),
                     ],
@@ -728,12 +744,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.check_circle_outline, color: AppColors.danger, size: 16),
+                      const Icon(Icons.check_circle_outline,
+                          color: AppColors.danger, size: 16),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Customer will be notified with options to proceed, replace, or cancel.',
-                          style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12),
+                          style: GoogleFonts.outfit(
+                              color: Colors.white70, fontSize: 12),
                         ),
                       ),
                     ],
@@ -749,10 +767,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     onPressed: () => Navigator.pop(ctx, false),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.white24),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.white70, fontWeight: FontWeight.w600)),
+                    child: Text('Cancel',
+                        style: GoogleFonts.outfit(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -761,10 +783,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     onPressed: () => Navigator.pop(ctx, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.danger,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: Text('Mark Out of Stock', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700)),
+                    child: Text('Mark Out of Stock',
+                        style: GoogleFonts.outfit(
+                            color: Colors.white, fontWeight: FontWeight.w700)),
                   ),
                 ),
               ],
@@ -794,7 +819,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           body: allDeclined
               ? 'The shop could not fulfill any items in your order. Full refund will be processed.'
               : '"${item.productName}" is out of stock and was removed from your order. Tap to view options!',
-          data: {'order_id': order.id, 'role': 'customer', 'type': 'item_level_partial_rejection'},
+          data: {
+            'order_id': order.id,
+            'role': 'customer',
+            'type': 'item_level_partial_rejection'
+          },
         );
       }
 
@@ -810,15 +839,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   .eq('cart_group_id', order.cartGroupId!)
                   .neq('id', order.id)
                   .inFilter('status', [
-                    'awaiting_acceptance',
-                    'pending',
-                    'awaiting_payment',
-                    'confirmed',
-                    'preparing',
-                    'ready_for_pickup',
-                    'picked_up',
-                    'out_for_delivery'
-                  ]);
+                'awaiting_acceptance',
+                'pending',
+                'awaiting_payment',
+                'confirmed',
+                'preparing',
+                'ready_for_pickup',
+                'picked_up',
+                'out_for_delivery'
+              ]);
               if ((activeSiblings as List).isNotEmpty) {
                 hasOtherActiveOrders = true;
               }
@@ -841,7 +870,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           context.read<NotificationProvider>().sendBackgroundPush(
             targetUserId: partnerId,
             title: '📦 Order Item Update',
-            body: '"${item.productName}" marked out of stock. Do not collect this item.',
+            body:
+                '"${item.productName}" marked out of stock. Do not collect this item.',
             data: {'order_id': order.id, 'role': 'rider'},
           );
         }
@@ -915,7 +945,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       subtitle: 'Invalid, expired or unreadable prescription',
                       icon: Icons.medical_information_outlined,
                       isSelected: rejectReason == 'prescription',
-                      onTap: () => setState(() => rejectReason = 'prescription'),
+                      onTap: () =>
+                          setState(() => rejectReason = 'prescription'),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -926,9 +957,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     isSelected: rejectReason == 'out_of_stock',
                     onTap: () => setState(() => rejectReason = 'out_of_stock'),
                   ),
-                  if (rejectReason == 'out_of_stock' && order.activeItems.length > 1) ...[
+                  if (rejectReason == 'out_of_stock' &&
+                      order.activeItems.length > 1) ...[
                     Padding(
-                      padding: const EdgeInsets.only(top: 10, left: 4, right: 4, bottom: 8),
+                      padding: const EdgeInsets.only(
+                          top: 10, left: 4, right: 4, bottom: 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -936,12 +969,19 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Select Out-of-Stock Items:',
-                                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w700)),
+                                  style: GoogleFonts.outfit(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700)),
                               if (selectedOutOfStockItemIds.isNotEmpty)
                                 GestureDetector(
-                                  onTap: () => setState(() => selectedOutOfStockItemIds.clear()),
+                                  onTap: () => setState(
+                                      () => selectedOutOfStockItemIds.clear()),
                                   child: Text('Clear Selection',
-                                      style: GoogleFonts.outfit(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                                      style: GoogleFonts.outfit(
+                                          color: AppColors.primary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
                                 ),
                             ],
                           ),
@@ -957,10 +997,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                               shrinkWrap: true,
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               itemCount: order.activeItems.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white10),
+                              separatorBuilder: (_, __) => const Divider(
+                                  height: 1, color: Colors.white10),
                               itemBuilder: (ctx, idx) {
                                 final it = order.activeItems[idx];
-                                final isSelected = selectedOutOfStockItemIds.contains(it.id);
+                                final isSelected =
+                                    selectedOutOfStockItemIds.contains(it.id);
                                 return InkWell(
                                   onTap: () {
                                     setState(() {
@@ -972,12 +1014,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                     });
                                   },
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
                                     child: Row(
                                       children: [
                                         Icon(
-                                          isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                                          color: isSelected ? AppColors.danger : Colors.white38,
+                                          isSelected
+                                              ? Icons.check_box
+                                              : Icons.check_box_outline_blank,
+                                          color: isSelected
+                                              ? AppColors.danger
+                                              : Colors.white38,
                                           size: 20,
                                         ),
                                         const SizedBox(width: 10),
@@ -985,15 +1032,22 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                           child: Text(
                                             '${it.quantity}x ${it.productName}',
                                             style: GoogleFonts.outfit(
-                                              color: isSelected ? Colors.white : Colors.white70,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : Colors.white70,
                                               fontSize: 13,
-                                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
                                             ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        Text('₹${it.totalPrice.toStringAsFixed(0)}',
-                                            style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12)),
+                                        Text(
+                                            '₹${it.totalPrice.toStringAsFixed(0)}',
+                                            style: GoogleFonts.outfit(
+                                                color: Colors.white54,
+                                                fontSize: 12)),
                                       ],
                                     ),
                                   ),
@@ -1008,16 +1062,21 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                               decoration: BoxDecoration(
                                 color: Colors.amber.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                                border: Border.all(
+                                    color: Colors.amber.withValues(alpha: 0.3)),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.info_outline, size: 14, color: Colors.amber),
+                                  const Icon(Icons.info_outline,
+                                      size: 14, color: Colors.amber),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
                                       '${selectedOutOfStockItemIds.length} item(s) will be removed. Remaining ${order.activeItems.length - selectedOutOfStockItemIds.length} item(s) will stay active!',
-                                      style: GoogleFonts.outfit(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.w600),
+                                      style: GoogleFonts.outfit(
+                                          color: Colors.amber,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                 ],
@@ -1036,7 +1095,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     onTap: () => setState(() => rejectReason = 'other'),
                   ),
                   const SizedBox(height: 12),
-                  Text('Send an optional message to the customer explaining why.',
+                  Text(
+                      'Send an optional message to the customer explaining why.',
                       style: GoogleFonts.outfit(
                           color: Colors.white54, fontSize: 13)),
                   const SizedBox(height: 14),
@@ -1046,8 +1106,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     style: GoogleFonts.outfit(color: Colors.white),
                     decoration: InputDecoration(
                       hintText: 'e.g. "Item ran out of stock this evening"',
-                      hintStyle:
-                          GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
+                      hintStyle: GoogleFonts.outfit(
+                          color: Colors.white30, fontSize: 13),
                       filled: true,
                       fillColor: Colors.white.withValues(alpha: 0.07),
                       border: OutlineInputBorder(
@@ -1080,7 +1140,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         child: ElevatedButton(
                           onPressed: () => Navigator.pop(ctx, true),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isPartialDecline ? const Color(0xFFD97706) : AppColors.danger,
+                            backgroundColor: isPartialDecline
+                                ? const Color(0xFFD97706)
+                                : AppColors.danger,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1114,8 +1176,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .eq('id', order.id)
           .maybeSingle();
       final currentStatus = latestOrderRow?['status'] as String?;
-      final latestPartnerId =
-          latestOrderRow?['delivery_partner_id'] as String?;
+      final latestPartnerId = latestOrderRow?['delivery_partner_id'] as String?;
       const rejectableStatuses = [
         'awaiting_acceptance',
         'awaiting_payment',
@@ -1155,9 +1216,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         if (mounted) {
           context.read<NotificationProvider>().sendBackgroundPush(
             targetUserId: order.customerId,
-            title: '⚠️ Items Unavailable at ${_shopNames[order.shopId] ?? "Store"}',
-            body: '$declinedNames unavailable and removed from your order. Tap to view your options!',
-            data: {'order_id': order.id, 'role': 'customer', 'type': 'item_level_partial_rejection'},
+            title:
+                '⚠️ Items Unavailable at ${_shopNames[order.shopId] ?? "Store"}',
+            body:
+                '$declinedNames unavailable and removed from your order. Tap to view your options!',
+            data: {
+              'order_id': order.id,
+              'role': 'customer',
+              'type': 'item_level_partial_rejection'
+            },
           );
         }
 
@@ -1166,7 +1233,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           context.read<NotificationProvider>().sendBackgroundPush(
             targetUserId: partnerIdToNotify,
             title: '📦 Order Items Updated',
-            body: '$declinedNames marked out of stock. Please do not collect these items.',
+            body:
+                '$declinedNames marked out of stock. Please do not collect these items.',
             data: {'order_id': order.id, 'role': 'rider'},
           );
         }
@@ -1180,7 +1248,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
 
       // ── Full Order Rejection Branch (All items selected or non-stock reason) ──
-      if (rejectReason == 'out_of_stock' && selectedOutOfStockItemIds.isNotEmpty) {
+      if (rejectReason == 'out_of_stock' &&
+          selectedOutOfStockItemIds.isNotEmpty) {
         await _supabase.rpc('decline_order_items_seller', params: {
           'p_order_id': order.id,
           'p_order_item_ids': selectedOutOfStockItemIds.toList(),
@@ -1219,15 +1288,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 .eq('cart_group_id', order.cartGroupId!)
                 .neq('id', order.id)
                 .inFilter('status', [
-                  'awaiting_acceptance',
-                  'pending',
-                  'awaiting_payment',
-                  'confirmed',
-                  'preparing',
-                  'ready_for_pickup',
-                  'picked_up',
-                  'out_for_delivery'
-                ]);
+              'awaiting_acceptance',
+              'pending',
+              'awaiting_payment',
+              'confirmed',
+              'preparing',
+              'ready_for_pickup',
+              'picked_up',
+              'out_for_delivery'
+            ]);
             if ((activeSiblings as List).isNotEmpty) {
               hasOtherActiveOrders = true;
             }
@@ -1294,7 +1363,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     title,
                     style: GoogleFonts.outfit(
                       color: Colors.white,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w600,
                       fontSize: 14,
                     ),
                   ),
@@ -1455,7 +1525,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       if (msg.contains('cancel') ||
           msg.contains('invalid state') ||
           msg.contains('invalid transition')) {
-        _showSnack('⚠️ Customer cancelled this order. Do not pack.', isError: true);
+        _showSnack('⚠️ Customer cancelled this order. Do not pack.',
+            isError: true);
       } else {
         try {
           final check = await _supabase
@@ -1464,7 +1535,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               .eq('id', order.id)
               .maybeSingle();
           if (check != null && check['status'] == 'cancelled') {
-            _showSnack('⚠️ Customer cancelled this order. Do not pack.', isError: true);
+            _showSnack('⚠️ Customer cancelled this order. Do not pack.',
+                isError: true);
             _loadOrders();
             return;
           }
@@ -1475,7 +1547,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     } catch (e) {
       final errStr = e.toString().toLowerCase();
       if (errStr.contains('cancel') || errStr.contains('invalid state')) {
-        _showSnack('⚠️ Customer cancelled this order. Do not pack.', isError: true);
+        _showSnack('⚠️ Customer cancelled this order. Do not pack.',
+            isError: true);
       } else {
         _showSnack('Update error: $e', isError: true);
       }
@@ -1552,47 +1625,49 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       .where((o) =>
           !o.isBulkOrder &&
           (((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-              o.sellerAccepted &&
-              !o.isExpired) ||
-          [
-            'awaiting_payment',
-            'confirmed',
-            'preparing',
-            'ready_for_pickup',
-            'picked_up',
-            'out_for_delivery',
-          ].contains(o.status)))
+                  o.sellerAccepted &&
+                  !o.isExpired) ||
+              [
+                'awaiting_payment',
+                'confirmed',
+                'preparing',
+                'ready_for_pickup',
+                'picked_up',
+                'out_for_delivery',
+              ].contains(o.status)))
       .toList();
 
   List<OrderModel> _doneOrders() => _orders
       .where((o) =>
           !o.isBulkOrder &&
           ([
-            'delivered',
-            'cancelled',
-            'seller_rejected',
-            'partner_rejected',
-            'verification_failed',
-            'pending_verification',
-            'shop_dispute_cancel',
-            'timeout',
-            'failed',
-            'returned',
-            'refunded',
-            'no_rider',
-            'payment_failed',
-          ].contains(o.status) ||
-          ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
-              o.isExpired)))
+                'delivered',
+                'cancelled',
+                'seller_rejected',
+                'partner_rejected',
+                'verification_failed',
+                'pending_verification',
+                'shop_dispute_cancel',
+                'timeout',
+                'failed',
+                'returned',
+                'refunded',
+                'no_rider',
+                'payment_failed',
+              ].contains(o.status) ||
+              ((o.status == 'awaiting_acceptance' || o.status == 'pending') &&
+                  o.isExpired)))
       .toList();
 
-  List<OrderModel> _bulkOrders() => _orders.where((o) => o.isBulkOrder).toList();
+  List<OrderModel> _bulkOrders() =>
+      _orders.where((o) => o.isBulkOrder).toList();
 
   @override
   Widget build(BuildContext context) {
     final pendingCount = _pendingOrders().length;
-    final bulkPendingCount =
-        _orders.where((o) => o.isBulkOrder && o.status == 'bulk_pending').length;
+    final bulkPendingCount = _orders
+        .where((o) => o.isBulkOrder && o.status == 'bulk_pending')
+        .length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1756,7 +1831,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     }
     final primaryShopId = _shopNames.keys.first;
     _showSnack('Dispatching practice order with audio bell...', isError: false);
-    final orderId = await PracticeOrderService.instance.createSelfPracticeOrderForSeller(
+    final orderId =
+        await PracticeOrderService.instance.createSelfPracticeOrderForSeller(
       primaryShopId,
       sellerId: context.read<AuthProvider>().currentUserId,
     );
@@ -1823,14 +1899,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF0284C7),
                   side: const BorderSide(color: Color(0xFF0284C7)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _triggerPracticeOrder,
                 icon: const Icon(Icons.science_rounded, size: 18),
                 label: Text(
                   '🧪 Try Practice Order',
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+                  style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
             ],
@@ -1954,8 +2033,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
 
                 // Product Picture Area
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(24)),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(24)),
                   child: hasImage
                       ? CachedNetworkImage(
                           imageUrl: item.imageUrl!,
@@ -1964,18 +2043,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           fit: BoxFit.cover,
                           placeholder: (c, url) => Container(
                             height: 280,
-                            color: isDark
-                                ? Colors.white10
-                                : Colors.grey.shade100,
+                            color:
+                                isDark ? Colors.white10 : Colors.grey.shade100,
                             child: const Center(
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
                           errorWidget: (c, url, err) => Container(
                             height: 200,
-                            color: isDark
-                                ? Colors.white10
-                                : Colors.grey.shade100,
+                            color:
+                                isDark ? Colors.white10 : Colors.grey.shade100,
                             child: Center(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -1990,9 +2067,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                     'Image not available',
                                     style: GoogleFonts.outfit(
                                       fontSize: 12,
-                                      color: isDark
-                                          ? Colors.white38
-                                          : Colors.grey,
+                                      color:
+                                          isDark ? Colors.white38 : Colors.grey,
                                     ),
                                   ),
                                 ],
@@ -2149,7 +2225,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     color: item.isDeclined
                         ? (isDark ? Colors.white38 : Colors.grey)
                         : (isDark ? Colors.white : AppColors.textPrimary),
-                    decoration: item.isDeclined ? TextDecoration.lineThrough : null,
+                    decoration:
+                        item.isDeclined ? TextDecoration.lineThrough : null,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -2157,11 +2234,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 if (item.isDeclined) ...[
                   const SizedBox(height: 3),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.danger.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: AppColors.danger.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       '❌ Out of Stock · Removed',
@@ -2226,27 +2305,36 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   color: item.isDeclined
                       ? (isDark ? Colors.white30 : Colors.grey)
                       : (isDark ? Colors.white : AppColors.textPrimary),
-                  decoration: item.isDeclined ? TextDecoration.lineThrough : null,
+                  decoration:
+                      item.isDeclined ? TextDecoration.lineThrough : null,
                 ),
               ),
               if (item.isActive &&
-                  ['awaiting_acceptance', 'awaiting_payment', 'pending', 'confirmed', 'preparing']
-                      .contains(order.status)) ...[
+                  [
+                    'awaiting_acceptance',
+                    'awaiting_payment',
+                    'pending',
+                    'confirmed',
+                    'preparing'
+                  ].contains(order.status)) ...[
                 const SizedBox(height: 4),
                 InkWell(
                   onTap: () => _confirmDeclineItem(order, item),
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.danger.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+                      border: Border.all(
+                          color: AppColors.danger.withValues(alpha: 0.35)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.block, size: 10, color: AppColors.danger),
+                        const Icon(Icons.block,
+                            size: 10, color: AppColors.danger),
                         const SizedBox(width: 3),
                         Text(
                           'Unavailable',
@@ -2367,7 +2455,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                              color: const Color(0xFF0284C7)
+                                  .withValues(alpha: 0.3),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
@@ -2601,11 +2690,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          color: (order.sellerAccepted ? Colors.orange : Colors.red)
+                          color: (order.sellerAccepted
+                                  ? Colors.orange
+                                  : Colors.red)
                               .withValues(alpha: 0.07),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                              color: (order.sellerAccepted ? Colors.orange : Colors.red)
+                              color: (order.sellerAccepted
+                                      ? Colors.orange
+                                      : Colors.red)
                                   .withValues(alpha: 0.18)),
                         ),
                         child: Row(
@@ -2809,8 +2902,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 const SizedBox(height: 10),
                                 const Divider(height: 1),
                                 const SizedBox(height: 10),
-                                ...order.items.map((item) =>
-                                    _buildOrderItemRow(context, order, item, isDark)),
+                                ...order.items.map((item) => _buildOrderItemRow(
+                                    context, order, item, isDark)),
                                 if (order.sellerPayout > 0) ...[
                                   const SizedBox(height: 10),
                                   Container(
@@ -2827,7 +2920,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                       ),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           '💰 Seller Payout Breakdown',
@@ -2840,17 +2934,40 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                           ),
                                         ),
                                         const SizedBox(height: 6),
-                                        _buildPayoutDetailRow('Item Subtotal (Base)', '₹${order.totalAmount.toStringAsFixed(2)}', isDark),
+                                        _buildPayoutDetailRow(
+                                            'Item Subtotal (Base)',
+                                            '₹${order.totalAmount.toStringAsFixed(2)}',
+                                            isDark),
                                         if (order.nonFoodGstAmount > 0)
-                                          _buildPayoutDetailRow('Non-Food GST (Passthrough)', '+₹${order.nonFoodGstAmount.toStringAsFixed(2)}', isDark, isPositive: true),
+                                          _buildPayoutDetailRow(
+                                              'Non-Food GST (Passthrough)',
+                                              '+₹${order.nonFoodGstAmount.toStringAsFixed(2)}',
+                                              isDark,
+                                              isPositive: true),
                                         if (order.enythingCommission > 0)
-                                          _buildPayoutDetailRow('Platform Comm. & Gateway', '-₹${order.enythingCommission.toStringAsFixed(2)}', isDark, isNegative: true),
+                                          _buildPayoutDetailRow(
+                                              'Platform Comm. & Gateway',
+                                              '-₹${order.enythingCommission.toStringAsFixed(2)}',
+                                              isDark,
+                                              isNegative: true),
                                         if (order.tcsAmount > 0)
-                                          _buildPayoutDetailRow('GST TCS (§52 0.5%)', '-₹${order.tcsAmount.toStringAsFixed(2)}', isDark, isNegative: true),
+                                          _buildPayoutDetailRow(
+                                              'GST TCS (§52 0.5%)',
+                                              '-₹${order.tcsAmount.toStringAsFixed(2)}',
+                                              isDark,
+                                              isNegative: true),
                                         if (order.tdsAmount > 0)
-                                          _buildPayoutDetailRow('IT TDS (§194-O 0.1%)', '-₹${order.tdsAmount.toStringAsFixed(2)}', isDark, isNegative: true),
+                                          _buildPayoutDetailRow(
+                                              'IT TDS (§194-O 0.1%)',
+                                              '-₹${order.tdsAmount.toStringAsFixed(2)}',
+                                              isDark,
+                                              isNegative: true),
                                         const Divider(height: 10),
-                                        _buildPayoutDetailRow('Estimated Bank Payout', '₹${order.sellerPayout.toStringAsFixed(2)}', isDark, isBold: true),
+                                        _buildPayoutDetailRow(
+                                            'Estimated Bank Payout',
+                                            '₹${order.sellerPayout.toStringAsFixed(2)}',
+                                            isDark,
+                                            isBold: true),
                                       ],
                                     ),
                                   ),
@@ -3398,14 +3515,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               title: Row(
                 children: [
                   const Text('🎉 ', style: TextStyle(fontSize: 22)),
                   Expanded(
                     child: Text(
                       'Accept Bulk Order',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
+                      style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ),
                 ],
@@ -3416,7 +3535,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 children: [
                   Text(
                     'How many kitchen batches / parcels will you pack this order into?',
-                    style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                    style: GoogleFonts.outfit(
+                        fontSize: 13, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -3430,11 +3550,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             : null,
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 8),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                          border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           '$batches ${batches == 1 ? "Batch" : "Batches"}',
@@ -3460,8 +3582,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       hintText: 'e.g., Will start prep 4 hours prior',
                       labelStyle: GoogleFonts.outfit(fontSize: 13),
                       hintStyle: GoogleFonts.outfit(fontSize: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                     ),
                   ),
                 ],
@@ -3469,26 +3593,32 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+                  child: Text('Cancel',
+                      style: GoogleFonts.outfit(color: Colors.grey)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
                   ),
                   onPressed: () {
                     Navigator.pop(ctx);
                     _respondBulkOrder(
                       order,
                       'accepted',
-                      notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                      notes: notesController.text.trim().isEmpty
+                          ? null
+                          : notesController.text.trim(),
                       totalBatches: batches,
                     );
                   },
                   child: Text(
                     'Confirm Acceptance',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.outfit(
+                        color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -3506,10 +3636,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
             'Decline Bulk Order',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
+            style:
+                GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -3517,7 +3649,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
             children: [
               Text(
                 'Please provide a reason to release the scheduled delivery slot back to capacity.',
-                style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600),
+                style: GoogleFonts.outfit(
+                    fontSize: 13, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -3528,7 +3661,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   hintText: 'e.g., Kitchen fully booked for festival',
                   labelStyle: GoogleFonts.outfit(fontSize: 13),
                   hintStyle: GoogleFonts.outfit(fontSize: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   contentPadding: const EdgeInsets.all(12),
                 ),
               ),
@@ -3537,13 +3671,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
+              child:
+                  Text('Cancel', style: GoogleFonts.outfit(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.danger,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
               onPressed: () {
                 final reason = reasonController.text.trim();
@@ -3556,7 +3693,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               },
               child: Text(
                 'Decline Order',
-                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+                style: GoogleFonts.outfit(
+                    color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -3565,7 +3703,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     );
   }
 
-  Future<void> _incrementBulkBatch(OrderModel order, BulkOrderModel metadata) async {
+  Future<void> _incrementBulkBatch(
+      OrderModel order, BulkOrderModel metadata) async {
     final current = metadata.batchesPacked;
     final total = metadata.totalBatches;
     if (current >= total) return;
@@ -3601,10 +3740,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               Container(
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E2E) : Colors.purple.shade50,
+                  color:
+                      isDark ? const Color(0xFF1E1E2E) : Colors.purple.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.celebration_outlined, size: 52, color: Colors.purple),
+                child: const Icon(Icons.celebration_outlined,
+                    size: 52, color: Colors.purple),
               ),
               const SizedBox(height: 20),
               Text(
@@ -3652,13 +3793,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black26 : Colors.purple.withValues(alpha: 0.08),
+            color:
+                isDark ? Colors.black26 : Colors.purple.withValues(alpha: 0.08),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(
-          color: isDark ? Colors.white10 : Colors.purple.withValues(alpha: 0.15),
+          color:
+              isDark ? Colors.white10 : Colors.purple.withValues(alpha: 0.15),
           width: 1.5,
         ),
       ),
@@ -3682,7 +3825,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: Colors.purple.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
@@ -3699,7 +3843,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         const SizedBox(width: 8),
                         Text(
                           '#${order.id.substring(0, 8).toUpperCase()}',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+                          style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700, fontSize: 13),
                         ),
                       ],
                     ),
@@ -3713,23 +3858,29 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF26263A) : const Color(0xFFF9F7FD),
+                      color: isDark
+                          ? const Color(0xFF26263A)
+                          : const Color(0xFFF9F7FD),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.purple.withValues(alpha: 0.12)),
+                      border: Border.all(
+                          color: Colors.purple.withValues(alpha: 0.12)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.event, size: 16, color: Colors.purple),
+                            const Icon(Icons.event,
+                                size: 16, color: Colors.purple),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                metadata.eventName != null && metadata.eventName!.isNotEmpty
+                                metadata.eventName != null &&
+                                        metadata.eventName!.isNotEmpty
                                     ? '${metadata.eventName} • ${metadata.eventDateDisplay}'
                                     : 'Event Date: ${metadata.eventDateDisplay}',
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                             ),
                           ],
@@ -3737,15 +3888,18 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.access_time, size: 16, color: Colors.purple),
+                            const Icon(Icons.access_time,
+                                size: 16, color: Colors.purple),
                             const SizedBox(width: 6),
                             Text(
                               'Slot: ${metadata.slotDisplay}',
-                              style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600),
+                              style: GoogleFonts.outfit(
+                                  fontSize: 12, color: Colors.grey.shade600),
                             ),
                             const Spacer(),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.purple.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
@@ -3782,10 +3936,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 // Customer info
                 Builder(
                   builder: (context) {
-                    final customerName = metadata?.contactPersonName.isNotEmpty == true
-                        ? metadata!.contactPersonName
-                        : (order.addressLabel ?? 'Customer');
-                    final address = metadata?.venueAddress ?? order.address ?? 'Address not specified';
+                    final customerName =
+                        metadata?.contactPersonName.isNotEmpty == true
+                            ? metadata!.contactPersonName
+                            : (order.addressLabel ?? 'Customer');
+                    final address = metadata?.venueAddress ??
+                        order.address ??
+                        'Address not specified';
                     final phone = (metadata?.contactPersonPhone != null &&
                             metadata!.contactPersonPhone.isNotEmpty)
                         ? metadata.contactPersonPhone
@@ -3796,7 +3953,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         CircleAvatar(
                           radius: 14,
                           backgroundColor: Colors.grey.shade200,
-                          child: const Icon(Icons.person, size: 16, color: Colors.grey),
+                          child: const Icon(Icons.person,
+                              size: 16, color: Colors.grey),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -3805,20 +3963,23 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             children: [
                               Text(
                                 customerName,
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13),
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600, fontSize: 13),
                               ),
                               Text(
                                 address,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500),
+                                style: GoogleFonts.outfit(
+                                    fontSize: 11, color: Colors.grey.shade500),
                               ),
                             ],
                           ),
                         ),
                         if (phone != null && phone.isNotEmpty)
                           IconButton(
-                            icon: const Icon(Icons.phone, size: 18, color: AppColors.primary),
+                            icon: const Icon(Icons.phone,
+                                size: 18, color: AppColors.primary),
                             onPressed: () => _callPhone(phone),
                           ),
                       ],
@@ -3830,7 +3991,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 // Order Items
                 Text(
                   'Catering Items (${order.items.length})',
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12),
+                  style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
                 ...order.items.map((item) => _buildOrderItemRow(
@@ -3847,7 +4009,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.verified, size: 14, color: AppColors.success),
+                        const Icon(Icons.verified,
+                            size: 14, color: AppColors.success),
                         const SizedBox(width: 4),
                         Text(
                           'Prepaid (100% Online)',
@@ -3864,7 +4027,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                       children: [
                         Text(
                           'Total: ₹${order.totalAmount.toStringAsFixed(0)}',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16),
+                          style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800, fontSize: 16),
                         ),
                         if (order.sellerPayout > 0)
                           Text(
@@ -3881,15 +4045,19 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 ),
 
                 // Kitchen Packaging Stepper (if accepted / preparing)
-                if (['bulk_confirmed', 'bulk_preparing', 'bulk_ready'].contains(order.status) &&
+                if (['bulk_confirmed', 'bulk_preparing', 'bulk_ready']
+                        .contains(order.status) &&
                     metadata != null) ...[
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF232338) : Colors.orange.shade50,
+                      color: isDark
+                          ? const Color(0xFF232338)
+                          : Colors.orange.shade50,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3920,10 +4088,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           borderRadius: BorderRadius.circular(6),
                           child: LinearProgressIndicator(
                             value: metadata.totalBatches > 0
-                                ? (metadata.batchesPacked / metadata.totalBatches).clamp(0.0, 1.0)
+                                ? (metadata.batchesPacked /
+                                        metadata.totalBatches)
+                                    .clamp(0.0, 1.0)
                                 : 0.0,
-                            backgroundColor: Colors.orange.withValues(alpha: 0.2),
-                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
+                            backgroundColor:
+                                Colors.orange.withValues(alpha: 0.2),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                                Colors.orange),
                             minHeight: 8,
                           ),
                         ),
@@ -3937,10 +4109,13 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
                               ),
-                              onPressed: () => _incrementBulkBatch(order, metadata),
-                              icon: const Icon(Icons.check_circle_outline, size: 16, color: Colors.white),
+                              onPressed: () =>
+                                  _incrementBulkBatch(order, metadata),
+                              icon: const Icon(Icons.check_circle_outline,
+                                  size: 16, color: Colors.white),
                               label: Text(
                                 'Mark Batch #${metadata.batchesPacked + 1} Packed',
                                 style: GoogleFonts.outfit(
@@ -3955,7 +4130,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              const Icon(Icons.task_alt, size: 14, color: AppColors.success),
+                              const Icon(Icons.task_alt,
+                                  size: 14, color: AppColors.success),
                               const SizedBox(width: 4),
                               Text(
                                 'All batches packed & ready for fleet pickup!',
@@ -4013,7 +4189,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                               context: context,
                               isScrollControlled: true,
                               shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                                borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(24)),
                               ),
                               builder: (_) => SellerBulkModificationSheet(
                                 order: order,
@@ -4065,16 +4242,19 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                     decoration: BoxDecoration(
                       color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                      border:
+                          Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.schedule, size: 16, color: Colors.blue),
+                        const Icon(Icons.schedule,
+                            size: 16, color: Colors.blue),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Modification proposal sent to customer. Awaiting customer confirmation.',
-                            style: GoogleFonts.outfit(fontSize: 12, color: Colors.blue.shade900),
+                            style: GoogleFonts.outfit(
+                                fontSize: 12, color: Colors.blue.shade900),
                           ),
                         ),
                       ],
