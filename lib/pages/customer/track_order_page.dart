@@ -242,7 +242,55 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     super.dispose();
   }
 
-  void _handleBack() {
+  Future<bool> _confirmLeave() async {
+    if (!_hasPartialRejection &&
+        _aggregateStatus != 'awaiting_payment' &&
+        _aggregateStatus != 'awaiting_acceptance') {
+      return true;
+    }
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          _hasPartialRejection
+              ? 'Partial Rejection in Progress'
+              : 'Order Awaiting Action',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          _hasPartialRejection
+              ? 'You have a 5-minute window to replace declined items or continue. If you leave now, the timer will keep running in the background.'
+              : 'Your order is currently waiting for shop confirmation or payment. Are you sure you want to return to the dashboard?',
+          style: GoogleFonts.outfit(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Leave Anyway',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _handleBack() async {
+    final shouldLeave = await _confirmLeave();
+    if (!shouldLeave || !mounted) return;
+
+    if (_hasPartialRejection && _order?.cartGroupId != null) {
+      try {
+        final cartProvider = context.read<CartProvider>();
+        cartProvider.setPendingCartGroupId(_order!.cartGroupId);
+      } catch (_) {}
+    }
+
     final isFirst = ModalRoute.of(context)?.isFirst ?? false;
     if (isFirst) {
       Navigator.pushNamedAndRemoveUntil(
@@ -367,14 +415,18 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
         // Fix 3: Read the resolved flag from SharedPrefs so the panel stays hidden
         // even when this TrackOrderPage is recreated (e.g. banner tap after replacement).
-        if (order.cartGroupId != null && order.cartGroupId!.isNotEmpty) {
-          final resolvedKey = 'partial_rejection_resolved_${order.cartGroupId}';
-          final prefs = await SharedPreferences.getInstance();
-          final resolved = prefs.getBool(resolvedKey) ?? false;
-          if (resolved && mounted && !_partialRejectionResolved) {
-            _partialRejectionResolved = true;
-          }
+        final resolvedKey = 'partial_rejection_resolved_${order.cartGroupId ?? order.id}';
+        final prefs = await SharedPreferences.getInstance();
+        final resolved = prefs.getBool(resolvedKey) ?? false;
+        if (resolved && mounted && !_partialRejectionResolved) {
+          _partialRejectionResolved = true;
         }
+
+        // 100x FIX: Pre-seed _lastKnownRejectedCount from group so sequential rejection logic
+        // does not falsely un-resolve an already-handled rejection on page re-entry!
+        _lastKnownRejectedCount = group
+            .where((o) => _terminalRejectionStatuses.contains(o.status))
+            .length;
 
         // Compute aggregate status for countdowns/payments after reading preferences
         _handleAggregateStatusChange();
@@ -1078,6 +1130,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _autoPayTimer = Timer(Duration(milliseconds: delayMs), () {
             if (mounted &&
                 _aggregateStatus == 'awaiting_payment' &&
+                !_hasPartialRejection &&
                 !_isProcessingPayment &&
                 !_isOpeningRazorpay &&
                 !_paymentAttemptFailed) {
@@ -1120,7 +1173,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       if (!_hasPartialRejection) {
         _decisionCountdownTimer?.cancel();
         _decisionCountdownTimer = null;
-        _partialRejectionResolved = true;
+        if (_wasPartialRejectionTimerStarted) {
+          _partialRejectionResolved = true;
+        }
         _partnersNotifiedOfHolding = false;
         _wasPartialRejectionTimerStarted = false;
         if (_order?.cartGroupId != null) {
@@ -2046,7 +2101,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           shopOrd.shopLng != 0.0) {
         final sLat = shopOrd.shopLat!;
         final sLng = shopOrd.shopLng!;
-        final isRejected = shopOrd.status == 'rejected' || shopOrd.status == 'cancelled';
+        final isRejected = _terminalRejectionStatuses.contains(shopOrd.status);
         markers.add(Marker(
           point: LatLng(sLat, sLng),
           width: 36,
@@ -2239,8 +2294,14 @@ class _TrackOrderPageState extends State<TrackOrderPage>
       }
       setState(() {
         if (_hasPartialRejection) return; // FREEZE TIMER
-        if (order.paymentDeadline != null) {
-          final remaining = order.paymentDeadline!
+        
+        // 100x DYNAMIC DEADLINE PARITY: Resolve latest deadline from active order state,
+        // so when restart_payment_timer runs on replacement, the timer doesn't use stale closure!
+        final currentOrder = _activeGroupOrders.firstWhereOrNull((o) => o.status == 'awaiting_payment') ?? _order;
+        final activeDeadline = currentOrder?.paymentDeadline ?? order.paymentDeadline;
+
+        if (activeDeadline != null) {
+          final remaining = activeDeadline
               .difference(DateTime.now().toUtc())
               .inSeconds;
           _paymentSecondsLeft = remaining;
@@ -2812,14 +2873,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     final isCancelled = _isCancelled;
     final isLive = _aggregateStatus == 'out_for_delivery';
 
-    final isFirst = ModalRoute.of(context)?.isFirst ?? false;
     return PopScope(
-        canPop: !isFirst,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop) {
-            Navigator.pushNamedAndRemoveUntil(
-                context, AppRoutes.customerHome, (route) => false);
-          }
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          await _handleBack();
         },
         child: AnnotatedRegion<SystemUiOverlayStyle>(
           value:
@@ -4384,6 +4442,24 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     // the race window from opening two Razorpay sheets.
                     setState(() => _isProcessingPayment = true);
                     try {
+                      // 100x FIX: Acknowledge partial rejection so backend watchdog is disarmed
+                      // and resolution is persisted across app restarts!
+                      final cartGroupId = _order?.cartGroupId ?? _order?.id;
+                      if (cartGroupId != null) {
+                        try {
+                          await _supabase.rpc('acknowledge_partial_rejection', params: {
+                            'p_cart_group_id': cartGroupId,
+                            'p_resolution': 'proceeded',
+                          });
+                        } catch (_) {}
+
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setBool('partial_rejection_resolved_$cartGroupId', true);
+                          await prefs.remove('partial_rejection_timer_start_$cartGroupId');
+                        } catch (_) {}
+                      }
+
                       if (_order?.cartGroupId != null) {
                         await _supabase.rpc('restart_payment_timer',
                             params: {'p_cart_group_id': _order!.cartGroupId});
@@ -4393,6 +4469,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       // internal guard: `if (_isProcessingPayment) return;`
                       if (mounted) {
                         setState(() {
+                          _partialRejectionResolved = true;
                           _isProcessingPayment = false;
                           _isWaitingForRiderAfterProceed = false;
                         });
@@ -4468,10 +4545,20 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 }
               }
 
-              // Use pushNamed (not pushNamedAndRemoveUntil) so the track page
-              // stays alive — its 5-min timer keeps running in the background.
+              // 100x NAVIGATION FORTRESS: Pop back to existing customerHome route if already on the stack
+              // to prevent infinite stack duplication, or push if this track page is root.
               if (mounted) {
-                Navigator.pushNamed(context, AppRoutes.customerHome);
+                final isFirst = ModalRoute.of(context)?.isFirst ?? false;
+                if (isFirst) {
+                  Navigator.pushNamed(context, AppRoutes.customerHome);
+                } else {
+                  Navigator.popUntil(
+                    context,
+                    (route) =>
+                        route.settings.name == AppRoutes.customerHome ||
+                        route.isFirst,
+                  );
+                }
               }
             },
           ),
@@ -4626,8 +4713,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           Navigator.pop(
                               context); // Close the missing items sheet
                           final sourceOrder = allOrders.firstWhere(
-                              (o) => o.items.any((i) => i.productId == item.productId || i.id == item.id),
-                              orElse: () => (rejectedOrders.isNotEmpty ? rejectedOrders.first : allOrders.first));
+                              (o) => o.items.any((i) => i.id == item.id),
+                              orElse: () => allOrders.firstWhere(
+                                (o) => o.items.any((i) => i.productId == item.productId),
+                                orElse: () => (rejectedOrders.isNotEmpty ? rejectedOrders.first : allOrders.first),
+                              ),
+                          );
                           _showAlternativesDialog(item, sourceOrder);
                         },
                         icon: const Icon(Icons.search,

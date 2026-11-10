@@ -153,14 +153,15 @@ class OrderGroup {
       return 'pickup_in_progress';
     }
 
-    // Check if any is still pending/preparing
-    if (list.any((o) => o.status == 'awaiting_payment')) {
-      return 'awaiting_payment';
-    }
+    // 100x INVERTED STATUS PRIORITY: A group cannot be "awaiting_payment" until ALL shops accept!
+    // If any shop is still awaiting acceptance or pending, the group is awaiting acceptance.
     if (list.any((o) => o.status == 'awaiting_acceptance')) {
       return 'awaiting_acceptance';
     }
     if (list.any((o) => o.status == 'pending')) return 'pending';
+    if (list.any((o) => o.status == 'awaiting_payment')) {
+      return 'awaiting_payment';
+    }
 
     // BUG-OG1 FIX: confirmed and ready_for_pickup were missing — fell through to
     // 'pickup_in_progress' which has no UI handler, showing a blank label on the

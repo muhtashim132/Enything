@@ -1402,3 +1402,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.admin_issue_refund(UUID) TO authenticated, service_role;
+

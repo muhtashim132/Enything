@@ -1037,6 +1037,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               currentStatus == 'ready_for_pickup');
       if (currentStatus != 'awaiting_acceptance' &&
           currentStatus != 'pending' &&
+          currentStatus != 'awaiting_payment' &&
           !isReassignedPaid) {
         if (mounted) {
           _showSnack('⚠️ This order is no longer available to accept.',
@@ -1290,6 +1291,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           'p_reason': 'rider_dropped',
           'p_disputed': status == 'reassign_disputed',
         });
+
+        // 100x FORENSIC DROPPED GROUP SILENCING: Prevent dropped order from immediately re-ringing bell
+        final droppedGroupId = order.cartGroupId ?? order.id;
+        _ignoredAvailableGroups.add(droppedGroupId);
+        _ignoredAvailableGroups.add(order.id);
+        BellAlertService.instance.removePendingOrder(droppedGroupId);
+        BellAlertService.instance.removePendingOrder(order.id);
         // (100x Edge Case: Removed redundant retry_find_rider call.
         // The Postgres trigger `trigger_rider_reorder_push` automatically handles broadcasting
         // when status changes to 'awaiting_acceptance' securely.)
@@ -3611,32 +3619,38 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
             ),
           ],
-          if (order.status == 'confirmed' ||
+          if (order.status == 'awaiting_acceptance' ||
+              order.status == 'awaiting_payment' ||
+              order.status == 'confirmed' ||
               order.status == 'preparing' ||
               order.status == 'ready_for_pickup') ...[
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showDisputeDialog(order),
-                    icon: const Icon(Icons.report_problem_outlined,
-                        color: AppColors.danger, size: 14),
-                    label: Text(
-                        order.status == 'ready_for_pickup'
-                            ? 'Shop Lied'
-                            : 'Report Issue',
-                        style: GoogleFonts.outfit(
-                            color: AppColors.danger, fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.danger),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                if (order.status == 'confirmed' ||
+                    order.status == 'preparing' ||
+                    order.status == 'ready_for_pickup') ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showDisputeDialog(order),
+                      icon: const Icon(Icons.report_problem_outlined,
+                          color: AppColors.danger, size: 14),
+                      label: Text(
+                          order.status == 'ready_for_pickup'
+                              ? 'Shop Lied'
+                              : 'Report Issue',
+                          style: GoogleFonts.outfit(
+                              color: AppColors.danger, fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.danger),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _confirmDropOrder(order),

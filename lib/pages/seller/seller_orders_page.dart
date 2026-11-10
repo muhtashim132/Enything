@@ -2195,7 +2195,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: item.isDeclined
+              color: item.isDeclinedOrSwapped
                   ? Colors.grey.withValues(alpha: 0.15)
                   : AppColors.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
@@ -2205,7 +2205,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
-                color: item.isDeclined ? Colors.grey : AppColors.primary,
+                color: item.isDeclinedOrSwapped ? Colors.grey : AppColors.primary,
               ),
             ),
           ),
@@ -2222,11 +2222,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: item.isDeclined
+                    color: item.isDeclinedOrSwapped
                         ? (isDark ? Colors.white38 : Colors.grey)
                         : (isDark ? Colors.white : AppColors.textPrimary),
                     decoration:
-                        item.isDeclined ? TextDecoration.lineThrough : null,
+                        item.isDeclinedOrSwapped ? TextDecoration.lineThrough : null,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -2248,6 +2248,26 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: AppColors.danger,
+                      ),
+                    ),
+                  ),
+                ] else if (item.isSwapped) ...[
+                  const SizedBox(height: 3),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      '🔄 Swapped with Replacement · Do Not Pack',
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.orange.shade800,
                       ),
                     ),
                   ),
@@ -2302,11 +2322,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                 style: GoogleFonts.outfit(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: item.isDeclined
+                  color: item.isDeclinedOrSwapped
                       ? (isDark ? Colors.white30 : Colors.grey)
                       : (isDark ? Colors.white : AppColors.textPrimary),
                   decoration:
-                      item.isDeclined ? TextDecoration.lineThrough : null,
+                      item.isDeclinedOrSwapped ? TextDecoration.lineThrough : null,
                 ),
               ),
               if (item.isActive &&

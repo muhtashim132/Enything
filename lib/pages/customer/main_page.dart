@@ -537,6 +537,13 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               _homeKey.currentState?.scrollToTopIfNeeded() ?? false;
           if (scrolled) return;
 
+          // 100x NAVIGATION FORTRESS: If this home page was pushed on top of another page (e.g. TrackOrderPage),
+          // allow popping back to that page instead of killing the app!
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+            return;
+          }
+
           final now = DateTime.now();
           if (_lastBackPressTime == null ||
               now.difference(_lastBackPressTime!) >

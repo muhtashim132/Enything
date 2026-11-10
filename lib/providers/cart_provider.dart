@@ -674,7 +674,25 @@ class CartProvider extends ChangeNotifier {
         raw = prefs.getString(_legacyCartKey);
       }
 
-      if (raw == null || raw.isEmpty) return;
+      // 100x FORENSIC RESTORATION: Restore pending replacement fields BEFORE cart check.
+      // After checkout, the cart items list is empty, but replacement state must be preserved across app restarts!
+      _pendingCartGroupId ??= prefs.getString(_pendingCartGroupKey);
+      _pendingOrderIdToCancel ??= prefs.getString(_pendingOrderCancelKey);
+      final rawShops = prefs.getString(_pendingActiveShopsKey);
+      if (rawShops != null && rawShops.isNotEmpty && _activePendingShops.isEmpty) {
+        try {
+          final List decoded = jsonDecode(rawShops);
+          _activePendingShops = decoded
+              .map((m) => ShopModel.fromMap(m as Map<String, dynamic>))
+              .toList();
+        } catch (_) {}
+      }
+      _activePendingWeight = prefs.getDouble(_pendingActiveWeightKey) ?? 0.0;
+
+      if (raw == null || raw.isEmpty) {
+        safeNotifyListeners();
+        return;
+      }
 
       final List<dynamic> list = jsonDecode(raw) as List<dynamic>;
       final parsedList = <CartItem>[];
@@ -698,20 +716,6 @@ class CartProvider extends ChangeNotifier {
       }
       _items.clear();
       _items.addAll(parsedList);
-
-      // Bug E1: Restore pending replacement fields from SharedPrefs
-      _pendingCartGroupId ??= prefs.getString(_pendingCartGroupKey);
-      _pendingOrderIdToCancel ??= prefs.getString(_pendingOrderCancelKey);
-      final rawShops = prefs.getString(_pendingActiveShopsKey);
-      if (rawShops != null && rawShops.isNotEmpty && _activePendingShops.isEmpty) {
-        try {
-          final List decoded = jsonDecode(rawShops);
-          _activePendingShops = decoded
-              .map((m) => ShopModel.fromMap(m as Map<String, dynamic>))
-              .toList();
-        } catch (_) {}
-      }
-      _activePendingWeight = prefs.getDouble(_pendingActiveWeightKey) ?? 0.0;
 
       safeNotifyListeners();
     } catch (e) {

@@ -685,6 +685,8 @@ class OrderItem {
   double get totalPrice => price * quantity;
 
   bool get isDeclined => status == 'declined';
+  bool get isSwapped => status == 'swapped';
+  bool get isDeclinedOrSwapped => status == 'declined' || status == 'swapped';
   bool get isActive => status == 'active';
   bool get isCancelled => status == 'cancelled';
 
