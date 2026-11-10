@@ -100,7 +100,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .inFilter('status', [
         'awaiting_acceptance',
         'awaiting_payment',
+        'pending',
         'pending_pickup',
+        'confirmed',
         'accepted',
         'preparing',
         'ready_for_pickup',
@@ -828,9 +830,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final cartGroupId =
           widget.existingCartGroupId ?? pendingGroupId ?? const Uuid().v4();
 
-      // Clear the pending group ID now that we've consumed it
-      if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
-      if (pendingCancelId != null) cartProvider.setPendingOrderIdToCancel(null);
+      // 100x FIX: Do NOT clear pendingGroupId / pendingCancelId here prematurely.
+      // They are cleared only after place_orders_transaction succeeds so retries keep affinity.
       final numShops = cart.shops.length;
 
       // Acceptance deadline: 3 minutes from now (enforces 3-minute cancellation rule)
@@ -1210,7 +1211,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final notifProv = context.read<NotificationProvider>();
 
         Future(() async {
-          // FIX 1: Exclusive Rider Affinity check for replacement orders
+          // FIX 1: Exclusive Rider Affinity check for replacement orders (exclude dead statuses)
           String? exclusiveRiderId;
           if (isReplacementOrder) {
             try {
@@ -1219,6 +1220,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   .select('delivery_partner_id')
                   .eq('cart_group_id', cartGroupId)
                   .not('delivery_partner_id', 'is', null)
+                  .not(
+                    'status',
+                    'in',
+                    '(delivered,cancelled,seller_rejected,partner_rejected,rider_rejected,verification_failed,shop_dispute_cancel,timeout,failed,returned,refunded,no_rider)',
+                  )
                   .limit(1)
                   .maybeSingle();
               if (activeOrder != null &&
@@ -1290,6 +1296,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           debugPrint('Non-critical: could not write resolved flag: $e');
         }
       }
+
+      // 100x FIX: Clear pending replacement state now that order placement succeeded
+      if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
+      if (pendingCancelId != null) cartProvider.setPendingOrderIdToCancel(null);
 
       // Cleanup (Additive: avoid unmounted leaks and race conditions)
       await cart.clearAsync();

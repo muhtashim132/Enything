@@ -159,6 +159,12 @@ class OrderModel {
   /// Discount amount deducted via coupon (defaults to 0 when no coupon used).
   final double couponDiscount;
 
+  /// Partial refund pending amount queued for customer due to declined items.
+  final double pendingRefundAmount;
+
+  /// Refund status: 'none' | 'processing' | 'completed' | 'failed'
+  final String? refundStatus;
+
   OrderModel({
     required this.id,
     required this.customerId,
@@ -226,6 +232,8 @@ class OrderModel {
     this.heavyOrderFee = 0.0,
     this.couponId,
     this.couponDiscount = 0.0,
+    this.pendingRefundAmount = 0.0,
+    this.refundStatus,
   });
 
   static double _parseDouble(dynamic value) {
@@ -339,6 +347,8 @@ class OrderModel {
       heavyOrderFee: _parseDouble(map['heavy_order_fee']),
       couponId: map['coupon_id']?.toString(),
       couponDiscount: _parseDouble(map['coupon_discount']),
+      pendingRefundAmount: _parseDouble(map['pending_refund_amount']),
+      refundStatus: map['refund_status']?.toString(),
     );
   }
 
@@ -431,6 +441,8 @@ class OrderModel {
     double? heavyOrderFee,
     String? couponId,
     double? couponDiscount,
+    double? pendingRefundAmount,
+    String? refundStatus,
     String? paymentStatus,
     // C2 FIX: These time fields were hardcoded to original — any copyWith update was silently dropped
     DateTime? arrivedAtShopTime,
@@ -512,6 +524,8 @@ class OrderModel {
       heavyOrderFee: heavyOrderFee ?? this.heavyOrderFee,
       couponId: couponId ?? this.couponId,
       couponDiscount: couponDiscount ?? this.couponDiscount,
+      pendingRefundAmount: pendingRefundAmount ?? this.pendingRefundAmount,
+      refundStatus: refundStatus ?? this.refundStatus,
     );
   }
 

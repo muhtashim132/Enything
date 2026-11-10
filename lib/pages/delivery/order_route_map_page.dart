@@ -180,6 +180,16 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       _riderPositionNotifier.value = initialPos;
       _lastRouteFetchPos = initialPos;
     }
+
+    // 100x FIX: Resolve shop coordinates for any newly added replacement stores
+    for (final o in _orders) {
+      if ((o.shopLat == null || o.shopLat == 0.0) &&
+          o.shopId != null &&
+          o.shopId!.isNotEmpty) {
+        _resolveShopCoordinatesForOrder(o.id, o.shopId!);
+      }
+    }
+
     _fetchRoutes();
     _subscribeToOrderChanges();
 
@@ -222,6 +232,36 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     super.dispose();
   }
 
+  // 100x FIX: Asynchronously resolve shop coordinates & phone for newly added replacement stores
+  Future<void> _resolveShopCoordinatesForOrder(
+      String orderId, String shopId) async {
+    try {
+      final res = await _supabase
+          .from('shops')
+          .select('latitude, longitude, phone_number')
+          .eq('id', shopId)
+          .maybeSingle();
+      if (res != null && mounted) {
+        final lat = (res['latitude'] as num?)?.toDouble() ?? 0.0;
+        final lng = (res['longitude'] as num?)?.toDouble() ?? 0.0;
+        final phone = res['phone_number']?.toString();
+        final idx = _orders.indexWhere((o) => o.id == orderId);
+        if (idx != -1) {
+          setState(() {
+            _orders[idx] = _orders[idx].copyWith(
+              shopLat: lat != 0.0 ? lat : _orders[idx].shopLat,
+              shopLng: lng != 0.0 ? lng : _orders[idx].shopLng,
+              shopPhone: phone ?? _orders[idx].shopPhone,
+            );
+          });
+          _fetchRoutes(silent: true);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error resolving shop coordinates: $e');
+    }
+  }
+
   // ── Supabase Realtime Subscription ─────────────────────────────────────────
   void _subscribeToOrderChanges() {
     // 100x FIX (Edge Case 6): Subscribe to ALL distinct cart groups in
@@ -248,7 +288,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       final channel = _supabase
           .channel(channelName)
           .onPostgresChanges(
-            event: PostgresChangeEvent.update,
+            event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'orders',
             filter: PostgresChangeFilter(
@@ -270,6 +310,14 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                 setState(() {
                   _orders.add(updatedOrder);
                 });
+              }
+
+              // 100x FIX: If replacement order arrived without shop coordinates, resolve dynamically
+              if ((updatedOrder.shopLat == null || updatedOrder.shopLat == 0.0) &&
+                  updatedOrder.shopId != null &&
+                  updatedOrder.shopId!.isNotEmpty) {
+                _resolveShopCoordinatesForOrder(
+                    updatedOrder.id, updatedOrder.shopId!);
               }
 
               final activeOrders = _orders
@@ -1164,13 +1212,21 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                 color: AppColors.success,
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w600)),
-                                        Text(
-                                          '₹${(widget.groups != null && widget.groups!.isNotEmpty ? widget.groups!.fold(0.0, (sum, g) => sum + g.totalEarnings) : widget.group.totalEarnings).toStringAsFixed(0)}',
-                                          style: GoogleFonts.outfit(
-                                              color: AppColors.success,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w800),
-                                        ),
+                                        Builder(builder: (context) {
+                                          final activeOrders = _orders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
+                                          final dynamicEarnings = activeOrders.fold(0.0, (sum, o) => sum + o.riderEarnings);
+                                          final fallbackEarnings = (widget.groups != null && widget.groups!.isNotEmpty
+                                              ? widget.groups!.fold(0.0, (sum, g) => sum + g.totalEarnings)
+                                              : widget.group.totalEarnings);
+                                          final displayEarnings = dynamicEarnings > 0 ? dynamicEarnings : fallbackEarnings;
+                                          return Text(
+                                            '₹${displayEarnings.toStringAsFixed(0)}',
+                                            style: GoogleFonts.outfit(
+                                                color: AppColors.success,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800),
+                                          );
+                                        }),
                                       ],
                                     ),
                                   ],

@@ -145,6 +145,14 @@ class OrderGroup {
     }
     if (allPickedUp) return 'picked_up'; // ready to go out for delivery
 
+    // 100x FIX: If ANY sub-order is already picked up or out for delivery, the group
+    // is in the active pickup/delivery phase. Do NOT regress to awaiting_acceptance or pending!
+    final hasInFlightProgress = list.any(
+        (o) => o.status == 'picked_up' || o.status == 'out_for_delivery');
+    if (hasInFlightProgress) {
+      return 'pickup_in_progress';
+    }
+
     // Check if any is still pending/preparing
     if (list.any((o) => o.status == 'awaiting_payment')) {
       return 'awaiting_payment';

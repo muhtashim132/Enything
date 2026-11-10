@@ -275,15 +275,7 @@ class DemographicUtils {
 
   /// Classifies a [ProductModel] into its inherent demographic category.
   static ProductDemographicType classifyProduct(ProductModel product) {
-    final cat = product.category.toLowerCase().trim();
-
-    // 1. Food check (Food categories or food ingredients)
-    if (AppCategories.isFoodCategory(product.category) ||
-        _foodSemanticRegex.hasMatch('${product.name} ${product.description ?? ''} $cat')) {
-      return ProductDemographicType.food;
-    }
-
-    // 2. Explicit Special Tags
+    // 1. Explicit Special Tags take precedence over category heuristics
     if (product.specialTags.contains('#Women')) return ProductDemographicType.women;
     if (product.specialTags.contains('#Men')) return ProductDemographicType.men;
     if (product.specialTags.contains('#Girls')) return ProductDemographicType.girls;
@@ -291,23 +283,31 @@ class DemographicUtils {
     if (product.specialTags.contains('#Kids')) return ProductDemographicType.kids;
     if (product.specialTags.contains('#Unisex')) return ProductDemographicType.unisex;
 
-    // 3. Brand & Semantic Analysis
+    final cat = product.category.toLowerCase().trim();
     final brand = (product.brand ?? '').toLowerCase().trim();
     final text = '${product.name} ${product.description ?? ''} $cat ${product.subCategory ?? ''} ${product.menuCategory ?? ''}'.toLowerCase();
 
-    // A. Check Men-exclusive first (to prevent false women classifications)
+    // 2. Clear Food Ingredients / Edibles Check
+    final isExplicitFoodText = _foodSemanticRegex.hasMatch(text);
+    if (isExplicitFoodText) {
+      return ProductDemographicType.food;
+    }
+
+    // 3. Brand & Semantic Analysis for Lifestyle Items
+    // (Protects apparel, undergarments, cosmetics stocked in supermarkets/grocery from false food exclusion)
     if (_menBrands.contains(brand) || _menSemanticRegex.hasMatch(text)) {
       return ProductDemographicType.men;
     }
-
-    // B. Check Women-exclusive
     if (_womenBrands.contains(brand) || _womenSemanticRegex.hasMatch(text)) {
       return ProductDemographicType.women;
     }
-
-    // C. Check Kids/Baby
     if (_kidsBrands.contains(brand) || _kidsSemanticRegex.hasMatch(text)) {
       return ProductDemographicType.kids;
+    }
+
+    // 4. If category is Food, and no explicit apparel/cosmetic signal was found, it is Food
+    if (AppCategories.isFoodCategory(product.category)) {
+      return ProductDemographicType.food;
     }
 
     // D. Inherent Category Attributes
@@ -355,13 +355,7 @@ class DemographicUtils {
 
   /// Classifies a raw product Map into its inherent demographic category.
   static ProductDemographicType classifyRawProduct(Map<String, dynamic> product) {
-    final cat = (product['category'] as String? ?? '').toLowerCase().trim();
-
-    if (AppCategories.isFoodCategory(cat) ||
-        _foodSemanticRegex.hasMatch('${product['name']} ${product['description'] ?? ''} $cat')) {
-      return ProductDemographicType.food;
-    }
-
+    // 1. Explicit Special Tags take precedence over category heuristics
     final tagsRaw = product['special_tags'];
     final List<String> tags = (tagsRaw is List)
         ? tagsRaw.map((t) => t.toString().trim()).toList()
@@ -374,9 +368,18 @@ class DemographicUtils {
     if (tags.contains('#Kids')) return ProductDemographicType.kids;
     if (tags.contains('#Unisex')) return ProductDemographicType.unisex;
 
+    final cat = (product['category'] as String? ?? '').toLowerCase().trim();
     final brand = (product['brand'] as String? ?? '').toLowerCase().trim();
     final text = '${product['name']} ${product['description'] ?? ''} $cat ${product['sub_category'] ?? ''} ${product['menu_category'] ?? ''}'.toLowerCase();
 
+    // 2. Clear Food Ingredients / Edibles Check
+    final isExplicitFoodText = _foodSemanticRegex.hasMatch(text);
+    if (isExplicitFoodText) {
+      return ProductDemographicType.food;
+    }
+
+    // 3. Brand & Semantic Analysis for Lifestyle Items
+    // (Protects apparel, undergarments, cosmetics stocked in supermarkets/grocery from false food exclusion)
     if (_menBrands.contains(brand) || _menSemanticRegex.hasMatch(text)) {
       return ProductDemographicType.men;
     }
@@ -385,6 +388,11 @@ class DemographicUtils {
     }
     if (_kidsBrands.contains(brand) || _kidsSemanticRegex.hasMatch(text)) {
       return ProductDemographicType.kids;
+    }
+
+    // 4. If category is Food, and no explicit apparel/cosmetic signal was found, it is Food
+    if (AppCategories.isFoodCategory(cat)) {
+      return ProductDemographicType.food;
     }
     if (cat.contains('cosmetic') || cat.contains('beauty') || cat.contains('salon')) {
       if (text.contains('lipstick') ||

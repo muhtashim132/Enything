@@ -769,13 +769,32 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                 name: o.items.isNotEmpty ? (o.items.first.productName) : 'Active Shop',
                 shopType: 'General',
                 address: o.address ?? '',
-                location: LatLng(o.deliveryLat ?? 0.0, o.deliveryLng ?? 0.0),
+                location: LatLng(
+                    o.shopLat != null && o.shopLat != 0.0
+                        ? o.shopLat!
+                        : (o.deliveryLat ?? 0.0),
+                    o.shopLng != null && o.shopLng != 0.0
+                        ? o.shopLng!
+                        : (o.deliveryLng ?? 0.0)),
                 category: 'General',
                 categories: const [],
                 isActive: true,
               ))
           .toList();
     }
+  }
+
+  /// 100x Weight Fortress: Computes total active weight in kg across all active sibling orders
+  double _computeGroupActiveWeight() {
+    double total = 0.0;
+    for (final o in _activeGroupOrders) {
+      for (final item in o.items) {
+        if (item.status == 'active') {
+          total += item.weightKg * item.quantity;
+        }
+      }
+    }
+    return total;
   }
 
   double _computeGroupTotalAmount() =>
@@ -4080,6 +4099,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     }
     final isItemLevelOnly = declinedItemsAcrossAll.isNotEmpty && rejectedOrders.isEmpty;
     final totalActiveGrand = activeOrders.fold<double>(0, (sum, o) => sum + o.grandTotal);
+    final totalPendingRefund = allOrders.fold<double>(0, (sum, o) => sum + o.pendingRefundAmount);
     final isPaidOrder = ['confirmed', 'preparing', 'ready_for_pickup'].contains(_aggregateStatus);
 
     return Container(
@@ -4156,7 +4176,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             label: _aggregateStatus == 'awaiting_payment'
                 ? '✅ Proceed & Pay ₹${totalActiveGrand.toStringAsFixed(0)}'
                 : (isPaidOrder
-                    ? '✅ Acknowledge & Continue Delivery'
+                    ? (totalPendingRefund > 0
+                        ? '✅ Proceed & Refund ₹${totalPendingRefund.toStringAsFixed(0)}'
+                        : '✅ Acknowledge & Continue Delivery')
                     : (hasReadyToPayShops
                         ? '✅ Pay Now (Skip Waiting Shops)'
                         : (hasSellerAcceptedShops
@@ -4165,7 +4187,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             subtitle: _aggregateStatus == 'awaiting_payment'
                 ? 'Continue and pay for the remaining active items'
                 : (isPaidOrder
-                    ? 'Refund for unavailable items will be automatically processed'
+                    ? (totalPendingRefund > 0
+                        ? 'Remaining items are being prepared. ₹${totalPendingRefund.toStringAsFixed(0)} refund will be automatically credited.'
+                        : 'Refund for unavailable items will be automatically processed')
                     : (hasReadyToPayShops
                         ? 'Cancel pending shops and pay for accepted items'
                         : (hasSellerAcceptedShops
@@ -4431,7 +4455,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               }
 
               final activeShops = await _fetchActivePendingShops();
-              cartProvider.setActivePendingShops(activeShops);
+              cartProvider.setActivePendingShops(
+                  activeShops, _computeGroupActiveWeight());
 
               // 100x FIX: Bump deadlines immediately so active shops don't expire while user is browsing
               if (_order?.cartGroupId != null) {
@@ -4478,7 +4503,8 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         cartProvider.setPendingOrderIdToCancel(rejectedOrders.first.id);
       }
       final activeShops = await _fetchActivePendingShops();
-      cartProvider.setActivePendingShops(activeShops);
+      cartProvider.setActivePendingShops(
+          activeShops, _computeGroupActiveWeight());
     } catch (_) {}
 
     if (!mounted) return;
@@ -6359,6 +6385,46 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             'p_replacement_variant_name': null,
             'p_quantity': oldItem.quantity,
           });
+
+          // 100x FIX: Dispatch real-time push alerts to kitchen & rider
+          if (mounted) {
+            try {
+              final notifProv = context.read<NotificationProvider>();
+              final shopData = await _supabase
+                  .from('shops')
+                  .select('seller_id')
+                  .eq('id', rejectedOrder.shopId ?? '')
+                  .maybeSingle();
+              if (shopData != null && shopData['seller_id'] != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: shopData['seller_id'] as String,
+                  title: '🔄 Item Swapped in Order!',
+                  body:
+                      'Customer replaced ${oldItem.productName} with ${productModel.name} (x${oldItem.quantity}).',
+                  data: {
+                    'role': 'seller',
+                    'orderId': rejectedOrder.id,
+                    'action': 'item_swapped',
+                  },
+                );
+              }
+              if (rejectedOrder.deliveryPartnerId != null) {
+                notifProv.sendBackgroundPush(
+                  targetUserId: rejectedOrder.deliveryPartnerId!,
+                  title: '📦 Order Items Updated',
+                  body:
+                      'Customer replaced ${oldItem.productName} with ${productModel.name}.',
+                  data: {
+                    'role': 'delivery',
+                    'orderId': rejectedOrder.id,
+                    'action': 'item_swapped',
+                  },
+                );
+              }
+            } catch (notifErr) {
+              debugPrint('Failed to send swap notifications: $notifErr');
+            }
+          }
 
           if (mounted) {
             AppToast.show(

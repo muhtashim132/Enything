@@ -896,6 +896,19 @@ class _OrderCardState extends State<_OrderCard> {
             _InfoCell(
                 label: 'Grand Total', value: '₹${amount.toStringAsFixed(2)}'),
           ]),
+          if (parseNum(o['pending_refund_amount']) > 0) ...[
+            const SizedBox(height: 10),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _InfoCell(
+                  label: 'Pending Refund',
+                  value:
+                      '₹${parseNum(o['pending_refund_amount']).toStringAsFixed(2)} (${parseStr(o['refund_status'], 'processing')})'),
+              _InfoCell(
+                  label: 'Gross Turnover',
+                  value:
+                      '₹${parseNum(o['grand_total_collected']).toStringAsFixed(2)}'),
+            ]),
+          ],
 
           const SizedBox(height: 16),
 
@@ -926,26 +939,67 @@ class _OrderCardState extends State<_OrderCard> {
               const SizedBox(width: 10),
             ],
             if (context.read<RbacProvider>().can('orders.refund') ||
-                context.read<RbacProvider>().isSuperAdmin)
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _actioning
-                      ? null
-                      : () => _issueRefund(o['id'].toString(), amount),
-                  icon: const Icon(Icons.undo_rounded, size: 16),
-                  label: Text('Issue Refund',
-                      style: AdminStyles.caption(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdminColors.warning,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                context.read<RbacProvider>().isSuperAdmin) ...[
+              Builder(builder: (context) {
+                final pendingRefund = parseNum(o['pending_refund_amount']);
+                final isPartialPending = pendingRefund > 0;
+                return Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _actioning
+                        ? null
+                        : () => _issueRefund(
+                              o['id'].toString(),
+                              amount,
+                              isPartialPending ? pendingRefund : null,
+                            ),
+                    icon: const Icon(Icons.undo_rounded, size: 16),
+                    label: Text(
+                        isPartialPending
+                            ? 'Refund ₹${pendingRefund.toStringAsFixed(0)}'
+                            : 'Issue Refund',
+                        style: AdminStyles.caption(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isPartialPending
+                          ? const Color(0xFFD97706)
+                          : AdminColors.warning,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
                   ),
+                );
+              }),
+            ],
+          ]),
+          if (o['cart_group_id'] != null &&
+              (status == 'seller_rejected' ||
+                  (status == 'awaiting_acceptance' &&
+                      parseNum(o['pending_refund_amount']) > 0))) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _actioning
+                    ? null
+                    : () => _proxyAcknowledgePartialRejection(
+                        o['cart_group_id'].toString()),
+                icon: const Icon(Icons.verified_user_rounded,
+                    size: 16, color: Colors.white),
+                label: Text('Proxy Acknowledge Partial Rejection',
+                    style: AdminStyles.caption(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
-          ]),
+            ),
+          ],
         ],
       ),
     );
@@ -1732,15 +1786,22 @@ class _OrderCardState extends State<_OrderCard> {
     if (mounted) setState(() => _actioning = false);
   }
 
-  Future<void> _issueRefund(String orderId, double amount) async {
+  Future<void> _issueRefund(String orderId, double amount,
+      [double? partialAmount]) async {
+    final refundAmount =
+        (partialAmount != null && partialAmount > 0) ? partialAmount : amount;
+    final isPartial = partialAmount != null && partialAmount > 0;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AdminColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Issue Refund', style: AdminStyles.title()),
+        title: Text(isPartial ? 'Process Partial Refund' : 'Issue Refund',
+            style: AdminStyles.title()),
         content: Text(
-            'Are you sure you want to issue a refund of ₹${amount.toStringAsFixed(0)} for this order?',
+            isPartial
+                ? 'Are you sure you want to process the queued partial refund of ₹${refundAmount.toStringAsFixed(0)} for declined items in this order?'
+                : 'Are you sure you want to issue a refund of ₹${refundAmount.toStringAsFixed(0)} for this order?',
             style:
                 AdminStyles.body(size: 14, color: AdminColors.textSecondary)),
         actions: [
@@ -1753,7 +1814,8 @@ class _OrderCardState extends State<_OrderCard> {
                   backgroundColor: AdminColors.warning,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12))),
-              child: Text('Confirm Refund',
+              child: Text(
+                  isPartial ? 'Confirm Partial Refund' : 'Confirm Refund',
                   style: AdminStyles.body(size: 13, color: Colors.white))),
         ],
       ),
@@ -1771,7 +1833,7 @@ class _OrderCardState extends State<_OrderCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Refund of ₹${amount.toStringAsFixed(0)} queued. Status changed to processing.'),
+              'Refund of ₹${refundAmount.toStringAsFixed(0)} queued. Status changed to processing.'),
           backgroundColor: AdminColors.success,
           behavior: SnackBarBehavior.floating,
         ));
@@ -1780,6 +1842,69 @@ class _OrderCardState extends State<_OrderCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error issuing refund: $e'),
+          backgroundColor: AdminColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+    if (mounted) setState(() => _actioning = false);
+  }
+
+  Future<void> _proxyAcknowledgePartialRejection(String cartGroupId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AdminColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Proxy Acknowledge Partial Rejection',
+            style: AdminStyles.title()),
+        content: Text(
+          'Acknowledge partial order rejection on behalf of the customer? This permanently disarms the 5-minute auto-cancel timer and unblocks surviving orders for preparation and delivery.',
+          style: AdminStyles.body(size: 14, color: AdminColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: AdminStyles.body(size: 13)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Confirm Proceed',
+                style: AdminStyles.body(size: 13, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() => _actioning = true);
+    try {
+      await _db.rpc('admin_proxy_acknowledge_partial_rejection', params: {
+        'p_cart_group_id': cartGroupId,
+        'p_action': 'proceeded',
+      });
+
+      await widget.onRefresh();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Partial rejection acknowledged. Remaining stores unblocked!'),
+          backgroundColor: AdminColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error acknowledging partial rejection: $e'),
           backgroundColor: AdminColors.danger,
           behavior: SnackBarBehavior.floating,
         ));
