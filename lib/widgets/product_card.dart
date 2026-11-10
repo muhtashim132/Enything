@@ -418,6 +418,7 @@ class _ProductCardState extends State<ProductCard> {
                       Flexible(
                         child: SingleChildScrollView(
                           physics: const NeverScrollableScrollPhysics(),
+                          clipBehavior: Clip.none,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
@@ -425,7 +426,7 @@ class _ProductCardState extends State<ProductCard> {
                           // Brand & Unit/Weight row
                           if (hasBrand || weightLabel.isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 1),
+                              padding: const EdgeInsets.only(bottom: 2),
                               child: Row(
                                 children: [
                                   if (hasBrand)
@@ -499,7 +500,7 @@ class _ProductCardState extends State<ProductCard> {
                                       ? Colors.white
                                       : const Color(0xFF1A1A2E),
                                   letterSpacing: -0.2,
-                                  height: 1.1,
+                                  height: 1.15,
                                 ),
                                 maxLines: hasPharmacySalt ? 1 : 2,
                                 overflow: TextOverflow.ellipsis,
@@ -513,7 +514,7 @@ class _ProductCardState extends State<ProductCard> {
                               product.description != null &&
                               product.description!.trim().isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(top: 1),
+                              padding: const EdgeInsets.only(top: 1.5),
                               child: Text(
                                 product.description!.trim(),
                                 style: GoogleFonts.outfit(
@@ -531,7 +532,7 @@ class _ProductCardState extends State<ProductCard> {
 
                           // Rating & Shop Distance row
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(top: 2.5),
                             child: Row(
                               children: [
                                 const Icon(Icons.star_rounded,

@@ -37,3 +37,4 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_nearby_department_product_counts(uuid[]) TO authenticated, anon;
+

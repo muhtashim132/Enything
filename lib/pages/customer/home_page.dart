@@ -64,6 +64,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   static List<ShopModel>? _cachedShops;
   static List<ProductModel>? _cachedProducts;
   static Map<String, ShopModel>? _cachedProductShops;
+  static Map<String, int>? _cachedDepartmentProductCounts;
   static LatLng? _cachedLocation;
   static DateTime? _cacheTimestamp;
   static const _cacheTtl = Duration(minutes: 5);
@@ -2268,6 +2269,72 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     ],
   };
 
+  /// 100x Department Catalog Inventory Parity Counter
+  /// Queries exact total active products in database for nearby shops by department,
+  /// perfectly mirroring the query pattern and shop matching of AllListingsPage and
+  /// CategoryProductsPage so that dashboard badges match opened catalog views 100%.
+  Future<Map<String, int>> _fetchDepartmentTotalCounts(List<ShopModel> nearbyShops) async {
+    final Map<String, int> counts = {};
+    if (nearbyShops.isEmpty) return counts;
+
+    final departments = <String, List<String>>{
+      'Food': _tabCategories['Food'] ?? ['Food'],
+      'Pharmacy': _tabCategories['Pharmacy'] ?? ['Pharmacy', 'Medical Store'],
+      'Cosmetics': _tabCategories['Cosmetics'] ?? ['Cosmetics & Beauty'],
+      'Stationery': _tabCategories['Stationery'] ?? ['Stationery'],
+      'Grocery': _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? ['Grocery'],
+      'Clothing': _tabCategories['Clothing'] ?? ['Clothing'],
+    };
+
+    try {
+      await Future.wait(
+        departments.entries.map((entry) async {
+          final deptKey = entry.key;
+          final categories = entry.value;
+          final lowerCats = categories.map((c) => c.trim().toLowerCase()).toSet();
+
+          // Exactly match the shop filtering logic of _openCategoryListing:
+          final matchingShopIds = nearbyShops.where((s) {
+            if (lowerCats.contains(s.category.trim().toLowerCase())) return true;
+            if (s.categories.any((c) => lowerCats.contains(c.trim().toLowerCase()))) return true;
+            if (lowerCats.any((t) => t.contains('cosmetic') || t.contains('beauty') || t.contains('grocery'))) {
+              final sCat = s.category.trim().toLowerCase();
+              if (sCat.contains('supermarket') || sCat.contains('hypermarket') || sCat.contains('departmental')) {
+                return true;
+              }
+            }
+            return false;
+          }).map((s) => s.id).toList();
+
+          if (matchingShopIds.isEmpty) {
+            counts[deptKey] = 0;
+            return;
+          }
+
+          try {
+            // Direct PostgREST table query — exactly matches all_listings_page.dart:495-508
+            final countResp = await _supabase
+                .from('products')
+                .select('id')
+                .inFilter('shop_id', matchingShopIds)
+                .inFilter('category', categories)
+                .eq('is_deleted', false)
+                .eq('is_available', true);
+
+            if (countResp is List) {
+              counts[deptKey] = countResp.length;
+            }
+          } catch (e) {
+            debugPrint('Failed to count department $deptKey: $e');
+          }
+        }),
+      );
+    } catch (e) {
+      debugPrint('Error in _fetchDepartmentTotalCounts: $e');
+    }
+    return counts;
+  }
+
   /// Fetch ALL active shops & products, sorted by rating then total_orders.
   /// Used on initial load when no category tab is selected.
   Future<void> _loadAllData() async {
@@ -2306,6 +2373,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _shops = _cachedShops!;
             _products = _cachedProducts!;
             _productShops = _cachedProductShops!;
+            _departmentProductCounts = _cachedDepartmentProductCounts ?? {};
             _isLoading = false;
           });
         }
@@ -2571,25 +2639,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Query exact total available products across nearby shops by department
         // to ensure section header badges on the dashboard reflect true catalog
         // inventory matching AllListingsPage and CategoryProductsPage.
-        Map<String, int> deptCounts = {};
-        if (nearby.isNotEmpty) {
-          try {
-            final nearbyIds = nearby.map((s) => s.id).toList();
-            final countRows = await _supabase.rpc(
-              'get_nearby_department_product_counts',
-              params: {'p_shop_ids': nearbyIds},
-            );
-            if (countRows is List) {
-              for (final r in countRows) {
-                final d = r['department']?.toString();
-                final c = (r['total_count'] as num?)?.toInt() ?? 0;
-                if (d != null) deptCounts[d] = c;
-              }
-            }
-          } catch (countErr) {
-            debugPrint('_loadAllData: get_nearby_department_product_counts error: $countErr');
-          }
-        }
+        final deptCounts = await _fetchDepartmentTotalCounts(nearby);
+        _cachedDepartmentProductCounts = deptCounts;
 
         _invalidateSortMemo();
         // Atomic update: swap data and clear loading in a single setState
@@ -3969,7 +4020,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 282,
+                                      height: 300,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         physics: const BouncingScrollPhysics(),
@@ -3983,7 +4034,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                               padding: const EdgeInsets.only(
                                                   right: 10),
                                               child: ProductCard(
-                                                  product: p, shop: shop),
+                                                product: p,
+                                                shop: shop,
+                                                imageAspectRatio: 1.12,
+                                              ),
                                             ),
                                           );
                                         },
@@ -7079,7 +7133,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final carouselItems = products.take(12).toList();
 
     return SizedBox(
-      height: 282,
+      height: 300,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -7102,6 +7156,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   child: ProductCard(
                     product: product,
                     shop: shop,
+                    imageAspectRatio: 1.12,
                   ),
                 ),
               ),
