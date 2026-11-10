@@ -82,13 +82,13 @@ void main() {
 
       expect(bulkOrder.isBulkOrder, true);
       expect(bulkOrder.isInstantOrder, false);
-      expect(bulkOrder.statusDisplay, 'Preparing');
+      expect(bulkOrder.statusDisplay, 'Kitchen Cooking');
 
       final readyOrder = bulkOrder.copyWith(status: 'bulk_ready');
-      expect(readyOrder.statusDisplay, 'Ready for Pickup');
+      expect(readyOrder.statusDisplay, 'Feast Prepared & Packed');
 
       final dispatchedOrder = bulkOrder.copyWith(status: 'bulk_dispatched');
-      expect(dispatchedOrder.statusDisplay, 'Out for Delivery (Fleet)');
+      expect(dispatchedOrder.statusDisplay, 'Out for Delivery 🚗');
 
       final instantOrder = bulkOrder.copyWith(orderType: 'instant', status: 'preparing');
       expect(instantOrder.isBulkOrder, false);

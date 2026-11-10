@@ -235,9 +235,10 @@ Deno.serve(async (req: Request) => {
 
     // ── 4. Handle refund.created / refund.processed ───────────────────────────
     if (eventType === "refund.created" || eventType === "refund.processed") {
-      const refund    = payload?.refund?.entity;
-      const paymentId = refund?.payment_id;
-      const refundId  = refund?.id;
+      const refund      = payload?.refund?.entity;
+      const paymentId   = refund?.payment_id;
+      const refundId    = refund?.id;
+      const noteOrderId = refund?.notes?.order_id || refund?.notes?.orderId;
 
       if (paymentId && refundId) {
         // Fetch all orders associated with this payment (multi-shop support)
@@ -247,11 +248,16 @@ Deno.serve(async (req: Request) => {
           .eq("razorpay_payment_id", paymentId);
 
         if (orders && orders.length > 0) {
-          // Update all orders that haven't been marked as refunded yet
-          const terminalStates = ['cancelled', 'seller_rejected', 'payment_failed', 'timeout', 'shop_dispute_cancel', 'verification_failed'];
-          const idsToUpdate = orders
-            .filter((o: any) => !o.refund_id && (o.refund_status === 'processing' || terminalStates.includes(o.status)))
-            .map((o: any) => o.id);
+          const terminalStates = ['cancelled', 'seller_rejected', 'partner_rejected', 'rider_rejected', 'payment_failed', 'timeout', 'shop_dispute_cancel', 'verification_failed'];
+          
+          // 100x MULTI-SHOP ISOLATION:
+          // If the refund note specifically tags an order_id, update only that order.
+          // Otherwise, update eligible terminal/processing orders.
+          const idsToUpdate = noteOrderId
+            ? orders.filter((o: any) => o.id === noteOrderId && o.refund_status !== "processed").map((o: any) => o.id)
+            : orders
+                .filter((o: any) => !o.refund_id && (o.refund_status === 'processing' || terminalStates.includes(o.status)))
+                .map((o: any) => o.id);
           
           if (idsToUpdate.length > 0) {
             await supabaseAdmin
@@ -261,7 +267,7 @@ Deno.serve(async (req: Request) => {
 
             console.log(`Refund ${refundId} logged for ${idsToUpdate.length} orders via webhook.`);
           } else {
-            console.log(`Refund ${refundId} already logged for all orders associated with payment ${paymentId}.`);
+            console.log(`Refund ${refundId} already logged or no matching un-refunded orders found for payment ${paymentId}.`);
           }
         }
       }
@@ -269,12 +275,15 @@ Deno.serve(async (req: Request) => {
 
     // ── 5. Handle refund.failed ──────────────────────────────────────────────
     if (eventType === "refund.failed") {
-      const refund    = payload?.refund?.entity;
-      const paymentId = refund?.payment_id;
-      const errorDesc = refund?.error_description ?? "Refund processing failed on payment gateway.";
+      const refund      = payload?.refund?.entity;
+      const paymentId   = refund?.payment_id;
+      const noteOrderId = refund?.notes?.order_id || refund?.notes?.orderId;
+      const errorDesc   = refund?.error_description ?? "Refund processing failed on payment gateway.";
 
       if (paymentId) {
-        await supabaseAdmin
+        const terminalStates = ['cancelled', 'seller_rejected', 'partner_rejected', 'rider_rejected', 'payment_failed', 'timeout', 'shop_dispute_cancel', 'verification_failed'];
+        
+        let query = supabaseAdmin
           .from("orders")
           .update({
             refund_status: "failed",
@@ -282,7 +291,15 @@ Deno.serve(async (req: Request) => {
           })
           .eq("razorpay_payment_id", paymentId);
 
-        console.log(`Refund marked as failed for payment ${paymentId}.`);
+        // 100x MULTI-SHOP IMMUNITY: Never pollute active or delivered sibling orders with refund failures!
+        if (noteOrderId) {
+          query = query.eq("id", noteOrderId);
+        } else {
+          query = query.in("status", terminalStates);
+        }
+
+        await query;
+        console.log(`Refund marked as failed for payment ${paymentId}${noteOrderId ? ` (Order ${noteOrderId})` : ""}.`);
       }
     }
 

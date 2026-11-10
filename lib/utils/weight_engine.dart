@@ -11,6 +11,8 @@ class WeightEngine {
     required ProductModel product,
     ProductVariant? selectedVariant,
   }) {
+    final packMultiplier = _extractPackMultiplier(product.name);
+
     // ── Tier 1: Explicit Seller Weight Input & Unit Conversion ─────────────
     if (product.weightPerUnit != null && product.weightPerUnit! > 0) {
       final explicitKg = _normalizeExplicitWeight(
@@ -24,16 +26,14 @@ class WeightEngine {
         if (selectedVariant != null) {
           final vWeight = _extractWeightFromTitle(selectedVariant.name, product.category);
           if (vWeight != null && vWeight > 0) {
-            return vWeight.clamp(0.0001, 100.0);
+            return (vWeight * packMultiplier).clamp(0.0001, 100.0);
           }
           final factor = _variantPortionOrSizeFactor(selectedVariant.name);
-          return (explicitKg * factor).clamp(0.0001, 100.0);
+          return (explicitKg * factor * packMultiplier).clamp(0.0001, 100.0);
         }
-        return explicitKg.clamp(0.0001, 100.0);
+        return (explicitKg * packMultiplier).clamp(0.0001, 100.0);
       }
     }
-
-    final packMultiplier = _extractPackMultiplier(product.name);
 
     // ── Tier 2: Check if variant itself has explicit weight (e.g. "250g", "1 Litre")
     if (selectedVariant != null) {

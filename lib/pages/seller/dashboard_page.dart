@@ -74,13 +74,27 @@ class _SellerDashboardPageState extends State<SellerDashboardPage>
     _fcmSub = FirebaseMessaging.onMessage.listen((message) {
       if (mounted) {
         _debouncedLoadStats();
-        final orderId = message.data['order_id'];
         final action = message.data['action'];
         final title =
             message.notification?.title ?? message.data['title'] ?? '';
+        final body =
+            message.notification?.body ?? message.data['body'] ?? '';
+
+        if (action == 'item_swapped' ||
+            title.toLowerCase().contains('item replaced') ||
+            title.toLowerCase().contains('item swapped')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🔄 $title: $body'),
+              backgroundColor: Colors.blueAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
         final isNewOrder = action == 'new_order' ||
-            title.toLowerCase().contains('new order') ||
-            (orderId != null && orderId.toString().isNotEmpty);
+            title.toLowerCase().contains('new order');
         if (isNewOrder && ModalRoute.of(context)?.isCurrent == true) {
           Navigator.pushNamed(context, AppRoutes.sellerOrders);
         }

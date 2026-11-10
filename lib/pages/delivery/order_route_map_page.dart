@@ -60,7 +60,8 @@ class UnifiedShopStop {
   });
 
   String get aggregateStatus {
-    final active = orders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
+    final active =
+        orders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
     if (active.isEmpty) return 'cancelled';
     if (active.every((o) =>
         o.status == 'picked_up' ||
@@ -68,7 +69,8 @@ class UnifiedShopStop {
         o.status == 'delivered')) {
       return 'picked_up';
     }
-    if (active.any((o) => o.status == 'ready_for_pickup')) return 'ready_for_pickup';
+    if (active.any((o) => o.status == 'ready_for_pickup'))
+      return 'ready_for_pickup';
     if (active.any((o) => o.status == 'preparing')) return 'preparing';
     return active.first.status;
   }
@@ -209,8 +211,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
         // Dynamically re-evaluate routes if rider moved > 60m along the trip
         if (_lastRouteFetchPos == null ||
-            const Distance()
-                    .as(LengthUnit.Meter, _lastRouteFetchPos!, newPos) >
+            const Distance().as(LengthUnit.Meter, _lastRouteFetchPos!, newPos) >
                 60) {
           _lastRouteFetchPos = newPos;
           _fetchRoutes(silent: true);
@@ -266,9 +267,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   void _subscribeToOrderChanges() {
     // 100x FIX (Edge Case 6): Subscribe to ALL distinct cart groups in
     // multi-customer master route mode, not just the primary group.
-    final groupsToSubscribe = (widget.groups != null && widget.groups!.isNotEmpty)
-        ? widget.groups!
-        : [widget.group];
+    final groupsToSubscribe =
+        (widget.groups != null && widget.groups!.isNotEmpty)
+            ? widget.groups!
+            : [widget.group];
 
     final subscribedGroupIds = <String>{};
 
@@ -312,8 +314,12 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                 });
               }
 
+              // 100x FIX: Dynamically refresh order items for fresh replacement and swapped items
+              _refreshOrderItems(updatedOrder.id);
+
               // 100x FIX: If replacement order arrived without shop coordinates, resolve dynamically
-              if ((updatedOrder.shopLat == null || updatedOrder.shopLat == 0.0) &&
+              if ((updatedOrder.shopLat == null ||
+                      updatedOrder.shopLat == 0.0) &&
                   updatedOrder.shopId != null &&
                   updatedOrder.shopId!.isNotEmpty) {
                 _resolveShopCoordinatesForOrder(
@@ -330,7 +336,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                   updatedOrder.status == 'cancelled') {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('⚠️ A stop was cancelled or disputed. Recalculating route...'),
+                    content: const Text(
+                        '⚠️ A stop was cancelled or disputed. Recalculating route...'),
                     backgroundColor: Colors.orange.shade800,
                   ),
                 );
@@ -340,7 +347,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
               if (activeOrders.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Order was cancelled or rejected by all shops.'),
+                    content:
+                        Text('Order was cancelled or rejected by all shops.'),
                     backgroundColor: AppColors.danger,
                   ),
                 );
@@ -369,6 +377,24 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     }
   }
 
+  /// 100x FIX: Asynchronously refresh order_items so swapped or replacement items are immediately visible.
+  Future<void> _refreshOrderItems(String orderId) async {
+    try {
+      final res =
+          await _supabase.from('order_items').select().eq('order_id', orderId);
+      if (!mounted) return;
+      final items = (res as List).map((m) => OrderItem.fromMap(m)).toList();
+      final idx = _orders.indexWhere((o) => o.id == orderId);
+      if (idx != -1) {
+        setState(() {
+          _orders[idx].items = items;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refreshing order items for rider route map: $e');
+    }
+  }
+
   /// 100x FIX: Active customer groups excluding completely cancelled/rejected groups.
   List<OrderGroup> get _activeCustomerGroups {
     final allGroups = (widget.groups != null && widget.groups!.isNotEmpty)
@@ -386,7 +412,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     if (_orderedCustomerGroups.isNotEmpty) {
       final active = _activeCustomerGroups;
       final activeIds = active.map((g) => g.groupId).toSet();
-      final list = _orderedCustomerGroups.where((g) => activeIds.contains(g.groupId)).toList();
+      final list = _orderedCustomerGroups
+          .where((g) => activeIds.contains(g.groupId))
+          .toList();
       final presentIds = list.map((g) => g.groupId).toSet();
       for (final g in active) {
         if (!presentIds.contains(g.groupId)) list.add(g);
@@ -398,9 +426,11 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   /// 100x FIX: True only if all sub-orders of this group are terminal cancelled/rejected.
   bool _isGroupCancelled(OrderGroup g) {
-    final groupOrders = _orders.where((o) =>
-        (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
-        (o.cartGroupId == null && o.id == g.primaryOrder.id)).toList();
+    final groupOrders = _orders
+        .where((o) =>
+            (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
+            (o.cartGroupId == null && o.id == g.primaryOrder.id))
+        .toList();
     if (groupOrders.isEmpty) return true;
     return groupOrders.every((o) =>
         o.status == 'rejected' ||
@@ -412,21 +442,25 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
   /// 100x FIX: Group is delivered ONLY if active orders are non-empty and all are 'delivered'.
   bool _isGroupDelivered(OrderGroup g) {
-    final groupOrders = _orders.where((o) =>
-        (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
-        (o.cartGroupId == null && o.id == g.primaryOrder.id)).toList();
+    final groupOrders = _orders
+        .where((o) =>
+            (o.cartGroupId != null && o.cartGroupId == g.groupId) ||
+            (o.cartGroupId == null && o.id == g.primaryOrder.id))
+        .toList();
     if (groupOrders.isEmpty) return false;
-    final active = groupOrders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
-    if (active.isEmpty) return false; // If all were cancelled, it's NOT delivered!
+    final active = groupOrders
+        .where((o) => !_kTerminalStatuses.contains(o.status))
+        .toList();
+    if (active.isEmpty)
+      return false; // If all were cancelled, it's NOT delivered!
     return active.every((o) => o.status == 'delivered');
   }
 
   /// 100x FIX (Edge Case 1): Unified Physical Shop Stops.
   /// Deduplicates co-located shops across multiple customer cart groups.
   List<UnifiedShopStop> get _effectiveShopStops {
-    final activeOrders = _orders
-        .where((o) => !_kTerminalStatuses.contains(o.status))
-        .toList();
+    final activeOrders =
+        _orders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
 
     final targetOrders = activeOrders.isNotEmpty ? activeOrders : _orders;
     final stops = <UnifiedShopStop>[];
@@ -438,18 +472,17 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
       // Check if this shop already exists by shopId or within 25m geographic radius
       final existingIndex = stops.indexWhere((s) {
-        if (o.shopId != null && s.orders.any((ord) => ord.shopId == o.shopId)) {
-          return true;
+        if (o.shopId != null && o.shopId!.isNotEmpty) {
+          return s.orders.any((ord) => ord.shopId == o.shopId);
         }
         return Geolocator.distanceBetween(s.lat, s.lng, sLat, sLng) < 25.0;
       });
 
       final matchingShop = widget.shops.firstWhere(
-        (s) =>
-            (sLat != 0.0 &&
-                sLng != 0.0 &&
-                (s.lat - sLat).abs() < 0.0001 &&
-                (s.lng - sLng).abs() < 0.0001),
+        (s) => (sLat != 0.0 &&
+            sLng != 0.0 &&
+            (s.lat - sLat).abs() < 0.0001 &&
+            (s.lng - sLng).abs() < 0.0001),
         orElse: () => (
           lat: sLat,
           lng: sLng,
@@ -483,9 +516,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
     final shops = _effectiveShopStops;
     // 100x FIX: Include all non-terminal unpicked shops
-    final unpickedShops = shops
-        .where((s) => !s.isPickedUp && !s.isCancelled)
-        .toList();
+    final unpickedShops =
+        shops.where((s) => !s.isPickedUp && !s.isCancelled).toList();
 
     List<LatLng> shopPts = [];
     if (unpickedShops.isNotEmpty) {
@@ -524,16 +556,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
       while (unvisitedGroups.isNotEmpty) {
         unvisitedGroups.sort((a, b) {
-          final distA = Geolocator.distanceBetween(
-              dropRef.latitude,
-              dropRef.longitude,
-              a.deliveryLat!,
-              a.deliveryLng!);
-          final distB = Geolocator.distanceBetween(
-              dropRef.latitude,
-              dropRef.longitude,
-              b.deliveryLat!,
-              b.deliveryLng!);
+          final distA = Geolocator.distanceBetween(dropRef.latitude,
+              dropRef.longitude, a.deliveryLat!, a.deliveryLng!);
+          final distB = Geolocator.distanceBetween(dropRef.latitude,
+              dropRef.longitude, b.deliveryLat!, b.deliveryLng!);
           return distA.compareTo(distB);
         });
         final nearest = unvisitedGroups.removeAt(0);
@@ -617,9 +643,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
   Future<void> _openInExternalMap() async {
     final riderPos = _riderPositionNotifier.value;
     final shops = _effectiveShopStops;
-    final unpickedShops = shops
-        .where((s) => !s.isPickedUp && !s.isCancelled)
-        .toList();
+    final unpickedShops =
+        shops.where((s) => !s.isPickedUp && !s.isCancelled).toList();
 
     final origin = (riderPos != null && riderPos.latitude != 0.0)
         ? '${riderPos.latitude},${riderPos.longitude}'
@@ -627,17 +652,39 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
             ? '${shops.first.lat},${shops.first.lng}'
             : '';
 
+    // 100x FIX: Greedy TSP unpicked shops for external navigation
+    final orderedUnpickedShops = <UnifiedShopStop>[];
+    if (unpickedShops.isNotEmpty) {
+      final unvisitedShops = List<UnifiedShopStop>.from(unpickedShops);
+      LatLng ref = (riderPos != null && riderPos.latitude != 0.0)
+          ? riderPos
+          : LatLng(unvisitedShops.first.lat, unvisitedShops.first.lng);
+
+      while (unvisitedShops.isNotEmpty) {
+        unvisitedShops.sort((a, b) {
+          final distA = Geolocator.distanceBetween(
+              ref.latitude, ref.longitude, a.lat, a.lng);
+          final distB = Geolocator.distanceBetween(
+              ref.latitude, ref.longitude, b.lat, b.lng);
+          return distA.compareTo(distB);
+        });
+        final nearest = unvisitedShops.removeAt(0);
+        orderedUnpickedShops.add(nearest);
+        ref = LatLng(nearest.lat, nearest.lng);
+      }
+    }
+
     // 100x FIX: Greedy TSP customer drop-offs for external map
     final undeliveredGroups =
         _effectiveCustomerGroups.where((g) => !_isGroupDelivered(g)).toList();
     final orderedCustomerPts = <String>[];
     if (undeliveredGroups.isNotEmpty) {
       final unvisited = List<OrderGroup>.from(undeliveredGroups);
-      LatLng ref = unpickedShops.isNotEmpty
-          ? LatLng(unpickedShops.last.lat, unpickedShops.last.lng)
+      LatLng ref = orderedUnpickedShops.isNotEmpty
+          ? LatLng(orderedUnpickedShops.last.lat, orderedUnpickedShops.last.lng)
           : (riderPos ??
-              LatLng(unvisited.first.deliveryLat!,
-                  unvisited.first.deliveryLng!));
+              LatLng(
+                  unvisited.first.deliveryLat!, unvisited.first.deliveryLng!));
 
       while (unvisited.isNotEmpty) {
         unvisited.sort((a, b) {
@@ -655,7 +702,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
     final destination = orderedCustomerPts.isNotEmpty
         ? orderedCustomerPts.last
-        : (shops.isNotEmpty ? '${shops.last.lat},${shops.last.lng}' : '');
+        : (orderedUnpickedShops.isNotEmpty
+            ? '${orderedUnpickedShops.last.lat},${orderedUnpickedShops.last.lng}'
+            : (shops.isNotEmpty ? '${shops.last.lat},${shops.last.lng}' : ''));
 
     if (origin.isEmpty || destination.isEmpty) {
       if (mounted) {
@@ -665,12 +714,20 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       return;
     }
 
-    // Build waypoints: deduplicated unpicked shops + intermediate customer drop-offs
-    final waypoints = <String>[
-      ...unpickedShops.map((s) => '${s.lat},${s.lng}'),
+    // Build waypoints: deduplicated TSP-sorted unpicked shops + intermediate customer drop-offs
+    final rawWaypoints = <String>[
+      ...orderedUnpickedShops.map((s) => '${s.lat},${s.lng}'),
       if (orderedCustomerPts.length > 1)
         ...orderedCustomerPts.sublist(0, orderedCustomerPts.length - 1),
     ];
+
+    // Filter out waypoints that match origin, destination, or duplicate previous waypoint
+    final waypoints = <String>[];
+    for (final wp in rawWaypoints) {
+      if (wp.isEmpty || wp == origin || wp == destination) continue;
+      if (waypoints.isNotEmpty && waypoints.last == wp) continue;
+      waypoints.add(wp);
+    }
 
     // 100x FIX (Edge Case 6): Cap waypoints to max 8 immediate stops to prevent Google Maps URL overflow
     // and avoid leapfrogging intermediate drop-offs
@@ -801,8 +858,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         if (activeGroups[i].deliveryLat != null &&
             activeGroups[i].deliveryLat != 0.0)
           Marker(
-            point: applyJitter(activeGroups[i].deliveryLat!,
-                activeGroups[i].deliveryLng!),
+            point: applyJitter(
+                activeGroups[i].deliveryLat!, activeGroups[i].deliveryLng!),
             width: 90,
             height: 70,
             child: _mapMarker(
@@ -1213,12 +1270,27 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w600)),
                                         Builder(builder: (context) {
-                                          final activeOrders = _orders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
-                                          final dynamicEarnings = activeOrders.fold(0.0, (sum, o) => sum + o.riderEarnings);
-                                          final fallbackEarnings = (widget.groups != null && widget.groups!.isNotEmpty
-                                              ? widget.groups!.fold(0.0, (sum, g) => sum + g.totalEarnings)
-                                              : widget.group.totalEarnings);
-                                          final displayEarnings = dynamicEarnings > 0 ? dynamicEarnings : fallbackEarnings;
+                                          final activeOrders = _orders
+                                              .where((o) => !_kTerminalStatuses
+                                                  .contains(o.status))
+                                              .toList();
+                                          final dynamicEarnings =
+                                              activeOrders.fold(
+                                                  0.0,
+                                                  (sum, o) =>
+                                                      sum + o.riderEarnings);
+                                          final fallbackEarnings =
+                                              (widget.groups != null &&
+                                                      widget.groups!.isNotEmpty
+                                                  ? widget.groups!.fold(
+                                                      0.0,
+                                                      (sum, g) =>
+                                                          sum + g.totalEarnings)
+                                                  : widget.group.totalEarnings);
+                                          final displayEarnings =
+                                              dynamicEarnings > 0
+                                                  ? dynamicEarnings
+                                                  : fallbackEarnings;
                                           return Text(
                                             '₹${displayEarnings.toStringAsFixed(0)}',
                                             style: GoogleFonts.outfit(
@@ -1241,7 +1313,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                         // Stop Selector Tabs (Pickup Stores vs Dropoff)
                         Builder(
                           builder: (context) {
-                            final totalStops = shops.length + activeGroups.length;
+                            final totalStops =
+                                shops.length + activeGroups.length;
                             final int selectedIndex = _selectedStopIndex
                                 .clamp(0, math.max<int>(0, totalStops - 1))
                                 .toInt();
@@ -1253,7 +1326,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                   scrollDirection: Axis.horizontal,
                                   child: Row(
                                     children: [
-                                      for (int i = 0; i < shops.length; i++) ...[
+                                      for (int i = 0;
+                                          i < shops.length;
+                                          i++) ...[
                                         GestureDetector(
                                           onTap: () => setState(
                                               () => _selectedStopIndex = i),
@@ -1264,8 +1339,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                 const EdgeInsets.only(right: 8),
                                             decoration: BoxDecoration(
                                               color: selectedIndex == i
-                                                  ? _kPickupColor
-                                                      .withValues(alpha: 0.15)
+                                                  ? _kPickupColor.withValues(
+                                                      alpha: 0.15)
                                                   : Colors.transparent,
                                               borderRadius:
                                                   BorderRadius.circular(10),
@@ -1310,8 +1385,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                             decoration: BoxDecoration(
                                               color: selectedIndex ==
                                                       (shops.length + j)
-                                                  ? _kCustomerMarker
-                                                      .withValues(alpha: 0.15)
+                                                  ? _kCustomerMarker.withValues(
+                                                      alpha: 0.15)
                                                   : Colors.transparent,
                                               borderRadius:
                                                   BorderRadius.circular(10),
@@ -1370,17 +1445,19 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                           width: 38,
                                           height: 38,
                                           decoration: BoxDecoration(
-                                            color: (shops[selectedIndex].isPickedUp
-                                                    ? _kShopPickedUpMarker
-                                                    : _kShopMarker)
-                                                .withValues(alpha: 0.15),
+                                            color:
+                                                (shops[selectedIndex].isPickedUp
+                                                        ? _kShopPickedUpMarker
+                                                        : _kShopMarker)
+                                                    .withValues(alpha: 0.15),
                                             shape: BoxShape.circle,
                                           ),
                                           child: Icon(
                                               shops[selectedIndex].isPickedUp
                                                   ? Icons.check_circle_rounded
                                                   : Icons.storefront_rounded,
-                                              color: shops[selectedIndex].isPickedUp
+                                              color: shops[selectedIndex]
+                                                      .isPickedUp
                                                   ? _kShopPickedUpMarker
                                                   : _kShopMarker,
                                               size: 20),
@@ -1405,30 +1482,43 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                               Text(
                                                 shops[selectedIndex].isPickedUp
                                                     ? 'Items picked up ✓'
-                                                    : (shops[selectedIndex].orders.length > 1
+                                                    : (shops[selectedIndex]
+                                                                .orders
+                                                                .length >
+                                                            1
                                                         ? 'Pick up for ${shops[selectedIndex].orders.length} customers'
                                                         : 'Pick up items here'),
                                                 style: GoogleFonts.outfit(
                                                   fontSize: 11,
-                                                  color: shops[selectedIndex].isPickedUp
+                                                  color: shops[selectedIndex]
+                                                          .isPickedUp
                                                       ? AppColors.success
                                                       : (isDark
                                                           ? Colors.white54
-                                                          : Colors.grey.shade600),
+                                                          : Colors
+                                                              .grey.shade600),
                                                   fontWeight:
-                                                      shops[selectedIndex].isPickedUp
+                                                      shops[selectedIndex]
+                                                              .isPickedUp
                                                           ? FontWeight.w600
                                                           : FontWeight.normal,
                                                 ),
                                               ),
-                                              if (shops[selectedIndex].orders.isNotEmpty)
+                                              if (shops[selectedIndex]
+                                                  .orders
+                                                  .isNotEmpty)
                                                 Padding(
                                                   padding:
-                                                      const EdgeInsets.only(top: 2),
+                                                      const EdgeInsets.only(
+                                                          top: 2),
                                                   child: Text(
                                                     shops[selectedIndex]
                                                         .orders
-                                                        .expand((o) => o.activeItems.isNotEmpty ? o.activeItems : o.items)
+                                                        .expand((o) => o
+                                                                .activeItems
+                                                                .isNotEmpty
+                                                            ? o.activeItems
+                                                            : o.items)
                                                         .map((it) =>
                                                             '${it.quantity}x ${it.productName}')
                                                         .join(', '),
@@ -1479,8 +1569,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                         color: isDark
                                             ? const Color(0xFF141424)
                                             : const Color(0xFFF7F9FC),
-                                        borderRadius:
-                                            BorderRadius.circular(14),
+                                        borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
                                           color: isDark
                                               ? Colors.white12
@@ -1537,27 +1626,44 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                   ),
-                                                Text(
-                                                  '${group.activeOrders.length} store${group.activeOrders.length > 1 ? 's' : ''} · ${group.activeOrders.fold<int>(0, (sum, o) => sum + (o.activeItems.isNotEmpty ? o.activeItems : o.items).fold<int>(0, (s, i) => s + i.quantity))} items',
-                                                  style: GoogleFonts.outfit(
-                                                    fontSize: 10,
-                                                    color: isDark
-                                                        ? Colors.white54
-                                                        : Colors.grey.shade600,
-                                                  ),
-                                                ),
+                                                Builder(builder: (context) {
+                                                  final liveGroupOrders = _orders.where((o) =>
+                                                      (o.cartGroupId != null && o.cartGroupId == group.groupId) ||
+                                                      (o.cartGroupId == null && o.id == group.primaryOrder.id)).toList();
+                                                  final liveActiveOrders = liveGroupOrders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
+                                                  final displayOrders = liveActiveOrders.isNotEmpty ? liveActiveOrders : (group.activeOrders.isNotEmpty ? group.activeOrders : group.orders);
+                                                  final storeCount = displayOrders.length;
+                                                  final itemCount = displayOrders.fold<int>(0, (sum, o) => sum + (o.activeItems.isNotEmpty ? o.activeItems : o.items).fold<int>(0, (s, i) => s + i.quantity));
+                                                  return Text(
+                                                    '$storeCount store${storeCount > 1 ? 's' : ''} · $itemCount items',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 10,
+                                                      color: isDark
+                                                          ? Colors.white54
+                                                          : Colors.grey.shade600,
+                                                    ),
+                                                  );
+                                                }),
                                                 const SizedBox(height: 3),
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
                                                   decoration: BoxDecoration(
-                                                    color: AppColors.success.withValues(alpha: 0.15),
-                                                    borderRadius: BorderRadius.circular(6),
+                                                    color: AppColors.success
+                                                        .withValues(
+                                                            alpha: 0.15),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
                                                   ),
                                                   child: Text(
                                                     '💳 Prepaid (₹0)',
                                                     style: GoogleFonts.outfit(
                                                       fontSize: 10,
-                                                      fontWeight: FontWeight.w700,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                       color: AppColors.success,
                                                     ),
                                                   ),
@@ -1595,7 +1701,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                           width: double.infinity,
                           child: OutlinedButton.icon(
                             onPressed: _openInExternalMap,
-                            icon: const Icon(Icons.navigation_rounded, size: 20),
+                            icon:
+                                const Icon(Icons.navigation_rounded, size: 20),
                             label: Text('Open Google Maps Navigation',
                                 style: GoogleFonts.outfit(
                                     fontWeight: FontWeight.w800, fontSize: 14)),
@@ -1632,8 +1739,8 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16)),
                                   elevation: 4,
-                                  shadowColor: AppColors.success
-                                      .withValues(alpha: 0.4)),
+                                  shadowColor:
+                                      AppColors.success.withValues(alpha: 0.4)),
                             ),
                           ),
                         ],

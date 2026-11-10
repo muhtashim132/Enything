@@ -10,6 +10,7 @@ class OrderGroup {
   static const Set<String> _terminalRejectionStatuses = {
     'seller_rejected',
     'partner_rejected',
+    'rider_rejected',
     'cancelled',
     'rejected',
     'shop_dispute_cancel',
@@ -28,11 +29,12 @@ class OrderGroup {
       .toList();
 
   /// Primary order to read shared metadata from (customer info, delivery coordinates).
-  OrderModel get primaryOrder =>
-      activeOrders.isNotEmpty ? activeOrders.first : orders.first;
+  OrderModel get primaryOrder => activeOrders.isNotEmpty
+      ? activeOrders.first
+      : (orders.isNotEmpty ? orders.first : OrderModel.empty());
 
   /// Delivery handover OTP for this order group.
-  String? get deliveryOtp => primaryOrder.deliveryOtp;
+  String? get deliveryOtp => orders.isNotEmpty ? primaryOrder.deliveryOtp : null;
 
   double get totalGrand => (activeOrders.isNotEmpty ? activeOrders : orders)
       .fold(0.0, (sum, o) => sum + o.grandTotal);
@@ -54,8 +56,12 @@ class OrderGroup {
   bool get isPractice => orders.any((o) => o.isPracticeOrder);
 
   /// Total items across all active orders in this group.
-  int get totalItemCount => activeOrders
-      .fold<int>(0, (sum, o) => sum + o.items.fold<int>(0, (s, i) => s + i.quantity));
+  int get totalItemCount => activeOrders.fold<int>(
+      0,
+      (sum, o) =>
+          sum +
+          (o.activeItems.isNotEmpty ? o.activeItems : o.items)
+              .fold<int>(0, (s, i) => s + i.quantity));
 
   /// Full delivery address shown to the rider.
   /// Format: "🏠 Home · A-404, Bandipora, J&K, Near City Mall"

@@ -425,8 +425,10 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         // 100x FIX: Pre-seed _lastKnownRejectedCount from group so sequential rejection logic
         // does not falsely un-resolve an already-handled rejection on page re-entry!
         _lastKnownRejectedCount = group
-            .where((o) => _terminalRejectionStatuses.contains(o.status))
-            .length;
+                .where((o) => _terminalRejectionStatuses.contains(o.status))
+                .length +
+            group.fold<int>(
+                0, (sum, o) => sum + o.items.where((i) => i.isDeclined).length);
 
         // Compute aggregate status for countdowns/payments after reading preferences
         _handleAggregateStatusChange();
@@ -504,8 +506,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
               final oldOrder =
                   _groupOrders.firstWhereOrNull((o) => o.id == updatedOrder.id);
 
-              if (oldOrder == null || oldOrder.totalAmount != updatedOrder.totalAmount) {
-                // This is a new order (INSERT) or items declined/modified — full reload needed
+              if (oldOrder == null ||
+                  oldOrder.totalAmount != updatedOrder.totalAmount ||
+                  oldOrder.refundStatus != updatedOrder.refundStatus ||
+                  oldOrder.updatedAt != updatedOrder.updatedAt) {
+                // This is a new order (INSERT), refund update, or items modified — full reload needed
                 _fetchOrder();
                 return;
               }
@@ -944,10 +949,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     if (!mounted || _order == null) return;
     final aggStatus = _aggregateStatus;
 
-    // Bug E7: Detect sequential rejections (Shop A rejects → resolved → Shop B rejects)
-    final currentRejectedCount = _groupOrders
-        .where((o) => _terminalRejectionStatuses.contains(o.status))
-        .length;
+    // Bug E7: Detect sequential rejections (Shop A rejects → resolved → Shop B rejects or items declined)
+    final int currentRejectedCount = _groupOrders
+            .where((o) => _terminalRejectionStatuses.contains(o.status))
+            .length +
+        _groupOrders.fold<int>(
+            0, (int sum, o) => sum + o.items.where((i) => i.isDeclined).length);
     if (currentRejectedCount > _lastKnownRejectedCount && _partialRejectionResolved) {
       // A NEW rejection appeared after we resolved the previous one — re-show panel
       _partialRejectionResolved = false;
@@ -1453,6 +1460,19 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           'p_reason': 'timeout',
           'p_cancel_entire_group': true,
         });
+      }
+
+      // 100x FIX: If the order was already captured (paid) and has pending partial rejection / refund amount,
+      // also ensure acknowledge_partial_rejection was called or partial refund is processed!
+      final cartGroupId = _order?.cartGroupId;
+      final isCaptured = targetOrders.any((o) => o.paymentStatus == 'captured');
+      if (cartGroupId != null && isCaptured) {
+        try {
+          await _supabase.rpc('acknowledge_partial_rejection', params: {
+            'p_cart_group_id': cartGroupId,
+            'p_action': 'cancelled',
+          });
+        } catch (_) {}
       }
 
       if (mounted) {
@@ -3481,8 +3501,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                       const SizedBox(height: 20),
                     ],
 
-                    // ── Tracking Steps ────────────────────────────────────────────
-                    if (_groupOrders.length > 1) ...[
+                    // ── Tracking Steps / Store & Item Statuses ────────────────────
+                    if (_groupOrders.length > 1 ||
+                        (_order != null &&
+                            _order!.items.any((i) =>
+                                i.isDeclined ||
+                                i.isSwapped ||
+                                i.isCancelled))) ...[
                       _buildShopStatusList(isDark),
                     ],
 
@@ -4449,7 +4474,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         try {
                           await _supabase.rpc('acknowledge_partial_rejection', params: {
                             'p_cart_group_id': cartGroupId,
-                            'p_resolution': 'proceeded',
+                            'p_action': 'proceeded',
                           });
                         } catch (_) {}
 
@@ -5319,7 +5344,11 @@ class _TrackOrderPageState extends State<TrackOrderPage>
   }
 
   Widget _buildShopStatusList(bool isDark) {
-    if (_groupOrders.length <= 1) return const SizedBox.shrink();
+    final targetOrders = _groupOrders.isNotEmpty
+        ? _groupOrders
+        : (_order != null ? [_order!] : <OrderModel>[]);
+    if (targetOrders.isEmpty) return const SizedBox.shrink();
+    final isMultiStore = targetOrders.length > 1;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -5354,7 +5383,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ),
             const SizedBox(width: 10),
             Text(
-              'Shop Statuses',
+              isMultiStore ? 'Shop Statuses' : 'Order Items',
               style: GoogleFonts.outfit(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -5363,10 +5392,12 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             ),
           ]),
           const SizedBox(height: 16),
-          ..._groupOrders.asMap().entries.map((entry) {
+          ...targetOrders.asMap().entries.map((entry) {
             final index = entry.key;
             final shopOrder = entry.value;
-            final shopName = 'Shop ${index + 1}';
+            final shopName = isMultiStore
+                ? 'Shop ${index + 1}'
+                : (shopOrder.items.isNotEmpty ? 'Items (${shopOrder.items.length})' : 'Store');
             final statusStr = shopOrder.status;
 
             // Map status to a readable string and color
@@ -5478,6 +5509,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                           const SizedBox(height: 6),
                           ...shopOrder.items.map((it) {
                             final isItemDeclined = it.isDeclined;
+                            final isItemSwapped = it.isSwapped;
+                            final isItemCancelled = it.isCancelled;
+                            final isInactive = isItemDeclined || isItemSwapped || isItemCancelled;
                             return Padding(
                               padding: const EdgeInsets.only(top: 3),
                               child: Row(
@@ -5487,13 +5521,13 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                       '${it.quantity}x ${it.productName}${it.variantName != null && it.variantName!.isNotEmpty ? " (${it.variantName})" : ""}',
                                       style: GoogleFonts.outfit(
                                         fontSize: 11,
-                                        color: isItemDeclined
+                                        color: isInactive
                                             ? (isDark ? Colors.white38 : Colors.black38)
                                             : (isDark ? Colors.white70 : Colors.black87),
-                                        decoration: isItemDeclined
+                                        decoration: isInactive
                                             ? TextDecoration.lineThrough
                                             : null,
-                                        decorationColor: Colors.redAccent,
+                                        decorationColor: isItemSwapped ? Colors.blueAccent : Colors.redAccent,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -5514,6 +5548,42 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                           fontSize: 9,
                                           fontWeight: FontWeight.w700,
                                           color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    )
+                                  else if (isItemSwapped)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      margin: const EdgeInsets.only(left: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 0.8),
+                                      ),
+                                      child: Text(
+                                        'Swapped with Replacement',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.blueAccent,
+                                        ),
+                                      ),
+                                    )
+                                  else if (isItemCancelled)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      margin: const EdgeInsets.only(left: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.orange.withValues(alpha: 0.3), width: 0.8),
+                                      ),
+                                      child: Text(
+                                        'Removed · Refunded',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.orangeAccent,
                                         ),
                                       ),
                                     ),
@@ -6201,23 +6271,44 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     if (isShopRejected && rejectedOrder.shopId != null) {
                       preciseQuery = preciseQuery.neq('shop_id', rejectedOrder.shopId!);
                     }
-                    final precise = await preciseQuery.limit(10);
-                    if ((precise as List).isNotEmpty) {
-                      return precise as List<dynamic>;
-                    }
+                    final preciseRes = await preciseQuery.limit(20);
+                    List<dynamic> productList = List<dynamic>.from(preciseRes as List);
 
                     // Fallback: single first-word search (broader)
-                    var broadQuery = _supabase
-                        .from('products')
-                        .select('*, shops(*)')
-                        .eq('is_deleted', false)
-                        .ilike('name', '%$firstWord%')
-                        .eq('is_available', true);
-                    if (isShopRejected && rejectedOrder.shopId != null) {
-                      broadQuery = broadQuery.neq('shop_id', rejectedOrder.shopId!);
+                    if (productList.isEmpty) {
+                      var broadQuery = _supabase
+                          .from('products')
+                          .select('*, shops(*)')
+                          .eq('is_deleted', false)
+                          .ilike('name', '%$firstWord%')
+                          .eq('is_available', true);
+                      if (isShopRejected && rejectedOrder.shopId != null) {
+                        broadQuery = broadQuery.neq('shop_id', rejectedOrder.shopId!);
+                      }
+                      final broadRes = await broadQuery.limit(20);
+                      productList = List<dynamic>.from(broadRes as List);
                     }
-                    final broad = await broadQuery.limit(10);
-                    return broad as List<dynamic>;
+
+                    // 100x GEOSPATIAL & OPEN SHOP FORTRESS:
+                    // Only surface alternatives from active, open, accepting shops with valid stock
+                    final filtered = productList.where((p) {
+                      final shop = p['shops'];
+                      if (shop == null) return false;
+                      final isActive = shop['is_active'] ?? true;
+                      final isOpen = shop['is_open'] ?? true;
+                      final isAccepting = shop['is_accepting_orders'] ?? true;
+                      final hasStock = p['total_quantity'] == null || (p['total_quantity'] as num) > 0;
+                      return isActive && isOpen && isAccepting && hasStock;
+                    }).toList();
+
+                    // Prioritize same-shop items for instant, 0-friction in-place swap
+                    filtered.sort((a, b) {
+                      final aSame = a['shop_id'] == rejectedOrder.shopId ? 0 : 1;
+                      final bSame = b['shop_id'] == rejectedOrder.shopId ? 0 : 1;
+                      return aSame.compareTo(bSame);
+                    });
+
+                    return filtered;
                   })(),
                   builder: (ctx, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -6289,11 +6380,23 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                         final imageUrl =
                             images.isNotEmpty ? images.first as String? : null;
 
+                        final isSameShop = p['shop_id'] == rejectedOrder.shopId;
                         return GestureDetector(
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            _replaceRejectedOrderWithAlternative(
-                                p, item, rejectedOrder);
+                          onTap: () async {
+                            final rawVariants = p['variants'] as List<dynamic>?;
+                            if (rawVariants != null && rawVariants.isNotEmpty) {
+                              final selectedVariant = await _showVariantPickerModal(ctx, p, rawVariants);
+                              if (selectedVariant == null) return;
+                              if (!mounted || !ctx.mounted) return;
+                              Navigator.pop(ctx);
+                              _replaceRejectedOrderWithAlternative(
+                                  p, item, rejectedOrder,
+                                  selectedVariantName: selectedVariant['name']?.toString());
+                            } else {
+                              Navigator.pop(ctx);
+                              _replaceRejectedOrderWithAlternative(
+                                  p, item, rejectedOrder);
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.all(12),
@@ -6357,17 +6460,42 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        p['name'] as String? ?? '',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark
-                                              ? Colors.white
-                                              : const Color(0xFF1A1A2E),
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              p['name'] as String? ?? '',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : const Color(0xFF1A1A2E),
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (isSameShop && !_terminalRejectionStatuses.contains(rejectedOrder.status)) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                                              ),
+                                              child: Text(
+                                                '⚡ Instant Swap',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: const Color(0xFF059669),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       const SizedBox(height: 4),
                                       Row(
@@ -6424,7 +6552,9 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                                     ],
                                   ),
                                   child: Text(
-                                    'Add',
+                                    isSameShop && !_terminalRejectionStatuses.contains(rejectedOrder.status)
+                                        ? 'Swap'
+                                        : 'Add',
                                     style: GoogleFonts.outfit(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w700,
@@ -6450,8 +6580,59 @@ class _TrackOrderPageState extends State<TrackOrderPage>
     });
   }
 
+  Future<Map<String, dynamic>?> _showVariantPickerModal(
+      BuildContext context, Map<String, dynamic> product, List<dynamic> variants) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select Variant',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...variants.map((v) {
+                  final vMap = v as Map<String, dynamic>;
+                  final vName = vMap['name']?.toString() ?? 'Default';
+                  final vPrice = (vMap['price'] as num?)?.toDouble() ??
+                      (product['price'] as num?)?.toDouble() ??
+                      0.0;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(vName,
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                    trailing: Text('₹${vPrice.toStringAsFixed(0)}',
+                        style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary)),
+                    onTap: () => Navigator.pop(ctx, vMap),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _replaceRejectedOrderWithAlternative(Map<String, dynamic> newProduct,
-      OrderItem oldItem, OrderModel rejectedOrder) async {
+      OrderItem oldItem, OrderModel rejectedOrder, {String? selectedVariantName}) async {
     final cart = context.read<CartProvider>();
     final productModel = ProductModel.fromMap(newProduct);
     final shopModel = ShopModel.fromMap(newProduct['shops']);
@@ -6464,8 +6645,17 @@ class _TrackOrderPageState extends State<TrackOrderPage>
         !_terminalRejectionStatuses.contains(rejectedOrder.status);
 
     if (isSameShop && isPartialItemDecline) {
+      double targetPrice = productModel.price;
+      if (selectedVariantName != null && productModel.variants.isNotEmpty) {
+        try {
+          final matching = productModel.variants.firstWhere(
+            (v) => v.name == selectedVariantName,
+          );
+          targetPrice = matching.price;
+        } catch (_) {}
+      }
       final oldSubtotal = oldItem.price * oldItem.quantity;
-      final newSubtotal = productModel.price * oldItem.quantity;
+      final newSubtotal = targetPrice * oldItem.quantity;
 
       if (newSubtotal <= oldSubtotal || rejectedOrder.paymentStatus != 'captured') {
         try {
@@ -6473,7 +6663,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
             'p_order_id': rejectedOrder.id,
             'p_declined_item_id': oldItem.id,
             'p_replacement_product_id': productModel.id,
-            'p_replacement_variant_name': null,
+            'p_replacement_variant_name': selectedVariantName,
             'p_quantity': oldItem.quantity,
           });
 
@@ -6531,6 +6721,28 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           }
         } catch (e) {
           debugPrint('In-order swap RPC error: $e');
+          if (mounted) {
+            String errorMsg = e.toString();
+            if (errorMsg.contains('PHYSICAL_WEIGHT_LIMIT_EXCEEDED')) {
+              errorMsg = 'Swapping this item exceeds the 15.0 kg two-wheeler delivery limit.';
+            } else if (errorMsg.contains('REPLACEMENT_PRICE_EXCEEDS_ORIGINAL')) {
+              errorMsg = 'Replacement item costs more than original item. Please select an item of equal or lower price.';
+            } else if (errorMsg.contains('Insufficient stock')) {
+              errorMsg = 'This replacement item is currently out of stock.';
+            } else if (errorMsg.contains('ALREADY_REFUNDED')) {
+              errorMsg = 'A cash refund has already been completed for this item.';
+            } else {
+              errorMsg = errorMsg.replaceAll('Exception: ', '').split('\n').first;
+            }
+            AppToast.show(
+              context,
+              title: 'Swap Failed',
+              message: errorMsg,
+              type: ToastType.error,
+              icon: Icons.error_outline_rounded,
+            );
+          }
+          return; // Strictly stop here: do not fall through to checkout on swap error!
         }
       }
     }
@@ -6552,8 +6764,24 @@ class _TrackOrderPageState extends State<TrackOrderPage>
 
     // Go to checkout and pass the old order ID so it cancels ONLY if checkout succeeds
     if (mounted) {
-      cart.clear(); // Ensure cart only has the replacement items
-      cart.addItem(productModel, shopModel, quantity: oldItem.quantity);
+      cart.clearItemsOnlyForReplacement(); // Preserve pending replacement metadata while clearing physical items
+      ProductVariant? matchingVariant;
+      if (selectedVariantName != null && productModel.variants.isNotEmpty) {
+        try {
+          matchingVariant = productModel.variants.firstWhere(
+            (v) => v.name == selectedVariantName,
+          );
+        } catch (_) {}
+      }
+      final err = cart.addItem(productModel, shopModel,
+          quantity: oldItem.quantity, selectedVariant: matchingVariant);
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.danger,
+        ));
+        return;
+      }
 
       Navigator.push(
           context,

@@ -176,8 +176,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       }
 
       // Also reload when any FCM push arrives in foreground
-      _fcmSub = FirebaseMessaging.onMessage.listen((_) {
-        if (mounted) _debouncedLoadOrders();
+      _fcmSub = FirebaseMessaging.onMessage.listen((message) {
+        if (!mounted) return;
+        if (message.data['action'] == 'item_swapped') {
+          _showSnack('🔄 Kitchen Alert: Customer swapped an item in Order!', isError: false);
+        }
+        _debouncedLoadOrders();
       });
     });
   }
@@ -452,7 +456,18 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       if (mounted) {
         final notifProv = context.read<NotificationProvider>();
 
-        final bool isPaid = order.paymentStatus == 'captured';
+        String? currentPaymentStatus = order.paymentStatus;
+        try {
+          final freshStatus = await _supabase
+              .from('orders')
+              .select('payment_status')
+              .eq('id', order.id)
+              .maybeSingle();
+          if (freshStatus != null && freshStatus['payment_status'] != null) {
+            currentPaymentStatus = freshStatus['payment_status'] as String;
+          }
+        } catch (_) {}
+        final bool isPaid = currentPaymentStatus == 'captured';
         if (riderAlreadyAccepted) {
           if (isPaid) {
             _showSnack(
@@ -2644,6 +2659,33 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
                             : _statusBadge(order, statusColor),
                       ],
                     ),
+
+                    if (tab == 'done' && order.cancelledReason != null && order.cancelledReason!.contains('replaced')) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.swap_horiz_rounded, size: 14, color: Colors.amber),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Customer Replaced with Another Store',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // ── Rider Arrival Badge (100x Rider Arrival Display Guard) ──────
                     if (order.arrivedAtShopTime != null &&

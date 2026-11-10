@@ -116,8 +116,8 @@ void main() {
       // Group is not all picked up yet
       expect(group.allPickedUp, isFalse);
 
-      // Group dominant status is ready_for_pickup (lowest incomplete prep status)
-      expect(group.groupStatus, equals('ready_for_pickup'));
+      // Group dominant status is pickup_in_progress when any sub-order is picked_up
+      expect(group.groupStatus, equals('pickup_in_progress'));
 
       // Customer notification message construction
       String getCustomerPickupNotification(int remainingUnpicked, String justPickedShopName) {

@@ -162,8 +162,8 @@ void main() {
       );
 
       expect(WeightEngine.resolve(product: laptop, quantity: 1), equals(2.40));
-      expect(WeightEngine.resolve(product: phone, quantity: 1), equals(0.45));
-      expect(WeightEngine.resolve(product: earbuds, quantity: 1), equals(0.12));
+      expect(WeightEngine.resolve(product: phone, quantity: 1), equals(0.40));
+      expect(WeightEngine.resolve(product: earbuds, quantity: 1), equals(0.10));
     });
   });
 }

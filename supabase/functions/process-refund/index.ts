@@ -75,9 +75,15 @@ Deno.serve(async (req) => {
       // 2. Fetch fresh order from DB to get the latest reallocated grand_total_collected & pending_refund_amount
       const { data: freshOrder } = await supabaseAdmin
         .from("orders")
-        .select("grand_total_collected, pending_refund_amount, total_refunded, razorpay_payment_id, refund_status, refund_id, payment_method")
+        .select("status, grand_total, grand_total_collected, pending_refund_amount, total_refunded, razorpay_payment_id, refund_status, refund_id, payment_method")
         .eq("id", record.id)
         .maybeSingle();
+
+      // Defer refund if customer is currently deciding on item swaps/alternatives
+      if (freshOrder?.refund_status === "pending_customer_decision") {
+        console.log(`Order ${record.id} is pending customer decision. Skipping refund for now.`);
+        return new Response("Refund deferred: Waiting for customer decision.", { status: 200 });
+      }
 
       const paymentId = freshOrder?.razorpay_payment_id || record.razorpay_payment_id;
       if (!paymentId) {
@@ -103,22 +109,28 @@ Deno.serve(async (req) => {
       const razorpayAuth = btoa(`${keyId}:${keySecret}`);
 
       // 100x ARCHITECTURAL FIX:
-      // If the entire order is terminal/cancelled, refund the remaining collected amount PLUS any pending item refunds.
-      // If the order is still active and only item-level partial decline refund is processing, refund pending_refund_amount.
+      // Prevent 200% over-refund bug.
+      // grand_total_collected is the total money collected for this order.
+      // Already refunded amount is tracked in freshOrder?.total_refunded.
+      const totalCollected = Number(freshOrder?.grand_total_collected ?? record.grand_total_collected ?? freshOrder?.grand_total ?? record.grand_total ?? 0);
+      const totalRefunded = Number(freshOrder?.total_refunded ?? record.total_refunded ?? 0);
+      const remainingUnrefunded = Math.max(0, totalCollected - totalRefunded);
+
+      // If the entire order is terminal/cancelled, refund the remaining unrefunded collected amount.
+      // If the order is active and only item-level partial decline refund is processing, refund pending_refund_amount (capped by remaining unrefunded).
       const collectedAmount = isRefundableState
-        ? (Number(freshOrder?.grand_total_collected || record.grand_total_collected || 0) + (hasPendingItemRefund ? Number(freshOrder.pending_refund_amount) : 0))
+        ? remainingUnrefunded
         : (hasPendingItemRefund
-          ? Number(freshOrder.pending_refund_amount)
-          : (freshOrder?.grand_total_collected != null
-            ? Number(freshOrder.grand_total_collected)
-            : (record.grand_total_collected != null ? Number(record.grand_total_collected) : 0)));
+          ? Math.min(Number(freshOrder?.pending_refund_amount ?? record.pending_refund_amount ?? 0), remainingUnrefunded)
+          : remainingUnrefunded);
       let amountInPaise = Math.round(collectedAmount * 100);
 
       if (amountInPaise <= 0) {
         console.log(`Order ${record.id} has 0 collected amount. Marking refund as processed internally.`);
+        const existingRefId = freshOrder?.refund_id || record.refund_id;
         await supabaseAdmin.from("orders").update({
           refund_status: "processed",
-          refund_id: "internal_zero_amount"
+          refund_id: existingRefId || "internal_zero_amount"
         }).eq("id", record.id);
 
         return new Response("Refund processed internally (zero amount).", { status: 200 });

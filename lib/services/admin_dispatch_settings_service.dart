@@ -86,7 +86,8 @@ class AdminDispatchSettingsService {
       final hasKey = prefs.containsKey('$_radiusKmKey$adminId');
       if (!hasKey) return 15.0; // Default 15 km
       final val = prefs.getDouble('$_radiusKmKey$adminId');
-      return val; // null if explicitly saved as unlimited
+      if (val != null && val < 0) return null; // -1.0 represents Unlimited
+      return val;
     } catch (e) {
       debugPrint('[AdminDispatchSettings] Error reading radiusKm: $e');
       return 15.0;
@@ -97,7 +98,7 @@ class AdminDispatchSettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (radius == null) {
-        await prefs.remove('$_radiusKmKey$adminId');
+        await prefs.setDouble('$_radiusKmKey$adminId', -1.0); // 100x FIX: -1.0 persists Unlimited across app restarts
       } else {
         await prefs.setDouble('$_radiusKmKey$adminId', radius);
       }

@@ -3156,16 +3156,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   controller: _searchController,
                                   onChanged: (v) {
                                     _searchDebounce?.cancel();
-                                    if (v.trim().isNotEmpty) {
+                                    if (v.trim().isEmpty) {
+                                      _searchShops('');
+                                    } else {
                                       setState(() {
                                         _searchQuery = v;
                                         _isSearching = true;
                                       });
+                                      _searchDebounce = Timer(
+                                        const Duration(milliseconds: 350),
+                                        () => _searchShops(v),
+                                      );
                                     }
-                                    _searchDebounce = Timer(
-                                      const Duration(milliseconds: 350),
-                                      () => _searchShops(v),
-                                    );
                                   },
                                   decoration: InputDecoration(
                                     hintText: '',
@@ -3209,22 +3211,30 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         horizontal: 16, vertical: 12),
                                   ),
                                 ),
-                                if (_searchController.text.isEmpty)
-                                  Positioned(
-                                    left: 44,
-                                    right: 48,
-                                    child: IgnorePointer(
-                                      child: AnimatedSearchTicker(
-                                        textStyle: GoogleFonts.outfit(
-                                          color: isDark
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade500,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
+                                ValueListenableBuilder<TextEditingValue>(
+                                  valueListenable: _searchController,
+                                  builder: (context, value, _) {
+                                    if (value.text.isNotEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Positioned(
+                                      left: 44,
+                                      right: 48,
+                                      child: IgnorePointer(
+                                        child: AnimatedSearchTicker(
+                                          key: const ValueKey('animated_search_ticker'),
+                                          textStyle: GoogleFonts.outfit(
+                                            color: isDark
+                                                ? Colors.grey.shade400
+                                                : Colors.grey.shade500,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -3341,9 +3351,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               ),
 
             // ── Main Content ──────────────────────────────────────────
-            // ── Main Content ──────────────────────────────────────────
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               sliver: _isLoading
                   ? SliverToBoxAdapter(child: _buildShimmer())
                   : SliverMainAxisGroup(
@@ -3843,6 +3852,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ],
                           ],
 
+                          // Symmetrical Bottom Nav Clearance for Search Mode:
+                          // 68dp floating bottom nav bar + device safe area inset + 20dp optical breathing room
+                          SliverToBoxAdapter(
+                            child: SizedBox(
+                              height: 68.0 +
+                                  math.max(
+                                      MediaQuery.paddingOf(context).bottom,
+                                      MediaQuery.viewPaddingOf(context).bottom) +
+                                  20.0,
+                            ),
+                          ),
+
                           // ──────────────────────────────────────────────────
                           // NORMAL MODE: banner + shops + products
                           // ──────────────────────────────────────────────────
@@ -3910,18 +3931,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 280,
+                                      height: 244,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
+                                        physics: const BouncingScrollPhysics(),
                                         itemCount: availableRecent.length,
                                         itemBuilder: (_, index) {
                                           final p = availableRecent[index];
                                           final shop = _productShops[p.id];
                                           return SizedBox(
-                                            width: 148,
+                                            width: 146,
                                             child: Padding(
                                               padding: const EdgeInsets.only(
-                                                  right: 12),
+                                                  right: 10),
                                               child: ProductCard(
                                                   product: p, shop: shop),
                                             ),
@@ -3929,7 +3951,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                         },
                                       ),
                                     ),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 20),
                                   ],
                                 );
                               }),
@@ -4628,9 +4650,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           SliverToBoxAdapter(
                             child: SizedBox(
                               // Symmetrical Bottom Nav Clearance Fortress:
-                              // Calibrated to 72dp + safe area to provide exact 16-20dp optical breathing room
-                              // above the 68dp floating bottom navigation bar, eliminating the previous 68dp dead void.
-                              height: 72 + MediaQuery.paddingOf(context).bottom,
+                              // 68dp floating bottom nav bar + device safe area inset + 20dp optical breathing room
+                              height: 68.0 +
+                                  math.max(
+                                      MediaQuery.paddingOf(context).bottom,
+                                      MediaQuery.viewPaddingOf(context).bottom) +
+                                  20.0,
                             ),
                           ),
                         ],
@@ -5264,23 +5289,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ).createShader(bounds),
                               child: Text(
                                 'Host an Event or Party? 🎊',
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.outfit(
-                                  fontSize: 14.5,
+                                  fontSize: 13.5,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                   letterSpacing: -0.2,
+                                  height: 1.15,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'Bulk catering for 20 to 500+ guests',
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 11.0,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w500,
                                 color: isDark ? Colors.white70 : const Color(0xFF475569),
                                 height: 1.2,
@@ -5292,17 +5318,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               children: [
                                 Icon(
                                   Icons.verified_rounded,
-                                  size: 11.5,
+                                  size: 11.0,
                                   color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A),
                                 ),
-                                const SizedBox(width: 3.5),
+                                const SizedBox(width: 3.0),
                                 Flexible(
                                   child: Text(
                                     'Chef quotes in 15 mins · Custom menus',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 10.0,
+                                      fontSize: 9.5,
                                       fontWeight: FontWeight.w600,
                                       color: isDark ? Colors.white60 : const Color(0xFF64748B),
                                     ),
@@ -5313,11 +5339,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
 
                       // Sleek Brand Gradient Action Button (Cobalt to Coral)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 9.5, vertical: 6.5),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [
@@ -5342,15 +5368,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               'Plan Event',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 11.0,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.2,
                               ),
                             ),
-                            SizedBox(width: 3),
+                            SizedBox(width: 2.5),
                             Icon(
                               Icons.arrow_forward_rounded,
-                              size: 12.5,
+                              size: 11.5,
                               color: Colors.white,
                             ),
                           ],
@@ -6537,6 +6563,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     VoidCallback? onSeeAllTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isNarrow = MediaQuery.of(context).size.width < 380;
+    final double titleFontSize = isNarrow
+        ? (title.length > 25 ? 14.5 : (title.length > 18 ? 15.5 : 17.0))
+        : (title.length > 25 ? 15.5 : (title.length > 18 ? 16.5 : 18.0));
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -6548,7 +6579,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               // Colored left accent bar
               Container(
                 width: 4,
-                height: 36,
+                height: 34,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: isHighlighted
@@ -6560,10 +6591,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       children: [
@@ -6571,22 +6603,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           child: Text(
                             title,
                             style: GoogleFonts.outfit(
-                              fontSize: 19,
+                              fontSize: titleFontSize,
                               fontWeight: FontWeight.w900,
                               color: isDark
                                   ? Colors.white
                                   : const Color(0xFF1A1A2E),
-                              letterSpacing: -0.3,
+                              letterSpacing: -0.2,
+                              height: 1.15,
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (count != null) ...[
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
+                                horizontal: 6, vertical: 1.5),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: isHighlighted
@@ -6614,7 +6647,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             child: Text(
                               '$count',
                               style: GoogleFonts.outfit(
-                                fontSize: 11,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w800,
                                 color: isHighlighted
                                     ? const Color(0xFFFF3366)
@@ -6625,16 +6658,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         ],
                       ],
                     ),
-                    if (subtitle != null)
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
                       Text(
                         subtitle,
                         style: GoogleFonts.outfit(
-                          fontSize: 12,
+                          fontSize: 11.5,
                           color:
                               isDark ? Colors.white54 : AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
+                          height: 1.15,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -6644,13 +6682,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         if (onSeeAllTap != null || isLoading)
           GestureDetector(
             onTap: isLoading ? null : onSeeAllTap,
+            behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 9.5, vertical: 4.5),
               decoration: BoxDecoration(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.07)
                     : AppColors.primary.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white10
+                      : AppColors.primary.withValues(alpha: 0.12),
+                ),
               ),
               child: isLoading
                   ? SizedBox(
@@ -6667,15 +6711,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         Text(
                           'See all',
                           style: GoogleFonts.outfit(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: isDark ? Colors.white70 : AppColors.primary,
                           ),
                         ),
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 2.5),
                         Icon(
                           Icons.arrow_forward_rounded,
-                          size: 14,
+                          size: 13,
                           color: isDark ? Colors.white70 : AppColors.primary,
                         ),
                       ],
@@ -6830,155 +6874,161 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     required VoidCallback onSeeAllTap,
     required bool isDark,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Department Emoji / Gradient Pill
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        accentGradient.first
-                            .withValues(alpha: isDark ? 0.25 : 0.14),
-                        accentGradient.last
-                            .withValues(alpha: isDark ? 0.15 : 0.07),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: accentGradient.first
-                          .withValues(alpha: isDark ? 0.35 : 0.20),
-                      width: 1.2,
-                    ),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 380;
+    final titleFontSize = isCompact
+        ? (title.length > 20 ? 14.0 : 15.0)
+        : (title.length > 20 ? 15.5 : 17.0);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Department Emoji / Gradient Pill
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      accentGradient.first
+                          .withValues(alpha: isDark ? 0.25 : 0.14),
+                      accentGradient.last
+                          .withValues(alpha: isDark ? 0.15 : 0.07),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Center(
-                    child: Text(
-                      emoji,
-                      style: const TextStyle(fontSize: 18),
-                    ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: accentGradient.first
+                        .withValues(alpha: isDark ? 0.35 : 0.20),
+                    width: 1.2,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF1A1A2E),
-                                letterSpacing: -0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  accentGradient.first.withValues(alpha: 0.12),
-                                  accentGradient.last.withValues(alpha: 0.06),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: accentGradient.first
-                                    .withValues(alpha: 0.25),
-                              ),
-                            ),
-                            child: Text(
-                              '$count',
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: accentGradient.first,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          color: isDark
-                              ? Colors.white54
-                              : AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                child: Center(
+                  child: Text(
+                    emoji,
+                    style: const TextStyle(fontSize: 16),
                   ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: GoogleFonts.outfit(
+                              fontSize: titleFontSize,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A2E),
+                              letterSpacing: -0.2,
+                              height: 1.15,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                accentGradient.first.withValues(alpha: 0.12),
+                                accentGradient.last.withValues(alpha: 0.06),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: accentGradient.first
+                                  .withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: accentGradient.first,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.outfit(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? Colors.white54
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                        height: 1.15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: onSeeAllTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 9.5, vertical: 4.5),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : AppColors.primary.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white10
+                    : AppColors.primary.withValues(alpha: 0.12),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'See all',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white70 : AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 2.5),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 13,
+                  color: isDark ? Colors.white70 : AppColors.primary,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onSeeAllTap,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : AppColors.primary.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white10
-                      : AppColors.primary.withValues(alpha: 0.12),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'See all',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white70 : AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 3),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 14,
-                    color: isDark ? Colors.white70 : AppColors.primary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -6991,11 +7041,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final carouselItems = products.take(10).toList();
 
     return SizedBox(
-      height: 285,
+      height: 244,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.only(right: 6),
         itemCount: carouselItems.length + 1,
         itemBuilder: (context, index) {
           if (index < carouselItems.length) {
@@ -7006,9 +7056,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       orElse: () => null,
                     );
             return SizedBox(
-              width: 156,
+              width: 146,
               child: Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.only(right: 10),
                 child: RepaintBoundary(
                   key: ValueKey('sec_p_${product.id}'),
                   child: ProductCard(
@@ -7022,7 +7072,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
           // ── Sleek "View All" End-Card ──────────────────────────────
           return SizedBox(
-            width: 140,
+            width: 136,
             child: Padding(
               padding: const EdgeInsets.only(right: 4, top: 4, bottom: 4),
               child: RepaintBoundary(
@@ -7057,8 +7107,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
-                            width: 46,
-                            height: 46,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [
@@ -7081,14 +7131,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             child: const Icon(
                               Icons.arrow_forward_rounded,
                               color: Colors.white,
-                              size: 22,
+                              size: 20,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           Text(
                             'View All',
                             style: GoogleFonts.outfit(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: isDark
                                   ? Colors.white
@@ -7099,17 +7149,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           Text(
                             '$sectionTitle Items',
                             style: GoogleFonts.outfit(
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: isDark
                                   ? Colors.white60
                                   : AppColors.textSecondary,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 3),
+                                horizontal: 8, vertical: 2.5),
                             decoration: BoxDecoration(
                               color: AppColors.primary
                                   .withValues(alpha: isDark ? 0.20 : 0.08),
@@ -7118,7 +7168,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             child: Text(
                               '${products.length}+ items',
                               style: GoogleFonts.outfit(
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 fontWeight: FontWeight.w700,
                                 color: isDark
                                     ? AppColors.primaryLight
@@ -7748,6 +7798,19 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  String _formatCategoryDisplayLabel(String name) {
+    if (name == 'Supermarket / Hypermarket') return 'Supermarket\nHypermarket';
+    if (name.contains(' & ')) {
+      final parts = name.split(' & ');
+      return '${parts[0]}\n& ${parts[1]}';
+    }
+    if (name.contains(' / ')) {
+      final parts = name.split(' / ');
+      return '${parts[0]}\n${parts[1]}';
+    }
+    return name;
+  }
+
   // ── Shop by Category Section ────────────────────────────────────────────────
   // Primary department categories + a "See More" card, horizontally swipable.
   // Tap: filter home page in-place (same logic as old upper chips).
@@ -7907,9 +7970,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               final cat = mainCats[index];
               final grad = cat['grad'] as List<Color>;
               final catName = cat['name'] as String;
-              final displayLabel = catName == 'Supermarket / Hypermarket'
-                  ? 'Supermarket\nHypermarket'
-                  : catName;
+              final displayLabel = _formatCategoryDisplayLabel(catName);
               final imageUrl = AppCategories.getImageUrl(catName);
               final isSelected = _selectedTabIndex == index;
 

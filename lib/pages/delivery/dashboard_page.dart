@@ -2677,7 +2677,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
     // Calculate distinct shops and their grouped items
     final shopGroups = <String, List<OrderModel>>{};
-    for (final o in group.orders) {
+    final targetOrders =
+        group.activeOrders.isNotEmpty ? group.activeOrders : group.orders;
+    for (final o in targetOrders) {
       final sId = o.shopId ?? 'unknown';
       shopGroups.putIfAbsent(sId, () => []).add(o);
     }
@@ -2895,15 +2897,15 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: allItems
                                       .map((item) => Text(
-                                          '${item.quantity}x ${item.productName}${item.isDeclined ? " (Out of Stock)" : ""}',
+                                          '${item.quantity}x ${item.productName}${item.isDeclined ? " (Out of Stock)" : (!item.isActive ? " (Cancelled)" : "")}',
                                           style: GoogleFonts.outfit(
                                             fontSize: 12,
-                                            color: item.isDeclined
+                                            color: (!item.isActive || item.isDeclined)
                                                 ? Colors.grey
                                                 : (isDark
                                                     ? Colors.white54
                                                     : Colors.black54),
-                                            decoration: item.isDeclined
+                                            decoration: (!item.isActive || item.isDeclined)
                                                 ? TextDecoration.lineThrough
                                                 : null,
                                           )))
@@ -3008,11 +3010,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       Expanded(
                         child: Builder(builder: (context) {
                           // 100x FIX (Domain 2): Hoarding Limit UI Lockout (Max 3 Cart Groups)
-                          final isLinkedAddon = _myGroups.any((g) =>
-                              g.groupId == group.groupId ||
-                              (group.orders.isNotEmpty &&
-                                  g.orders.any((o) =>
-                                      o.customerId == group.orders.first.customerId)));
+                          final isLinkedAddon =
+                              _myGroups.any((g) => g.groupId == group.groupId);
                           final isAtCapacity = _myGroups.length >= 3 && !isLinkedAddon;
                           return ElevatedButton(
                             onPressed: (_isLoading ||
@@ -3038,7 +3037,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                 isExpired
                                     ? 'Expired'
                                     : isAtCapacity
-                                        ? 'Max 3 Orders'
+                                        ? 'Max 3 Orders Active'
                                         : 'Accept',
                                 style: GoogleFonts.outfit(
                                     fontWeight: FontWeight.w800, fontSize: 14)),
@@ -3061,7 +3060,10 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             : [const Color(0xFFFF8C42), const Color(0xFFE8590C)];
 
     bool isExpanded = !_collapsedActiveGroups.contains(group.groupId);
-    final distinctShopCount = group.orders.map((o) => o.shopId).toSet().length;
+    final targetActiveOrders =
+        group.activeOrders.isNotEmpty ? group.activeOrders : group.orders;
+    final distinctShopCount =
+        targetActiveOrders.map((o) => o.shopId).toSet().length;
 
     return StatefulBuilder(builder: (context, setStateBuilder) {
       return Container(
@@ -3557,22 +3559,42 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
-                                  color: i.isDeclined ? Colors.grey : AppColors.accent)),
+                                  color: (!i.isActive || i.isDeclinedOrSwapped) ? Colors.grey : AppColors.accent)),
                           Expanded(
                             child: Text(
                               i.productName,
                               style: GoogleFonts.outfit(
                                   fontSize: 13,
-                                  color: i.isDeclined
+                                  color: (!i.isActive || i.isDeclinedOrSwapped)
                                       ? Colors.grey
                                       : (isDark ? Colors.white70 : Colors.black87),
-                                  decoration: i.isDeclined ? TextDecoration.lineThrough : null),
+                                  decoration: (!i.isActive || i.isDeclinedOrSwapped) ? TextDecoration.lineThrough : null),
                             ),
                           ),
-                          if (i.isDeclined) ...[
+                          if (i.isSwapped) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '(🔄 Swapped · Do Not Collect)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ] else if (i.isDeclined) ...[
                             const SizedBox(width: 4),
                             Text(
                               '(Out of Stock)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.danger,
+                              ),
+                            ),
+                          ] else if (i.isCancelled) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '(Cancelled · Do Not Collect)',
                               style: GoogleFonts.outfit(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,

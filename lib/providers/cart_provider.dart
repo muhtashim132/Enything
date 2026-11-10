@@ -602,6 +602,8 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     _pendingCartGroupId = null;      // Bug 1.1: prevent cross-account injection
     _pendingOrderIdToCancel = null;  // Bug 1.1: prevent cross-account injection
+    _activePendingShops = [];        // 100x FIX: Flush ghost replacement shops from memory
+    _activePendingWeight = 0.0;      // 100x FIX: Flush ghost replacement weight from memory
     scaffoldMessengerKey.currentState?.clearSnackBars();
     _saveCart(); // Bug #20
     _clearPersistedPendingFields();
@@ -613,10 +615,24 @@ class CartProvider extends ChangeNotifier {
     _items.clear();
     _pendingCartGroupId = null;      // Bug 1.1: prevent cross-account injection
     _pendingOrderIdToCancel = null;  // Bug 1.1: prevent cross-account injection
+    _activePendingShops = [];        // 100x FIX: Flush ghost replacement shops from memory
+    _activePendingWeight = 0.0;      // 100x FIX: Flush ghost replacement weight from memory
     scaffoldMessengerKey.currentState?.clearSnackBars();
     safeNotifyListeners();
     await _saveCart();
     await _clearPersistedPendingFields();
+  }
+
+  /// 100x REPLACEMENT PARADIGM:
+  /// Clears only cart items and active coupons while strictly preserving
+  /// pending replacement state (_pendingCartGroupId, _pendingOrderIdToCancel,
+  /// _activePendingShops, _activePendingWeight) so the customer can checkout
+  /// the replacement item cleanly without state loss.
+  void clearItemsOnlyForReplacement() {
+    _items.clear();
+    scaffoldMessengerKey.currentState?.clearSnackBars();
+    _saveCart();
+    safeNotifyListeners();
   }
 
   // ---------------------------------------------------------------------------

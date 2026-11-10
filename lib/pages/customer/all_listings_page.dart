@@ -1133,7 +1133,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 ? _sortedProducts.length
                 : _totalAvailableProducts)
             : _sortedProducts.length)
-        : widget.shops.length;
+        : (_searchQuery.isNotEmpty ? _sortedShops.length : widget.shops.length);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

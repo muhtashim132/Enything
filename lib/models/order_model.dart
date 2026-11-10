@@ -236,6 +236,20 @@ class OrderModel {
     this.refundStatus,
   });
 
+  factory OrderModel.empty() => OrderModel(
+        id: '',
+        customerId: '',
+        status: 'cancelled',
+        orderType: 'instant',
+        totalAmount: 0.0,
+        deliveryCharges: 0.0,
+        riderEarnings: 0.0,
+        multiShopSurcharge: 0.0,
+        platformFee: 0.0,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+        items: const [],
+      );
+
   static double _parseDouble(dynamic value) {
     if (value == null) return 0.0;
     if (value is num) return value.toDouble();

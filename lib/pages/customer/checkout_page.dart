@@ -70,6 +70,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double _activeSurchargePaid = 0.0;
   // ignore: unused_field
   List<ShopModel> _activeShops = [];
+  String? _replacementSessionKey;
 
   @override
   void initState() {
@@ -588,6 +589,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       throw Exception('Your cart is empty. Please add items before ordering.');
     }
 
+    // Ensure active group state is loaded if currently fetching
+    if (_isLoadingActiveGroup) {
+      await _fetchActiveGroupState();
+    }
+
     // 100x PRELAUNCH FIX: Delivery coordinates guard
     if (!LocationProvider.isValidCoordinates(location.currentLocation) ||
         location.currentAddress.trim().isEmpty) {
@@ -758,11 +764,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       final isReplacementOrder = widget.existingCartGroupId != null ||
           cart.pendingCartGroupId != null;
-      // 100x FIX: Only treat as replacement if there are actual surviving active shops in the group.
-      // If all previous orders in the group were cancelled/rejected, _activeShopIds is empty.
-      // SQL place_orders_transaction evaluates v_is_replacement = false in that case,
-      // expecting standard base delivery and handling fee. Waiving fees when _activeShopIds is empty
-      // caused a runtime exception: 'Handling fee spoofing detected. Expected: 20, Got: 0'.
+      // 100x FIX: When this order is a replacement, handling fee and base delivery are waived
+      // because they were already accounted for in the original order group.
       final bool isEffectiveReplacement =
           isReplacementOrder && _activeShopIds.isNotEmpty;
 
@@ -1163,7 +1166,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           // violation. A fresh UUID lets the new replacement order be inserted
           // cleanly while still using the SAME cartGroupId to link the group.
           'p_idempotency_key':
-              isReplacementOrder ? const Uuid().v4() : cartGroupId,
+              isReplacementOrder ? (_replacementSessionKey ??= const Uuid().v4()) : cartGroupId,
           if (widget.orderIdToCancelOnSuccess != null || pendingCancelId != null)
             'p_order_id_to_cancel':
                 widget.orderIdToCancelOnSuccess ?? pendingCancelId,
@@ -1229,7 +1232,27 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   .maybeSingle();
               if (activeOrder != null &&
                   activeOrder['delivery_partner_id'] != null) {
-                exclusiveRiderId = activeOrder['delivery_partner_id'] as String;
+                final riderIdCandidate = activeOrder['delivery_partner_id'] as String;
+                // Verify rider is not already at max 3 active delivery groups
+                final activeGroupsRes = await supabase
+                    .from('orders')
+                    .select('cart_group_id, id')
+                    .eq('delivery_partner_id', riderIdCandidate)
+                    .not(
+                      'status',
+                      'in',
+                      '(delivered,cancelled,seller_rejected,partner_rejected,rider_rejected,verification_failed,shop_dispute_cancel,timeout,failed,returned,refunded,no_rider)',
+                    )
+                    .neq('cart_group_id', cartGroupId);
+                final distinctGroups = <String>{};
+                for (final row in (activeGroupsRes as List)) {
+                  distinctGroups.add((row['cart_group_id'] ?? row['id']).toString());
+                }
+                if (distinctGroups.length < 3) {
+                  exclusiveRiderId = riderIdCandidate;
+                } else {
+                  debugPrint('Rider $riderIdCandidate is at capacity (${distinctGroups.length} groups). Falling back to general broadcast.');
+                }
               }
             } catch (e) {
               debugPrint('Error finding exclusive rider: $e');
@@ -1297,9 +1320,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
 
-      // 100x FIX: Clear pending replacement state now that order placement succeeded
-      if (pendingGroupId != null) cartProvider.setPendingCartGroupId(null);
-      if (pendingCancelId != null) cartProvider.setPendingOrderIdToCancel(null);
+      // 100x FIX: Clear pending replacement state completely now that order placement succeeded
+      cartProvider.clearPendingReplacement();
 
       // Cleanup (Additive: avoid unmounted leaks and race conditions)
       await cart.clearAsync();
@@ -1856,8 +1878,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       const SizedBox(height: 8),
                       _billRow(
                         'Handling Fee',
-                        '+₹${cart.platformFee.toStringAsFixed(2)}',
-                        hint: 'Covers payment gateway & app operations (incl. GST)',
+                        isEffectiveReplacement
+                            ? '₹0.00 (Waived)'
+                            : '+₹${cart.platformFee.toStringAsFixed(2)}',
+                        hint: isEffectiveReplacement
+                            ? 'Waived for replacement order in active group'
+                            : 'Covers payment gateway & app operations (incl. GST)',
+                        valueColor: isEffectiveReplacement ? AppColors.success : null,
                       ),
                       if ((gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst) > 0) ...[
                         const SizedBox(height: 8),
