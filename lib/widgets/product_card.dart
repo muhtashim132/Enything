@@ -531,7 +531,7 @@ class _ProductCardState extends State<ProductCard> {
 
                           // Rating & Shop Distance row
                           Padding(
-                            padding: const EdgeInsets.only(top: 1),
+                            padding: const EdgeInsets.only(top: 2),
                             child: Row(
                               children: [
                                 const Icon(Icons.star_rounded,
@@ -562,29 +562,44 @@ class _ProductCardState extends State<ProductCard> {
                                     ),
                                   ),
                                 if (shop != null) ...[
-                                  const SizedBox(width: 3),
-                                  Container(
-                                      width: 2.5,
-                                      height: 2.5,
-                                      decoration: BoxDecoration(
-                                          color: isDark
-                                              ? Colors.white38
-                                              : AppColors.textSecondary,
-                                          shape: BoxShape.circle)),
-                                  const SizedBox(width: 3),
-                                  Flexible(
-                                    child: Text(
-                                      '${context.watch<LocationProvider>().distanceTo(shop!.location).toStringAsFixed(1)}km',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? Colors.white54
-                                            : AppColors.textSecondary,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
+                                  Builder(builder: (ctx) {
+                                    final locProv = ctx.watch<LocationProvider>();
+                                    final hasValidCoords = locProv.hasLocation &&
+                                        shop!.location.latitude != 0 &&
+                                        shop!.location.longitude != 0;
+                                    final d = hasValidCoords
+                                        ? locProv.distanceTo(shop!.location)
+                                        : -1.0;
+                                    if (d < 0) return const SizedBox.shrink();
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const SizedBox(width: 3),
+                                        Container(
+                                            width: 2.5,
+                                            height: 2.5,
+                                            decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? Colors.white38
+                                                    : AppColors.textSecondary,
+                                                shape: BoxShape.circle)),
+                                        const SizedBox(width: 3),
+                                        Flexible(
+                                          child: Text(
+                                            '${d.toStringAsFixed(1)}km',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : AppColors.textSecondary,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
                                 ],
                               ],
                             ),

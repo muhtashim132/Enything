@@ -133,7 +133,8 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         return;
       }
 
-      String targetId = _shopId ?? widget.initialShopId ?? shopsList.first['id'];
+      String targetId =
+          _shopId ?? widget.initialShopId ?? shopsList.first['id'];
       final resp = shopsList.firstWhere(
         (s) => s['id'] == targetId,
         orElse: () => shopsList.first,
@@ -154,10 +155,14 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
 
         // Bulk settings
         _acceptsBulkOrders = resp['accepts_bulk_orders'] ?? false;
-        _maxBulkItemsCtrl.text = (resp['max_bulk_items_per_slot'] ?? 200).toString();
-        _minLeadHoursCtrl.text = (resp['min_bulk_lead_time_hours'] ?? 4).toString();
-        _maxLeadHoursCtrl.text = (resp['max_bulk_lead_time_hours'] ?? 168).toString();
-        _slotDurationCtrl.text = (resp['bulk_slot_duration_minutes'] ?? 120).toString();
+        _maxBulkItemsCtrl.text =
+            (resp['max_bulk_items_per_slot'] ?? 200).toString();
+        _minLeadHoursCtrl.text =
+            (resp['min_bulk_lead_time_hours'] ?? 4).toString();
+        _maxLeadHoursCtrl.text =
+            (resp['max_bulk_lead_time_hours'] ?? 168).toString();
+        _slotDurationCtrl.text =
+            (resp['bulk_slot_duration_minutes'] ?? 120).toString();
 
         _isLoading = false;
       });
@@ -171,7 +176,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
   Future<void> _toggleShopStatus(bool value) async {
     if (_shopId == null) return;
     if (_adminSuspended) {
-      _showSnack('Your shop has been suspended by administration. You cannot open the store.', isError: true);
+      _showSnack(
+          'Your shop has been suspended by administration. You cannot open the store.',
+          isError: true);
       return;
     }
     setState(() => _isActive = value);
@@ -239,10 +246,14 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
         'open_time': _openTimeCtrl.text.trim(),
         'close_time': _closeTimeCtrl.text.trim(),
         'accepts_bulk_orders': _acceptsBulkOrders,
-        'max_bulk_items_per_slot': int.tryParse(_maxBulkItemsCtrl.text.trim()) ?? 200,
-        'min_bulk_lead_time_hours': int.tryParse(_minLeadHoursCtrl.text.trim()) ?? 4,
-        'max_bulk_lead_time_hours': int.tryParse(_maxLeadHoursCtrl.text.trim()) ?? 168,
-        'bulk_slot_duration_minutes': int.tryParse(_slotDurationCtrl.text.trim()) ?? 120,
+        'max_bulk_items_per_slot':
+            int.tryParse(_maxBulkItemsCtrl.text.trim()) ?? 200,
+        'min_bulk_lead_time_hours':
+            int.tryParse(_minLeadHoursCtrl.text.trim()) ?? 4,
+        'max_bulk_lead_time_hours':
+            int.tryParse(_maxLeadHoursCtrl.text.trim()) ?? 168,
+        'bulk_slot_duration_minutes':
+            int.tryParse(_slotDurationCtrl.text.trim()) ?? 120,
       }).eq('id', _shopId!);
       if (!mounted) return;
       _showSnack('✅ Shop details updated!');
@@ -350,10 +361,14 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
           children: [
             Text('Shop Management',
                 style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18)),
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontSize: 18)),
             if (_shops.isNotEmpty)
               Text(
-                _shops.firstWhere((s) => s['id'] == _shopId, orElse: () => _shops.first)['name'] ?? 'Store',
+                _shops.firstWhere((s) => s['id'] == _shopId,
+                        orElse: () => _shops.first)['name'] ??
+                    'Store',
                 style: GoogleFonts.outfit(fontSize: 12, color: Colors.white70),
               ),
           ],
@@ -383,7 +398,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                   child: Row(
                     children: [
                       Icon(
-                        id == _shopId ? Icons.check_circle : Icons.store_outlined,
+                        id == _shopId
+                            ? Icons.check_circle
+                            : Icons.store_outlined,
                         color: id == _shopId ? AppColors.primary : Colors.grey,
                         size: 18,
                       ),
@@ -391,7 +408,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                       Expanded(
                         child: Text(name,
                             style: GoogleFonts.outfit(
-                              fontWeight: id == _shopId ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: id == _shopId
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             )),
                       ),
                     ],
@@ -474,7 +493,9 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
                                 ),
                                 Switch(
                                   value: _adminSuspended ? false : _isActive,
-                                  onChanged: _adminSuspended ? null : _toggleShopStatus,
+                                  onChanged: _adminSuspended
+                                      ? null
+                                      : _toggleShopStatus,
                                   activeThumbColor: AppColors.success,
                                   inactiveThumbColor: AppColors.danger,
                                 ),

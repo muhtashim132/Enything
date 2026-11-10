@@ -100,6 +100,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Map<String, ShopModel> _searchProductShops = {};
   List<ProductModel> _products = [];
   Map<String, ShopModel> _productShops = {};
+  Map<String, int> _departmentProductCounts = {};
   String _searchQuery = '';
   String _selectedSearchDemographic = 'All';
   String _selectedFeedDemographic = 'All'; // 'All', 'Men/Boys', 'Women/Girls'
@@ -2200,7 +2201,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'Fish & Seafood',
       'Organic'
     ],
-    'Pharmacy': ['Pharmacy', 'Medical Store'],
+    'Pharmacy': [
+      'Pharmacy',
+      'Medical Store',
+      'Medicines',
+      'Medicine',
+      'Pharma',
+      'Chemist',
+      'Healthcare'
+    ],
     'GroceryAndMed': [
       'Grocery',
       'Grocerylm',
@@ -2211,7 +2220,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'Fish & Seafood',
       'Organic',
       'Pharmacy',
-      'Medical Store'
+      'Medical Store',
+      'Medicines',
+      'Medicine',
+      'Pharma',
+      'Chemist',
+      'Healthcare'
     ],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
@@ -2449,7 +2463,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         diverseShopIds.add(s.id);
       }
 
-      final perShopLimit = diverseShopIds.length <= 2 ? 12 : 8;
+      final perShopLimit = diverseShopIds.length <= 2 ? 16 : 12;
       final productsResponse = diverseShopIds.isEmpty
           ? []
           : await _supabase.rpc('get_feed_products', params: {
@@ -2553,6 +2567,30 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         _cachedLocation = locationProvider.currentLocation;
         _cacheTimestamp = DateTime.now();
 
+        // ── 100x Department Aggregate Product Counts Fortress ────────────────
+        // Query exact total available products across nearby shops by department
+        // to ensure section header badges on the dashboard reflect true catalog
+        // inventory matching AllListingsPage and CategoryProductsPage.
+        Map<String, int> deptCounts = {};
+        if (nearby.isNotEmpty) {
+          try {
+            final nearbyIds = nearby.map((s) => s.id).toList();
+            final countRows = await _supabase.rpc(
+              'get_nearby_department_product_counts',
+              params: {'p_shop_ids': nearbyIds},
+            );
+            if (countRows is List) {
+              for (final r in countRows) {
+                final d = r['department']?.toString();
+                final c = (r['total_count'] as num?)?.toInt() ?? 0;
+                if (d != null) deptCounts[d] = c;
+              }
+            }
+          } catch (countErr) {
+            debugPrint('_loadAllData: get_nearby_department_product_counts error: $countErr');
+          }
+        }
+
         _invalidateSortMemo();
         // Atomic update: swap data and clear loading in a single setState
         setState(() {
@@ -2561,6 +2599,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           _shops = nearby;
           _products = prods;
           _productShops = prodShops;
+          _departmentProductCounts = deptCounts;
           _isLoading = false;
           _hasLoadedOnce = true;
           _loadRetryCount = 0; // Reset retry counter on success
@@ -3930,7 +3969,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 244,
+                                      height: 282,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         physics: const BouncingScrollPhysics(),
@@ -3983,7 +4022,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Fresh meals, snacks & cuisines delivered hot',
                                   emoji: '🍔',
-                                  count: _sortedFoodProducts.length,
+                                  count: _departmentProductCounts['Food'] ?? _sortedFoodProducts.length,
                                   accentGradient: const [
                                     Color(0xFFFF6B6B),
                                     Color(0xFFEE5A24),
@@ -4024,7 +4063,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Prescription drugs, vitamins & wellness',
                                   emoji: '💊',
-                                  count: _sortedPharmacyProducts.length,
+                                  count: _departmentProductCounts['Pharmacy'] ?? _sortedPharmacyProducts.length,
                                   accentGradient: const [
                                     Color(0xFF0284C7),
                                     Color(0xFF06B6D4),
@@ -4065,7 +4104,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Skincare, makeup & fragrances near you',
                                   emoji: '💄',
-                                  count: _sortedCosmeticsProducts.length,
+                                  count: _departmentProductCounts['Cosmetics'] ?? _sortedCosmeticsProducts.length,
                                   accentGradient: const [
                                     Color(0xFFE91E8C),
                                     Color(0xFFFF6FB5),
@@ -4106,7 +4145,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Books, pens, art & school essentials',
                                   emoji: '📚',
-                                  count: _sortedStationeryProducts.length,
+                                  count: _departmentProductCounts['Stationery'] ?? _sortedStationeryProducts.length,
                                   accentGradient: const [
                                     Color(0xFF5B86E5),
                                     Color(0xFF36D1DC),
@@ -4147,7 +4186,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Daily staples, fresh veggies & household needs',
                                   emoji: '🏬',
-                                  count: _sortedSupermarketProducts.length,
+                                  count: _departmentProductCounts['Grocery'] ?? _sortedSupermarketProducts.length,
                                   accentGradient: const [
                                     Color(0xFF00B074),
                                     Color(0xFF10B981),
@@ -4294,7 +4333,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Trending styles, apparel & accessories',
                                   emoji: '👕',
-                                  count: _sortedClothingProducts.length,
+                                  count: _departmentProductCounts['Clothing'] ?? _sortedClothingProducts.length,
                                   accentGradient: const [
                                     Color(0xFF8B5CF6),
                                     Color(0xFFEC4899),
@@ -7037,10 +7076,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     required VoidCallback onViewAllTap,
     required bool isDark,
   }) {
-    final carouselItems = products.take(10).toList();
+    final carouselItems = products.take(12).toList();
 
     return SizedBox(
-      height: 244,
+      height: 282,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),

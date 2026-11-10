@@ -11,7 +11,10 @@ class WeightEngine {
     required ProductModel product,
     ProductVariant? selectedVariant,
   }) {
-    final packMultiplier = _extractPackMultiplier(product.name);
+    int packMultiplier = _extractPackMultiplier(product.name);
+    if (packMultiplier == 1 && selectedVariant != null) {
+      packMultiplier = _extractPackMultiplier(selectedVariant.name);
+    }
 
     // ── Tier 1: Explicit Seller Weight Input & Unit Conversion ─────────────
     if (product.weightPerUnit != null && product.weightPerUnit! > 0) {
@@ -173,8 +176,9 @@ class WeightEngine {
   // "2-Pack", "3-pack", "6 Pack", "2 Pack"
   // "2x500g", "2 x 500g"
   // "Buy 1 Get 1", "BOGO", "1+1 Free"
+  // 100x FORENSIC GUARD: Negative lookahead ensures "Basmati Rice Pack 5kg" does NOT match "Pack 5" as a 5x multiplier!
   static final RegExp _packOfRegex = RegExp(
-    r'(?:pack\s*of|combo\s*of|set\s*of|\bpack\b|\bbox\s*of)\s*[:\-]?\s*(\d+)',
+    r'(?:pack\s*of|combo\s*of|set\s*of|\bbox\s*of|\bpack\b)\s*[:\-]?\s*(\d+)(?!\s*(?:kg|g|gm|gms|grams|ml|l|ltr|liters|litres|mg)\b)',
     caseSensitive: false,
   );
 
@@ -184,7 +188,12 @@ class WeightEngine {
   );
 
   static final RegExp _multiplierXRegex = RegExp(
-    r'\b(\d+)\s*[xX]\s*\d+\s*(?:g|kg|ml|l|gm)\b',
+    r'\b(\d+)\s*[xX]\s*\d+\s*(?:g|kg|ml|l|gm|gms|grams)\b',
+    caseSensitive: false,
+  );
+
+  static final RegExp _reverseMultiplierXRegex = RegExp(
+    r'\b\d+\s*(?:g|kg|ml|l|gm|gms|grams)\s*[xX]\s*(\d+)\b',
     caseSensitive: false,
   );
 
@@ -204,6 +213,13 @@ class WeightEngine {
     final matchX = _multiplierXRegex.firstMatch(name);
     if (matchX != null) {
       final count = int.tryParse(matchX.group(1) ?? '1');
+      if (count != null && count > 1 && count <= 50) return count;
+    }
+
+    // Check "500g x 2" (reverse multiplier)
+    final matchRevX = _reverseMultiplierXRegex.firstMatch(name);
+    if (matchRevX != null) {
+      final count = int.tryParse(matchRevX.group(1) ?? '1');
       if (count != null && count > 1 && count <= 50) return count;
     }
 
