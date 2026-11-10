@@ -2407,6 +2407,10 @@ class _AdminProductManagementPageState
     );
 
     if (confirmed == true && mounted) {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      final rbac = context.read<RbacProvider>();
+      final isSuperAdmin = rbac.isSuperAdmin;
+
       // Show loading indicator dialog during deletion
       showDialog(
         context: context,
@@ -2450,6 +2454,23 @@ class _AdminProductManagementPageState
             .update(updatePayload)
             .eq('id', product.id)
             .eq('shop_id', product.shopId);
+
+        // Immutable Audit Trail
+        if (currentUserId != null) {
+          AuditRepository().log(
+            actorId: currentUserId,
+            actorRole: isSuperAdmin ? 'super_admin' : 'admin',
+            action: 'product.deleted',
+            entityType: 'product',
+            entityId: product.id,
+            metadata: {
+              'shop_id': product.shopId,
+              'product_name': product.name,
+              'has_order_history': hasOrderHistory,
+              'purged_images_count': deletedImagesCount,
+            },
+          );
+        }
 
         if (mounted) {
           // Dismiss loading dialog

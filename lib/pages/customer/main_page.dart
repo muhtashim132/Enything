@@ -272,7 +272,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                 } else {
                   cartProvider.setPendingOrderIdToCancel(null);
                 }
-                final activeShopIds = siblings
+                final activeOrders = siblings
                     .where((s) => !{
                           'seller_rejected',
                           'partner_rejected',
@@ -280,11 +280,32 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                           'verification_failed',
                           'cancelled'
                         }.contains(s['status']))
+                    .toList();
+                final activeShopIds = activeOrders
                     .map((s) => s['shop_id'] as String?)
                     .whereType<String>()
                     .where((id) => id.isNotEmpty)
                     .toSet()
                     .toList();
+                final activeOrderIds = activeOrders
+                    .map((s) => s['id'] as String?)
+                    .whereType<String>()
+                    .toList();
+                double survivingWeight = 0.0;
+                if (activeOrderIds.isNotEmpty) {
+                  try {
+                    final itemsResp = await supabase
+                        .from('order_items')
+                        .select('quantity, weight_kg')
+                        .inFilter('order_id', activeOrderIds)
+                        .eq('status', 'active');
+                    for (final it in (itemsResp as List)) {
+                      final q = (it['quantity'] as num?)?.toInt() ?? 1;
+                      final w = (it['weight_kg'] as num?)?.toDouble() ?? 0.5;
+                      survivingWeight += (q * w);
+                    }
+                  } catch (_) {}
+                }
                 if (activeShopIds.isNotEmpty) {
                   final shopsResp = await supabase
                       .from('shops')
@@ -294,7 +315,7 @@ class _CustomerMainPageState extends State<CustomerMainPage>
                       .map((m) => ShopModel.fromMap(m as Map<String, dynamic>))
                       .toList();
                   if (mounted) {
-                    cartProvider.setActivePendingShops(activeShops);
+                    cartProvider.setActivePendingShops(activeShops, survivingWeight);
                   }
                 }
               } catch (e) {

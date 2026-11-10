@@ -413,22 +413,31 @@ class _TrackOrderPageState extends State<TrackOrderPage>
           _checkStackedDelivery(activeRiderId, order.cartGroupId ?? order.id);
         }
 
-        // Fix 3: Read the resolved flag from SharedPrefs so the panel stays hidden
-        // even when this TrackOrderPage is recreated (e.g. banner tap after replacement).
-        final resolvedKey = 'partial_rejection_resolved_${order.cartGroupId ?? order.id}';
+        // Fix 3: Read the resolved flag and resolved count from SharedPrefs so the panel stays hidden
+        // even when TrackOrderPage is recreated, while allowing NEW subsequent rejections to surface cleanly.
+        final groupKey = order.cartGroupId ?? order.id;
+        final resolvedKey = 'partial_rejection_resolved_$groupKey';
+        final resolvedCountKey = 'resolved_rejected_count_$groupKey';
         final prefs = await SharedPreferences.getInstance();
         final resolved = prefs.getBool(resolvedKey) ?? false;
-        if (resolved && mounted && !_partialRejectionResolved) {
-          _partialRejectionResolved = true;
-        }
+        final savedResolvedCount = prefs.getInt(resolvedCountKey) ?? 0;
 
-        // 100x FIX: Pre-seed _lastKnownRejectedCount from group so sequential rejection logic
-        // does not falsely un-resolve an already-handled rejection on page re-entry!
-        _lastKnownRejectedCount = group
+        final currentRejectedCount = group
                 .where((o) => _terminalRejectionStatuses.contains(o.status))
                 .length +
             group.fold<int>(
                 0, (sum, o) => sum + o.items.where((i) => i.isDeclined).length);
+
+        if (savedResolvedCount > 0 && currentRejectedCount <= savedResolvedCount) {
+          _partialRejectionResolved = true;
+          _lastKnownRejectedCount = savedResolvedCount;
+        } else if (currentRejectedCount > savedResolvedCount) {
+          _partialRejectionResolved = false; // New unhandled rejection surfaced
+          _lastKnownRejectedCount = savedResolvedCount;
+        } else if (resolved && mounted && !_partialRejectionResolved) {
+          _partialRejectionResolved = true;
+          _lastKnownRejectedCount = currentRejectedCount;
+        }
 
         // Compute aggregate status for countdowns/payments after reading preferences
         _handleAggregateStatusChange();
@@ -3502,12 +3511,7 @@ class _TrackOrderPageState extends State<TrackOrderPage>
                     ],
 
                     // ── Tracking Steps / Store & Item Statuses ────────────────────
-                    if (_groupOrders.length > 1 ||
-                        (_order != null &&
-                            _order!.items.any((i) =>
-                                i.isDeclined ||
-                                i.isSwapped ||
-                                i.isCancelled))) ...[
+                    if (_groupOrders.isNotEmpty || _order != null) ...[
                       _buildShopStatusList(isDark),
                     ],
 

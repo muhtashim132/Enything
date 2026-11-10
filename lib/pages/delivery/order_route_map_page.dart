@@ -1627,20 +1627,61 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
                                                         TextOverflow.ellipsis,
                                                   ),
                                                 Builder(builder: (context) {
-                                                  final liveGroupOrders = _orders.where((o) =>
-                                                      (o.cartGroupId != null && o.cartGroupId == group.groupId) ||
-                                                      (o.cartGroupId == null && o.id == group.primaryOrder.id)).toList();
-                                                  final liveActiveOrders = liveGroupOrders.where((o) => !_kTerminalStatuses.contains(o.status)).toList();
-                                                  final displayOrders = liveActiveOrders.isNotEmpty ? liveActiveOrders : (group.activeOrders.isNotEmpty ? group.activeOrders : group.orders);
-                                                  final storeCount = displayOrders.length;
-                                                  final itemCount = displayOrders.fold<int>(0, (sum, o) => sum + (o.activeItems.isNotEmpty ? o.activeItems : o.items).fold<int>(0, (s, i) => s + i.quantity));
+                                                  final liveGroupOrders = _orders
+                                                      .where((o) =>
+                                                          (o.cartGroupId !=
+                                                                  null &&
+                                                              o.cartGroupId ==
+                                                                  group
+                                                                      .groupId) ||
+                                                          (o.cartGroupId ==
+                                                                  null &&
+                                                              o.id ==
+                                                                  group
+                                                                      .primaryOrder
+                                                                      .id))
+                                                      .toList();
+                                                  final liveActiveOrders =
+                                                      liveGroupOrders
+                                                          .where((o) =>
+                                                              !_kTerminalStatuses
+                                                                  .contains(
+                                                                      o.status))
+                                                          .toList();
+                                                  final displayOrders =
+                                                      liveActiveOrders
+                                                              .isNotEmpty
+                                                          ? liveActiveOrders
+                                                          : (group.activeOrders
+                                                                  .isNotEmpty
+                                                              ? group
+                                                                  .activeOrders
+                                                              : group.orders);
+                                                  final storeCount =
+                                                      displayOrders.length;
+                                                  final itemCount = displayOrders.fold<
+                                                          int>(
+                                                      0,
+                                                      (sum, o) =>
+                                                          sum +
+                                                          (o.activeItems
+                                                                      .isNotEmpty
+                                                                  ? o
+                                                                      .activeItems
+                                                                  : o.items)
+                                                              .fold<int>(
+                                                                  0,
+                                                                  (s, i) =>
+                                                                      s +
+                                                                      i.quantity));
                                                   return Text(
                                                     '$storeCount store${storeCount > 1 ? 's' : ''} · $itemCount items',
                                                     style: GoogleFonts.outfit(
                                                       fontSize: 10,
                                                       color: isDark
                                                           ? Colors.white54
-                                                          : Colors.grey.shade600,
+                                                          : Colors
+                                                              .grey.shade600,
                                                     ),
                                                   );
                                                 }),

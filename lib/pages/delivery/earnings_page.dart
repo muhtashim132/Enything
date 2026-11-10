@@ -35,10 +35,15 @@ class _EarningsPageState extends State<EarningsPage> {
 
   Future<void> _loadEarnings() async {
     final auth = context.read<AuthProvider>();
+    final riderId = auth.currentUserId;
+    if (riderId == null || riderId.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     try {
       // A1: Use the highly optimized get_rider_stats RPC to prevent Payload DDOS
       final stats = await _supabase.rpc('get_rider_stats',
-          params: {'p_rider_id': auth.currentUserId ?? ''});
+          params: {'p_rider_id': riderId});
 
       double today = 0, total = 0;
       int deliveriesCount = 0;

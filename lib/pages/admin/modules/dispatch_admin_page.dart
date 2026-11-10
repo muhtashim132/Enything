@@ -993,6 +993,9 @@ class _DispatchAdminPageState extends State<DispatchAdminPage>
         'p_new_rider_id': courierId,
       });
 
+      BellAlertService.instance.removePendingOrder('dispatch_$orderId');
+      _trackedBuzzIds.remove('dispatch_$orderId');
+
       if (order != null) {
         final customerId = order['customer_id'] as String?;
         if (customerId != null) {

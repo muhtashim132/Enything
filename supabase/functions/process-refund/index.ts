@@ -9,6 +9,18 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 Deno.serve(async (req) => {
   try {
+    // 100x Security Gate: Verify authorization
+    const authHeader = req.headers.get("Authorization");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const internalSecret = Deno.env.get("DATABASE_WEBHOOK_SECRET") ?? "";
+    const receivedSecret = req.headers.get("X-Webhook-Secret") ?? "";
+
+    if (internalSecret && receivedSecret !== internalSecret) {
+      if (!authHeader || (!authHeader.includes(serviceRoleKey) && !authHeader.startsWith("Bearer "))) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+    }
+
     const payload = await req.json().catch(() => ({}));
     let { type, old_record, record } = payload;
 
@@ -171,11 +183,13 @@ Deno.serve(async (req) => {
         console.warn(`Could not query Razorpay payment status for double-refund guard: ${capErr}. Proceeding with original amount.`);
       }
 
+      const idempotencyKey = `ref_${record.id}_${amountInPaise}_${Number(freshOrder?.total_refunded || record.total_refunded || 0)}`;
       const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Basic ${razorpayAuth}`
+          "Authorization": `Basic ${razorpayAuth}`,
+          "X-Razorpay-Idempotency-Key": idempotencyKey,
         },
         body: JSON.stringify({
           amount: amountInPaise,
@@ -206,10 +220,13 @@ Deno.serve(async (req) => {
         ? `${existingRefundId},${refundData.id}`
         : refundData.id;
 
+      const newTotalRefunded = (Number(freshOrder?.total_refunded) || 0) + (amountInPaise / 100.0);
+      const isFullyRefunded = newTotalRefunded >= (totalCollected - 0.01);
+
       await supabaseAdmin.from("orders").update({
         refund_id: combinedRefundId,
-        refund_status: "processed",
-        total_refunded: (Number(freshOrder?.total_refunded) || 0) + (amountInPaise / 100.0),
+        refund_status: isFullyRefunded ? "processed" : "partially_refunded",
+        total_refunded: newTotalRefunded,
         pending_refund_amount: 0.00
       }).eq("id", record.id);
 

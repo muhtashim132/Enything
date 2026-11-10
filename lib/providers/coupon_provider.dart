@@ -65,6 +65,7 @@ class CouponProvider extends ChangeNotifier {
           .maybeSingle();
 
       if (res == null) {
+        _appliedCoupon = null;
         _errorMessage = 'Coupon "$code" is invalid or expired';
         _isValidating = false;
         safeNotifyListeners();
@@ -74,6 +75,7 @@ class CouponProvider extends ChangeNotifier {
       // Check minimum order amount
       final minOrder = (res['min_order_amount'] as num?)?.toDouble() ?? 0;
       if (cartTotal < minOrder) {
+        _appliedCoupon = null;
         _errorMessage =
             'Minimum order ₹${minOrder.toStringAsFixed(0)} required for this coupon';
         _isValidating = false;
@@ -85,6 +87,7 @@ class CouponProvider extends ChangeNotifier {
       final usageLimit = res['usage_limit'] as int?;
       final usedCount = (res['usage_count'] as num?)?.toInt() ?? 0;
       if (usageLimit != null && usedCount >= usageLimit) {
+        _appliedCoupon = null;
         _errorMessage = 'This coupon has reached its usage limit';
         _isValidating = false;
         safeNotifyListeners();
@@ -105,6 +108,7 @@ class CouponProvider extends ChangeNotifier {
                 .not('status', 'in', '(cancelled,payment_failed,timeout,seller_rejected,partner_rejected,shop_dispute_cancel,no_rider,verification_failed,failed)');
             final userUsageCount = (userUsageRes as List).length;
             if (userUsageCount >= perUserLimit) {
+              _appliedCoupon = null;
               _errorMessage =
                   'You have already used this coupon the maximum number of times';
               _isValidating = false;
@@ -148,6 +152,7 @@ class CouponProvider extends ChangeNotifier {
       safeNotifyListeners();
       return true;
     } catch (e) {
+      _appliedCoupon = null;
       _errorMessage = 'Failed to validate coupon. Please try again.';
       _isValidating = false;
       safeNotifyListeners();

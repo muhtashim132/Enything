@@ -288,7 +288,7 @@ class SearchRelevanceEngine {
         () => computeScore(
           product: p,
           query: cleanQuery,
-          shop: shops?[p.id],
+          shop: shops?[p.shopId] ?? shops?[p.id],
         ),
       );
     }

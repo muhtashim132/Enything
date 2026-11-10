@@ -50,11 +50,11 @@ class DeliveryCalculator {
     final dLng = _toRad(b.longitude - a.longitude);
     final sinDLat = math.sin(dLat / 2);
     final sinDLng = math.sin(dLng / 2);
-    final h = sinDLat * sinDLat +
+    final h = (sinDLat * sinDLat +
         math.cos(_toRad(a.latitude)) *
             math.cos(_toRad(b.latitude)) *
             sinDLng *
-            sinDLng;
+            sinDLng).clamp(0.0, 1.0);
     return 2 * r * math.asin(math.sqrt(h));
   }
 

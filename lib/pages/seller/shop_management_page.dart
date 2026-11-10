@@ -176,9 +176,12 @@ class _ShopManagementPageState extends State<ShopManagementPage> {
     }
     setState(() => _isActive = value);
     try {
-      await _supabase
-          .from('shops')
-          .update({'is_accepting_orders': value}).eq('id', _shopId!);
+      await _supabase.from('shops').update({
+        'is_accepting_orders': value,
+        'is_open': value,
+        'is_manually_closed': !value,
+        if (value) 'is_active': true,
+      }).eq('id', _shopId!);
       if (!mounted) return;
       _showSnack(value ? '🟢 Shop is now Open' : '🔴 Shop is now Closed');
     } catch (e) {

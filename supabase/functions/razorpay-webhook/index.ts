@@ -41,15 +41,18 @@ Deno.serve(async (req: Request) => {
 
     // ── 1. Validate webhook signature ─────────────────────────────────────────
     const receivedSignature = req.headers.get("X-Razorpay-Signature") ?? "";
-    if (webhookSecret) {
-      const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-      const expBuf = Buffer.from(expectedSignature, "utf8");
-      const recBuf = Buffer.from(receivedSignature, "utf8");
+    if (!webhookSecret) {
+      console.error("RAZORPAY_WEBHOOK_SECRET environment variable is missing.");
+      return new Response("Webhook secret misconfigured", { status: 500, headers: corsHeaders });
+    }
 
-      if (expBuf.length !== recBuf.length || !timingSafeEqual(expBuf, recBuf)) {
-        console.warn("Webhook signature mismatch — possible spoofing attempt.");
-        return new Response("Forbidden", { status: 403, headers: corsHeaders });
-      }
+    const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+    const expBuf = Buffer.from(expectedSignature, "utf8");
+    const recBuf = Buffer.from(receivedSignature, "utf8");
+
+    if (expBuf.length !== recBuf.length || !timingSafeEqual(expBuf, recBuf)) {
+      console.warn("Webhook signature mismatch — possible spoofing attempt.");
+      return new Response("Forbidden", { status: 403, headers: corsHeaders });
     }
 
     if (!rawBody || rawBody.trim() === "") {
@@ -164,6 +167,16 @@ Deno.serve(async (req: Request) => {
         }
 
         console.log(`Order ${pendingOrder.id} confirmed via webhook (${eventType}).`);
+      } else if (pendingOrder && ['cancelled', 'timeout', 'seller_rejected', 'partner_rejected', 'shop_dispute_cancel'].includes(pendingOrder.status) && pendingOrder.payment_status !== "captured") {
+        console.warn(`Payment captured for terminal order ${pendingOrder.id} (${pendingOrder.status}). Recording payment and triggering automatic refund.`);
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            payment_status: "captured",
+            razorpay_payment_id: paymentId ?? `pay_auto_${orderId}`,
+            refund_status: "processing",
+          })
+          .eq("id", pendingOrder.id);
       }
     }
 
@@ -244,7 +257,7 @@ Deno.serve(async (req: Request) => {
         // Fetch all orders associated with this payment (multi-shop support)
         const { data: orders } = await supabaseAdmin
           .from("orders")
-          .select("id, refund_id, refund_status, status")
+          .select("id, refund_id, refund_status, status, total_refunded")
           .eq("razorpay_payment_id", paymentId);
 
         if (orders && orders.length > 0) {
@@ -260,10 +273,20 @@ Deno.serve(async (req: Request) => {
                 .map((o: any) => o.id);
           
           if (idsToUpdate.length > 0) {
-            await supabaseAdmin
-              .from("orders")
-              .update({ refund_id: refundId, refund_status: "processed" })
-              .in("id", idsToUpdate);
+            const refundAmount = Number(refund?.amount) ? Number(refund.amount) / 100.0 : 0.0;
+            for (const id of idsToUpdate) {
+              const matchedOrder = orders.find((o: any) => o.id === id);
+              const currentTotalRefunded = Number(matchedOrder?.total_refunded || 0);
+              const newTotalRefunded = refundAmount > 0 ? (currentTotalRefunded + refundAmount) : currentTotalRefunded;
+              await supabaseAdmin
+                .from("orders")
+                .update({
+                  refund_id: refundId,
+                  refund_status: "processed",
+                  ...(refundAmount > 0 ? { total_refunded: newTotalRefunded } : {}),
+                })
+                .eq("id", id);
+            }
 
             console.log(`Refund ${refundId} logged for ${idsToUpdate.length} orders via webhook.`);
           } else {

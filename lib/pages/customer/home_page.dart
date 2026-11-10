@@ -2136,7 +2136,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             'Search failed: ${errStr.length > 120 ? '${errStr.substring(0, 120)}...' : errStr}';
       }
 
-      if (mounted) {
+      if (mounted && _searchQuery == query) {
         setState(() {
           _isSearching = false;
           _searchError = true;
@@ -2521,10 +2521,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               if (!config.isActiveCategory(product.category)) continue;
 
               if (locationProvider.hasLocation) {
-                if (shop.location.latitude != 0 && shop.location.longitude != 0) {
-                  final d = locationProvider.distanceTo(shop.location);
-                  if (!DeliveryCalculator.isWithinRange(d)) continue;
-                }
+                if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
+                final d = locationProvider.distanceTo(shop.location);
+                if (!DeliveryCalculator.isWithinRange(d)) continue;
               }
 
               prods.add(product);

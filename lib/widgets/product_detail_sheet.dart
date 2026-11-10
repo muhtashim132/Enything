@@ -924,7 +924,9 @@ class _SheetContent extends StatelessWidget {
                                             variantName: v.name);
                                         return GestureDetector(
                                           onTap: () => onVariantChanged(v),
-                                          child: Transform.scale(
+                                          child: Opacity(
+                                            opacity: v.isAvailable ? 1.0 : 0.5,
+                                            child: Transform.scale(
                                             scale:
                                                 highlightVariants && !isSelected
                                                     ? value
@@ -977,9 +979,12 @@ class _SheetContent extends StatelessWidget {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Text(
-                                                    '${v.name} - ₹${v.price.toStringAsFixed(0)}',
+                                                    '${v.name} - ₹${v.price.toStringAsFixed(0)}${!v.isAvailable ? " (Sold Out)" : ""}',
                                                     style: GoogleFonts.outfit(
                                                       fontSize: 13,
+                                                      decoration: !v.isAvailable
+                                                          ? TextDecoration.lineThrough
+                                                          : null,
                                                       fontWeight: isSelected
                                                           ? FontWeight.w700
                                                           : FontWeight.w500,
@@ -1027,6 +1032,7 @@ class _SheetContent extends StatelessWidget {
                                                 ],
                                               ),
                                             ),
+                                          ),
                                           ),
                                         );
                                       }).toList(),
@@ -1341,7 +1347,8 @@ class _SheetContent extends StatelessWidget {
             )
           : (!product.isAvailable ||
                   (product.totalQuantity != null &&
-                      product.totalQuantity! <= 0))
+                      product.totalQuantity! <= 0) ||
+                  (selectedVariant != null && !selectedVariant!.isAvailable))
               ? Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -1350,7 +1357,9 @@ class _SheetContent extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      'Item Out of Stock',
+                      (selectedVariant != null && !selectedVariant!.isAvailable)
+                          ? 'Variant Out of Stock'
+                          : 'Item Out of Stock',
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,

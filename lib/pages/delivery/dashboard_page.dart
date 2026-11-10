@@ -1795,9 +1795,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
           riderLat: _riderLat,
           riderLng: _riderLng,
           shops: shops,
-          isViewOnly: isViewOnly || (_myGroups.length >= 3),
+          isViewOnly: isViewOnly ||
+              (_myGroups.length >= 3 &&
+                  !_myGroups.any((g) => g.groupId == group.groupId)),
           onAccept: () {
-            if (_myGroups.length >= 3) return;
+            if (_myGroups.length >= 3 &&
+                !_myGroups.any((g) => g.groupId == group.groupId)) return;
             Navigator.pop(context);
             _acceptOrderGroup(group);
           },

@@ -203,8 +203,55 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
     if (state == AppLifecycleState.resumed) {
       if (mounted) {
         _subscribeToRider();
+        _fetchFreshOrderState();
       }
     }
+  }
+
+  Future<void> _fetchFreshOrderState() async {
+    try {
+      final cartGroupId = _currentOrder.cartGroupId;
+      final query = _supabase.from('orders').select();
+      final res = cartGroupId != null
+          ? await query.eq('cart_group_id', cartGroupId)
+          : await query.eq('id', _currentOrder.id);
+      if (res.isNotEmpty && mounted) {
+        final orders =
+            res.map((m) => OrderModel.fromMap(m)).toList();
+        setState(() {
+          _currentGroupOrders = orders;
+          _currentOrder = orders.firstWhere(
+            (o) => o.id == _currentOrder.id,
+            orElse: () => orders.first,
+          );
+        });
+        final updatedLocs =
+            Map<String, LatLng>.from(_riderLocationsNotifier.value);
+        final updatedAts =
+            Map<String, DateTime>.from(_riderUpdatedAtsNotifier.value);
+        for (final o in orders) {
+          if (o.deliveryPartnerId != null &&
+              o.riderLat != null &&
+              o.riderLng != null &&
+              o.riderLat != 0.0) {
+            updatedLocs[o.deliveryPartnerId!] =
+                LatLng(o.riderLat!, o.riderLng!);
+            if (o.riderLocationUpdatedAt != null) {
+              updatedAts[o.deliveryPartnerId!] = o.riderLocationUpdatedAt!;
+            }
+          } else if (o.deliveryPartnerId == null) {
+            if (o.id == _currentOrder.id) {
+              setState(() {
+                _pickupRoute = [];
+              });
+            }
+          }
+        }
+        _riderLocationsNotifier.value = updatedLocs;
+        _riderUpdatedAtsNotifier.value = updatedAts;
+        _fetchRoutes(silent: true);
+      }
+    } catch (_) {}
   }
 
   // ── Supabase Realtime Subscription ─────────────────────────────────────────
@@ -313,7 +360,14 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
               _checkStackedDelivery();
             } else {
               _orderToRiderMap.remove(orderId);
-              if (mounted) setState(() => _isStackedDelivery = false);
+              if (mounted) {
+                setState(() {
+                  _isStackedDelivery = false;
+                  if (orderId == _currentOrder.id) {
+                    _pickupRoute = [];
+                  }
+                });
+              }
             }
 
             // 5. Handle Rider GPS Coordinates

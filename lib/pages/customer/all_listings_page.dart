@@ -359,10 +359,12 @@ class _AllListingsPageState extends State<AllListingsPage> {
     final loc = context.read<LocationProvider>();
     final resolvedIds = <String>{};
 
-    // 0. Include shops already provided from the caller
+    // 0. Include active shops already provided from the caller
     for (final s in widget.shops) {
-      resolvedIds.add(s.id);
-      _shopsMap[s.id] = s;
+      if (s.isActive) {
+        resolvedIds.add(s.id);
+        _shopsMap[s.id] = s;
+      }
     }
 
     // 1. Dynamic geospatial query using LocationProvider + DeliveryCalculator.maxRadiusKm
@@ -422,6 +424,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
 
       return _shopsMap.values
           .where((s) {
+            if (!s.isActive) return false;
             if (lowerFilters != null) {
               final matches =
                   lowerFilters.contains(s.category.trim().toLowerCase()) ||
@@ -489,23 +492,31 @@ class _AllListingsPageState extends State<AllListingsPage> {
       }
 
       // 1. Query exact total product count in database for nearby shops (excluding soft deletes)
-      final countQuery = Supabase.instance.client
+      var countQuery = Supabase.instance.client
           .from('products')
           .select('id')
           .inFilter('shop_id', shopIds)
           .eq('is_deleted', false)
           .eq('is_available', true);
 
+      if (widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty) {
+        countQuery = countQuery.inFilter('category', widget.categoryFilter!);
+      }
+
       final countResp = await countQuery;
       final totalInDb = (countResp as List).length;
 
       // 2. High-speed single-shot catalog fetch (up to 500 items)
-      final fetchQuery = Supabase.instance.client
+      var fetchQuery = Supabase.instance.client
           .from('products')
           .select()
           .inFilter('shop_id', shopIds)
           .eq('is_deleted', false)
           .eq('is_available', true);
+
+      if (widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty) {
+        fetchQuery = fetchQuery.inFilter('category', widget.categoryFilter!);
+      }
 
       final response = await fetchQuery
           .order('rating', ascending: false)
@@ -556,7 +567,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
       if (mounted) {
         setState(() {
           _allProducts.addAll(newProducts);
-          _currentOffset = _allProducts.length;
+          _currentOffset = rows.length;
           _hasMore = totalInDb > _allProducts.length;
           _totalAvailableProducts = math.max(totalInDb, _allProducts.length);
           _isLoadingMore = false;
@@ -913,6 +924,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
   List<ShopModel> _computeSortedShops() {
     final loc = context.read<LocationProvider>();
     var list = widget.shops.where((s) {
+      if (!s.isActive) return false;
       if (loc.hasLocation) {
         if (s.location.latitude == 0 || s.location.longitude == 0) return false;
         final d = s.distanceKm ?? loc.distanceTo(s.location);
@@ -1133,7 +1145,7 @@ class _AllListingsPageState extends State<AllListingsPage> {
                 ? _sortedProducts.length
                 : _totalAvailableProducts)
             : _sortedProducts.length)
-        : (_searchQuery.isNotEmpty ? _sortedShops.length : widget.shops.length);
+        : _sortedShops.length;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

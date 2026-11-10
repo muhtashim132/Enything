@@ -553,6 +553,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
       return 'Ordering is temporarily paused. Please try again later.';
     }
+    if (e.contains('physical_weight_limit_exceeded') ||
+        (e.contains('weight') && e.contains('limit')) ||
+        e.contains('two-wheeler limit') ||
+        e.contains('15.0 kg')) {
+      final match = RegExp(r'physical_weight_limit_exceeded:\s*(.+)', caseSensitive: false).firstMatch(errorStr);
+      if (match != null) {
+        var msg = match.group(1)?.trim() ?? '';
+        final codeIdx = msg.indexOf(RegExp(r',\s*code:\s*', caseSensitive: false));
+        if (codeIdx >= 0) msg = msg.substring(0, codeIdx).trim();
+        msg = msg.replaceAll(RegExp(r'[\)\]\"\s]+$'), '').trim();
+        if (msg.isNotEmpty) return msg;
+      }
+      return 'Total delivery weight exceeds the 15.0 kg two-wheeler payload limit. Please reduce item quantities to proceed.';
+    }
     if (e.contains('socketexception') ||
         e.contains('timeoutexception') ||
         e.contains('clientexception')) {

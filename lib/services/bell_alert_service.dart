@@ -256,6 +256,18 @@ class BellAlertService {
         loop ? ReleaseMode.loop : ReleaseMode.release,
       );
 
+      // 100x CONCURRENCY SHIELD: If all orders were acknowledged during async context setup, abort playback immediately
+      if (_pendingOrderIds.isEmpty) {
+        _isPlaying = false;
+        try {
+          await WakelockPlus.disable();
+        } catch (_) {}
+        await _player?.stop();
+        await _player?.dispose();
+        _player = null;
+        return;
+      }
+
       _isPlaying = true;
       await _playSource(_player!, customPath);
       debugPrint('[BellAlert] Bell started (loop=$loop, custom=$customPath)');
@@ -271,6 +283,9 @@ class BellAlertService {
     } catch (e) {
       debugPrint('[BellAlert] _startBell error: $e');
       _isPlaying = false;
+      try {
+        await WakelockPlus.disable();
+      } catch (_) {}
       _player?.dispose();
       _player = null;
     }

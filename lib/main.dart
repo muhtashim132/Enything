@@ -173,7 +173,10 @@ void handleNotificationClick(Map<String, dynamic> data) {
   final action = data['action'] as String?;
   final orderId = data['order_id'] as String?;
 
-  if (role == 'seller') {
+  if (role == 'admin') {
+    navigatorKey.currentState
+        ?.pushNamedAndRemoveUntil(AppRoutes.adminDashboard, (route) => false);
+  } else if (role == 'seller') {
     // Go directly to the Seller Orders page (Pending tab is tab 0 by default).
     // pushNamedAndRemoveUntil keeps the seller dashboard as the base so back works.
     navigatorKey.currentState

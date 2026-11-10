@@ -776,21 +776,6 @@ class AuthProvider extends ChangeNotifier {
       }
     }
 
-    // Auto-deactivate shop accepting orders when switching away from seller role
-    if (_user!.activeSessionRole == 'seller' && role != 'seller') {
-      try {
-        await _supabase
-            .from('shops')
-            .update({
-              'is_accepting_orders': false,
-              'is_open': false,
-              'is_manually_closed': true,
-            }).eq('seller_id', _user!.id);
-      } catch (e) {
-        debugPrint('Failed to deactivate seller orders: $e');
-      }
-    }
-
     String verificationStatus = 'verified'; // Default
     try {
       if (role == 'seller') {

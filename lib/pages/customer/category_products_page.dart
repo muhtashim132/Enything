@@ -672,9 +672,11 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         } catch (_) {}
       }
 
-      if (mounted && _searchQuery == trimmed) {
+      if (mounted) {
         setState(() {
-          _products.addAll(newProducts);
+          if (_searchQuery == trimmed) {
+            _products.addAll(newProducts);
+          }
           _isSearchingRemote = false;
         });
       }
@@ -1068,7 +1070,12 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                       controller: _searchController,
                                       onChanged: (v) {
                                         final trimmed = v.trim();
-                                        setState(() => _searchQuery = trimmed);
+                                        setState(() {
+                                          _searchQuery = trimmed;
+                                          if (trimmed.isEmpty) {
+                                            _isSearchingRemote = false;
+                                          }
+                                        });
                                         _searchDebounce?.cancel();
                                         if (trimmed.isNotEmpty) {
                                           _searchDebounce = Timer(

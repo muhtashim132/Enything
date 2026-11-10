@@ -159,6 +159,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage>
 
       // ── Case 2: They requested a role they ALREADY have ────────
       if (_requestedRole != null && allRoles.contains(_requestedRole)) {
+        await auth.switchSessionRole(_requestedRole!);
         _goToWelcomeThenDashboard(_requestedRole!);
         return;
       }

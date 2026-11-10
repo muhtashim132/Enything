@@ -128,7 +128,7 @@ class LiveActivityService {
 
   /// Checks if iOS Live Activities are supported and enabled on this device.
   Future<bool> areActivitiesEnabled() async {
-    if (!Platform.isIOS) return false;
+    if (kIsWeb || !Platform.isIOS) return false;
     try {
       final res = await _channel.invokeMethod<Map>('areActivitiesEnabled');
       return res?['enabled'] == true;
@@ -151,11 +151,26 @@ class LiveActivityService {
 
     // Filter active sub-orders
     final activeOrders = groupOrders.isNotEmpty
-        ? groupOrders.where((o) => o.status != 'cancelled' && o.status != 'seller_rejected').toList()
+        ? groupOrders
+            .where((o) =>
+                o.status != 'cancelled' &&
+                o.status != 'seller_rejected' &&
+                o.status != 'partner_rejected' &&
+                o.status != 'timeout' &&
+                o.status != 'verification_failed' &&
+                o.status != 'payment_failed' &&
+                o.status != 'no_rider' &&
+                o.status != 'shop_dispute_cancel')
+            .toList()
         : [order];
 
     final totalShops = activeOrders.isNotEmpty ? activeOrders.length : 1;
-    final pickedUpShops = activeOrders.where((o) => o.status == 'picked_up' || o.status == 'out_for_delivery').length;
+    final pickedUpShops = activeOrders
+        .where((o) =>
+            o.status == 'picked_up' ||
+            o.status == 'out_for_delivery' ||
+            o.status == 'delivered')
+        .length;
 
     // Compute distance and prep time
     double distanceKm = order.estimatedDistanceKm > 0 ? order.estimatedDistanceKm : 3.0;
@@ -277,6 +292,9 @@ class LiveActivityService {
       case 'shop_dispute_cancel':
       case 'timeout':
       case 'failed':
+      case 'verification_failed':
+      case 'payment_failed':
+      case 'no_rider':
         headline = 'Order Cancelled';
         progress = 0.0;
         etaMins = 0;
@@ -301,7 +319,7 @@ class LiveActivityService {
         }
       }
       _lastSmoothedEtaMinutes[order.id] = etaMins;
-    } else if (status == 'delivered' || status == 'cancelled' || status == 'seller_rejected') {
+    } else if (status == 'delivered' || isTerminal) {
       _lastSmoothedEtaMinutes.remove(order.id);
     }
 
@@ -375,7 +393,7 @@ class LiveActivityService {
     _lastSyncStatuses[order.id] = state.status;
 
     // Android: Update persistent ongoing notification with progress bar & live ETA
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       final notifTitle = 'Arriving in ${state.etaMinutes} mins · ${state.shopName}';
       final summary = state.deliveryOtp != null && state.status == 'out_for_delivery'
           ? '🔑 Delivery OTP: ${state.deliveryOtp}'
@@ -392,7 +410,7 @@ class LiveActivityService {
     }
 
     // iOS: Start or update native ActivityKit Live Activity
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       try {
         if (_currentOrderId == order.id && _currentActivityId != null) {
           final res = await _channel.invokeMethod<Map>('updateActivity', {
@@ -435,11 +453,11 @@ class LiveActivityService {
     _lastSyncEtas.remove(orderId);
     _lastSyncStatuses.remove(orderId);
 
-    if (Platform.isAndroid) {
+    if (!kIsWeb && Platform.isAndroid) {
       await NotificationService().cancelOrderProgressNotification(orderId);
     }
 
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       try {
         await _channel.invokeMethod('endActivity', {
           'activityId': _currentActivityId,

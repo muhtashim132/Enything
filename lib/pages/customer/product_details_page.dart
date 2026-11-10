@@ -1190,84 +1190,118 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                     ],
                   )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            if (_shop != null) {
-                              if (_product!.variants.isNotEmpty &&
-                                  _selectedVariant == null) {
-                                _promptVariantSelection();
-                                return;
-                              }
-                              cart.addItemWithFeedback(
-                                  context, _product!, _shop!,
-                                  selectedVariant: _selectedVariant);
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            side: const BorderSide(
-                                color: AppColors.primary, width: 2),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                          ),
-                          child: Text('ADD TO CART',
-                              style: GoogleFonts.outfit(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.primary)),
+                : Builder(builder: (context) {
+                    final bool isShopOpen = _shop?.isOpenRightNow ?? true;
+                    final bool isProductAvailable = (_product?.isAvailable ?? true) &&
+                        (_product?.totalQuantity == null || _product!.totalQuantity! > 0);
+                    final bool isVariantAvailable = _selectedVariant?.isAvailable ?? true;
+                    final bool canOrder = isShopOpen && isProductAvailable && isVariantAvailable;
+
+                    if (!canOrder) {
+                      final lockLabel = !isShopOpen
+                          ? 'STORE CURRENTLY CLOSED'
+                          : (!isVariantAvailable
+                              ? 'VARIANT OUT OF STOCK'
+                              : 'OUT OF STOCK');
+                      return Container(
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white12 : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            if (_shop != null) {
-                              if (_product!.variants.isNotEmpty &&
-                                  _selectedVariant == null) {
-                                _promptVariantSelection();
-                                return;
+                        child: Center(
+                          child: Text(
+                            lockLabel,
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white38 : Colors.grey.shade600,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              if (_shop != null) {
+                                if (_product!.variants.isNotEmpty &&
+                                    _selectedVariant == null) {
+                                  _promptVariantSelection();
+                                  return;
+                                }
+                                cart.addItemWithFeedback(
+                                    context, _product!, _shop!,
+                                    selectedVariant: _selectedVariant);
                               }
-                              final err = cart.addItem(
-                                _product!,
-                                _shop!,
-                                selectedVariant: _selectedVariant,
-                              );
-                              ScaffoldMessenger.of(context).clearSnackBars();
-                              if (err != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(err),
-                                    backgroundColor: const Color(0xFFEF4444),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
+                            },
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(
+                                  color: AppColors.primary, width: 2),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                            ),
+                            child: Text('ADD TO CART',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary)),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (_shop != null) {
+                                if (_product!.variants.isNotEmpty &&
+                                    _selectedVariant == null) {
+                                  _promptVariantSelection();
+                                  return;
+                                }
+                                final err = cart.addItem(
+                                  _product!,
+                                  _shop!,
+                                  selectedVariant: _selectedVariant,
                                 );
-                              } else {
-                                Navigator.pushNamed(context, AppRoutes.cart);
+                                ScaffoldMessenger.of(context).clearSnackBars();
+                                if (err != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(err),
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                } else {
+                                  Navigator.pushNamed(context, AppRoutes.cart);
+                                }
                               }
-                            }
-                          },
-                          child: Container(
-                            height: 56,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.ctaGradient,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: PremiumShadows.floatingButtonLight,
-                            ),
-                            child: Center(
-                              child: Text('BUY NOW',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white)),
+                            },
+                            child: Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                gradient: AppColors.ctaGradient,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: PremiumShadows.floatingButtonLight,
+                              ),
+                              child: Center(
+                                child: Text('BUY NOW',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white)),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
+                      ],
+                    );
+                  });
                 }(),
               ),
               ],

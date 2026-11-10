@@ -379,7 +379,14 @@ class NotificationProvider extends ChangeNotifier {
             if (newStatus == lastStatus) return;
             _lastProcessedStatus[orderId] = newStatus;
 
+            final paymentStatus = payload.newRecord['payment_status'] as String?;
             var (title, body) = _customerStatusMessage(newStatus, orderId);
+
+            // 100x FORENSIC GUARD: Reassigned Paid Order Push Suppression
+            if (newStatus == 'awaiting_payment' && paymentStatus == 'captured') {
+              title = '🛵 New Rider Assigned!';
+              body = 'A new delivery partner has accepted your order. Packing is in progress!';
+            }
             final otp = payload.newRecord['delivery_otp'] as String?;
             final orderType = payload.newRecord['order_type'] as String?;
             if (newStatus == 'bulk_dispatched' &&

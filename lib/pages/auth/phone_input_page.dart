@@ -7,6 +7,28 @@ import '../../config/routes.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/app_toast.dart';
 
+class _IndianPhoneNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    var text = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (text.startsWith('91') && text.length > 10) {
+      text = text.substring(2);
+    } else if (text.startsWith('0') && text.length > 10) {
+      text = text.substring(1);
+    }
+    if (text.length > 10) {
+      text = text.substring(text.length - 10);
+    }
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
 class PhoneAuthPage extends StatefulWidget {
   const PhoneAuthPage({super.key});
   @override
@@ -474,8 +496,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage>
                                           keyboardType: TextInputType.phone,
                                           maxLength: 10,
                                           inputFormatters: [
-                                            FilteringTextInputFormatter
-                                                .digitsOnly
+                                            _IndianPhoneNumberFormatter(),
                                           ],
                                           onChanged: (val) {
                                             if (val.length == 10) {

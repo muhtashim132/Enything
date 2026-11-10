@@ -24,7 +24,8 @@ class WeightEngine {
         // If the selected variant specifies an explicit weight in its title (e.g. variant "1kg"),
         // the variant's weight directly overrides the product's base weight:
         if (selectedVariant != null) {
-          final vWeight = _extractWeightFromTitle(selectedVariant.name, product.category);
+          final vWeight =
+              _extractWeightFromTitle(selectedVariant.name, product.category);
           if (vWeight != null && vWeight > 0) {
             return (vWeight * packMultiplier).clamp(0.0001, 100.0);
           }
@@ -37,7 +38,8 @@ class WeightEngine {
 
     // ── Tier 2: Check if variant itself has explicit weight (e.g. "250g", "1 Litre")
     if (selectedVariant != null) {
-      final vWeight = _extractWeightFromTitle(selectedVariant.name, product.category);
+      final vWeight =
+          _extractWeightFromTitle(selectedVariant.name, product.category);
       if (vWeight != null && vWeight > 0) {
         return (vWeight * packMultiplier).clamp(0.001, 100.0);
       }
@@ -77,7 +79,8 @@ class WeightEngine {
     int quantity = 1,
   }) {
     if (quantity <= 0) return 0.0;
-    final unitWeight = resolveUnit(product: product, selectedVariant: selectedVariant);
+    final unitWeight =
+        resolveUnit(product: product, selectedVariant: selectedVariant);
     return (unitWeight * quantity).clamp(0.005, 500.0);
   }
 
@@ -252,7 +255,8 @@ class WeightEngine {
               name.toLowerCase().contains('sim') ||
               name.toLowerCase().contains('network');
 
-          if ((val == 5.0 || val == 4.0 || val == 3.0 || val == 2.0) && isTechContext) {
+          if ((val == 5.0 || val == 4.0 || val == 3.0 || val == 2.0) &&
+              isTechContext) {
             continue; // Skip false 5G/4G match
           }
 
@@ -268,7 +272,11 @@ class WeightEngine {
 
         if (unit == 'kg') return val;
         if (unit == 'g' || unit == 'gm' || unit == 'grams') return val / 1000.0;
-        if (unit == 'l' || unit == 'ltr' || unit == 'liters' || unit == 'litres' || unit == 'litre') {
+        if (unit == 'l' ||
+            unit == 'ltr' ||
+            unit == 'liters' ||
+            unit == 'litres' ||
+            unit == 'litre') {
           return val * 1.02;
         }
         if (unit == 'ml') {
@@ -303,7 +311,9 @@ class WeightEngine {
     final desc = (description ?? '').toLowerCase();
 
     // ── 1. Clothing / Apparel ────────────────────────────────────────────────
-    if (cat.contains('clothing') || cat.contains('apparel') || cat.contains('fashion')) {
+    if (cat.contains('clothing') ||
+        cat.contains('apparel') ||
+        cat.contains('fashion')) {
       if (n.contains('jean') ||
           n.contains('denim') ||
           sub.contains('jean') ||
@@ -361,9 +371,7 @@ class WeightEngine {
     // ── 2. Footwear ──────────────────────────────────────────────────────────
     if (cat.contains('footwear') || cat.contains('shoes')) {
       if (n.contains('boot')) return 1.40;
-      if (n.contains('slipper') ||
-          n.contains('flip') ||
-          n.contains('sandal')) {
+      if (n.contains('slipper') || n.contains('flip') || n.contains('sandal')) {
         return 0.35;
       }
       return 0.90; // Standard sneakers / formal shoes with box = 900g
@@ -415,9 +423,7 @@ class WeightEngine {
           n.contains('roll')) {
         return 0.25;
       }
-      if (n.contains('biryani') ||
-          n.contains('rice') ||
-          n.contains('noodle')) {
+      if (n.contains('biryani') || n.contains('rice') || n.contains('noodle')) {
         return 0.60;
       }
       if (n.contains('curry') ||
@@ -448,14 +454,18 @@ class WeightEngine {
     }
 
     if (cat.contains('sweets') || cat.contains('mithai')) {
-      if (n.contains('piece') || n.contains('single') || n.contains('rasgulla')) {
+      if (n.contains('piece') ||
+          n.contains('single') ||
+          n.contains('rasgulla')) {
         return 0.06;
       }
       return 0.50; // Standard mithai box = 500g
     }
 
     // ── 6. Beverages, Tea, Coffee & Ice Cream ────────────────────────────────
-    if (cat.contains('beverage') || cat.contains('tea') || cat.contains('coffee')) {
+    if (cat.contains('beverage') ||
+        cat.contains('tea') ||
+        cat.contains('coffee')) {
       if (n.contains('1l') || n.contains('1.5l') || n.contains('2l')) {
         return 1.20;
       }
@@ -500,7 +510,10 @@ class WeightEngine {
         cat.contains('hypermarket') ||
         cat.contains('organic')) {
       // Staples
-      if (n.contains('rice') || n.contains('atta') || n.contains('flour') || n.contains('dal')) {
+      if (n.contains('rice') ||
+          n.contains('atta') ||
+          n.contains('flour') ||
+          n.contains('dal')) {
         if (n.contains('5kg') || n.contains('5 kg')) return 5.0;
         if (n.contains('10kg') || n.contains('10 kg')) return 10.0;
         return 1.0;
@@ -525,22 +538,35 @@ class WeightEngine {
         return 0.035; // 35g for roll/pack
       }
       // Sachets (masala, shampoo, conditioner, eno)
-      if (n.contains('sachet') || n.contains('eno') || n.contains('maggi masala')) {
+      if (n.contains('sachet') ||
+          n.contains('eno') ||
+          n.contains('maggi masala')) {
         return 0.015;
       }
       // Biscuits, noodles, chips, chocolates
       if (n.contains('chocolate') || n.contains('bar')) return 0.05;
-      if (n.contains('biscuit') || n.contains('noodle') || n.contains('chip') || n.contains('wafer')) {
+      if (n.contains('biscuit') ||
+          n.contains('noodle') ||
+          n.contains('chip') ||
+          n.contains('wafer')) {
         return 0.12;
       }
       // Soap bars & toothpastes
       if (n.contains('soap') || n.contains('bar')) return 0.125;
-      if (n.contains('toothpaste') || n.contains('paste') || n.contains('colgate')) return 0.15;
+      if (n.contains('toothpaste') ||
+          n.contains('paste') ||
+          n.contains('colgate')) return 0.15;
       // Spices & condiments
-      if (n.contains('masala') || n.contains('chilli powder') || n.contains('turmeric') || n.contains('spice')) {
+      if (n.contains('masala') ||
+          n.contains('chilli powder') ||
+          n.contains('turmeric') ||
+          n.contains('spice')) {
         return 0.10;
       }
-      if (n.contains('ketchup') || n.contains('sauce') || n.contains('jam') || n.contains('spread')) {
+      if (n.contains('ketchup') ||
+          n.contains('sauce') ||
+          n.contains('jam') ||
+          n.contains('spread')) {
         return 0.45;
       }
       return 0.35; // Balanced grocery fallback
@@ -563,12 +589,17 @@ class WeightEngine {
       }
       // Heavy produce
       if (n.contains('watermelon') || n.contains('pumpkin')) return 2.50;
-      if (n.contains('papaya') || n.contains('pineapple') || n.contains('cabbage')) return 1.20;
+      if (n.contains('papaya') ||
+          n.contains('pineapple') ||
+          n.contains('cabbage')) return 1.20;
       if (n.contains('coconut')) return 0.60;
       return 0.80; // Standard produce basket ~800g
     }
 
-    if (cat.contains('butcher') || cat.contains('meat') || cat.contains('fish') || cat.contains('seafood')) {
+    if (cat.contains('butcher') ||
+        cat.contains('meat') ||
+        cat.contains('fish') ||
+        cat.contains('seafood')) {
       return 0.50; // Standard cut ~500g
     }
 
@@ -652,7 +683,9 @@ class WeightEngine {
       return 0.35;
     }
 
-    if (cat.contains('cosmetic') || cat.contains('beauty') || cat.contains('salon')) {
+    if (cat.contains('cosmetic') ||
+        cat.contains('beauty') ||
+        cat.contains('salon')) {
       // Glass perfumes & Eau De Parfum (100ml liquid + heavy bottle + box)
       if (n.contains('perfume') ||
           n.contains('parfum') ||
@@ -662,7 +695,9 @@ class WeightEngine {
         return 0.28; // 280g
       }
       // Deodorants / Body sprays (aerosol pressurized cans)
-      if (n.contains('deo') || n.contains('deodorant') || n.contains('body spray')) {
+      if (n.contains('deo') ||
+          n.contains('deodorant') ||
+          n.contains('body spray')) {
         return 0.14; // 140g
       }
       if (n.contains('shampoo') ||
@@ -679,7 +714,9 @@ class WeightEngine {
           n.contains('nail polish')) {
         return 0.035;
       }
-      if (n.contains('cream') || n.contains('serum') || n.contains('foundation')) {
+      if (n.contains('cream') ||
+          n.contains('serum') ||
+          n.contains('foundation')) {
         return 0.08;
       }
       return 0.15;
