@@ -17,6 +17,7 @@ import '../utils/share_utils.dart';
 import '../widgets/common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
 import '../config/app_categories.dart';
+import '../config/payment_config.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -974,6 +975,22 @@ class _ProductCardState extends State<ProductCard> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
+                  if (cart.isMaxWeightReached) {
+                    HapticFeedback.heavyImpact();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Maximum delivery weight reached (${PaymentConfig.maxWeightKg.toInt()} kg)',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                        ),
+                        backgroundColor: const Color(0xFFEF4444),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
                   if (product.totalQuantity != null &&
                       totalQuantity >= product.totalQuantity!) {
                     HapticFeedback.heavyImpact();
@@ -982,6 +999,37 @@ class _ProductCardState extends State<ProductCard> {
                       SnackBar(
                         content: Text(
                           'Only ${product.totalQuantity} items in stock',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                        ),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  if (hasSingleVariant && singleItem != null) {
+                    if (!cart.canIncrementItem(singleItem)) {
+                      SensoryHaptics.error();
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                          ),
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      return;
+                    }
+                  } else if (cart.isMaxWeightReached) {
+                    SensoryHaptics.error();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
                           style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
                         ),
                         duration: const Duration(seconds: 2),
@@ -1009,8 +1057,17 @@ class _ProductCardState extends State<ProductCard> {
                   height: double.infinity,
                   alignment: Alignment.center,
                   padding: const EdgeInsets.only(right: 4),
-                  child: const Icon(Icons.add_rounded,
-                      size: 15, color: Colors.white),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 15,
+                    color: (hasSingleVariant && singleItem != null)
+                        ? (cart.canIncrementItem(singleItem)
+                            ? Colors.white
+                            : Colors.white38)
+                        : (cart.isMaxWeightReached
+                            ? Colors.white38
+                            : Colors.white),
+                  ),
                 ),
               ),
             ),
@@ -1028,6 +1085,21 @@ class _ProductCardState extends State<ProductCard> {
         SensoryHaptics.medium();
         if (product.variants.isNotEmpty) {
           showProductDetailSheet(context, product.id, highlightVariants: true);
+          return;
+        }
+        if (!cart.canAddItem(product)) {
+          SensoryHaptics.error();
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
           return;
         }
         if (shop != null) {
@@ -1176,6 +1248,21 @@ class _ProductCardState extends State<ProductCard> {
                     );
                     return;
                   }
+                  if (!cart.canIncrementProduct(product.id)) {
+                    SensoryHaptics.error();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                        ),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
                   SensoryHaptics.medium();
                   if (shop != null) {
                     context
@@ -1187,8 +1274,13 @@ class _ProductCardState extends State<ProductCard> {
                   height: double.infinity,
                   alignment: Alignment.center,
                   padding: const EdgeInsets.only(right: 4),
-                  child: const Icon(Icons.add_rounded,
-                      size: 15, color: Colors.white),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 15,
+                    color: cart.canIncrementProduct(product.id)
+                        ? Colors.white
+                        : Colors.white38,
+                  ),
                 ),
               ),
             ),

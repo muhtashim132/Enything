@@ -1278,6 +1278,7 @@ class _SheetContent extends StatelessWidget {
 
   Widget _buildBottomBar(
       BuildContext context, int quantity, CartProvider cart, bool isDark) {
+    final canInc = cart.canAddItem(product, selectedVariant: selectedVariant);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
       decoration: BoxDecoration(
@@ -1385,6 +1386,21 @@ class _SheetContent extends StatelessWidget {
                     ),
                     const SizedBox(width: 28),
                     _qtyBtn(Icons.add, () {
+                      if (!canInc) {
+                        SensoryHaptics.error();
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                              style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                            ),
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                        return;
+                      }
                       if (shop != null) {
                         if (product.variants.isNotEmpty &&
                             selectedVariant == null) {
@@ -1394,7 +1410,7 @@ class _SheetContent extends StatelessWidget {
                         cart.addItemWithFeedback(context, product, shop!,
                             selectedVariant: selectedVariant);
                       }
-                    }, isDark),
+                    }, isDark, enabled: canInc),
                     const SizedBox(width: 20),
                     Expanded(
                       child: GestureDetector(
@@ -1519,21 +1535,26 @@ class _SheetContent extends StatelessWidget {
     );
   }
 
-  Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark) {
+  Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark, {bool enabled = true}) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           border: Border.all(
-            color: AppColors.primary.withValues(alpha: isDark ? 0.6 : 0.8),
+            color: (enabled
+                    ? AppColors.primary
+                    : (isDark ? Colors.white24 : Colors.grey.shade400))
+                .withValues(alpha: isDark ? 0.6 : 0.8),
             width: 2,
           ),
           shape: BoxShape.circle,
         ),
         child: Icon(icon,
-            color: isDark ? AppColors.primaryLight : AppColors.primary,
+            color: enabled
+                ? (isDark ? AppColors.primaryLight : AppColors.primary)
+                : (isDark ? Colors.white24 : Colors.grey.shade400),
             size: 18),
       ),
     );

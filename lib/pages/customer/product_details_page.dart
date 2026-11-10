@@ -1110,7 +1110,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   boxShadow:
                       isDark ? PremiumShadows.cardDark : PremiumShadows.cardLight,
                 ),
-            child: quantity > 0
+            child: () {
+              final canInc = _product != null ? cart.canAddItem(_product!, selectedVariant: _selectedVariant) : true;
+              return quantity > 0
                 ? Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1131,6 +1133,21 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       ),
                       const SizedBox(width: 28),
                       _qtyBtn(Icons.add, () {
+                        if (!canInc) {
+                          SensoryHaptics.error();
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                              ),
+                              duration: const Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                          return;
+                        }
                         if (_shop != null) {
                           if (_product!.variants.isNotEmpty &&
                               _selectedVariant == null) {
@@ -1140,7 +1157,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           cart.addItemWithFeedback(context, _product!, _shop!,
                               selectedVariant: _selectedVariant);
                         }
-                      }),
+                      }, enabled: canInc),
                       const SizedBox(width: 24),
                       Expanded(
                         child: GestureDetector(
@@ -1250,8 +1267,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         ),
                       ),
                     ],
-                  ),
-                ),
+                  );
+                }(),
+              ),
               ],
             ),
           ),
@@ -1277,17 +1295,20 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     );
   }
 
-  Widget _qtyBtn(IconData icon, VoidCallback onTap) {
+  Widget _qtyBtn(IconData icon, VoidCallback onTap, {bool enabled = true}) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.1),
+          color: enabled
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : Colors.grey.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: AppColors.primary, size: 20),
+        child: Icon(icon,
+            color: enabled ? AppColors.primary : Colors.grey, size: 20),
       ),
     );
   }

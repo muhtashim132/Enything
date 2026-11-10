@@ -10,6 +10,7 @@ import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
+import '../theme/sensory_haptics.dart';
 import '../config/routes.dart';
 import 'common/sheet_skeleton_loader.dart';
 import 'product_detail_sheet.dart';
@@ -983,6 +984,37 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                         child: GestureDetector(
                                           behavior: HitTestBehavior.opaque,
                                           onTap: () {
+                                            if (hasSingleVariant && singleItem != null) {
+                                              if (!cart.canIncrementItem(singleItem)) {
+                                                SensoryHaptics.error();
+                                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                                    ),
+                                                    duration: const Duration(seconds: 2),
+                                                    behavior: SnackBarBehavior.floating,
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                            } else if (cart.isMaxWeightReached) {
+                                              SensoryHaptics.error();
+                                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                                  ),
+                                                  duration: const Duration(seconds: 2),
+                                                  behavior: SnackBarBehavior.floating,
+                                                ),
+                                              );
+                                              return;
+                                            }
                                             HapticFeedback.lightImpact();
                                             if (_shop != null) {
                                               if (hasSingleVariant &&
@@ -1001,9 +1033,18 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                               }
                                             }
                                           },
-                                          child: const Center(
-                                            child: Icon(Icons.add_rounded,
-                                                color: Colors.white, size: 18),
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.add_rounded,
+                                              color: (hasSingleVariant && singleItem != null)
+                                                  ? (cart.canIncrementItem(singleItem)
+                                                      ? Colors.white
+                                                      : Colors.white38)
+                                                  : (cart.isMaxWeightReached
+                                                      ? Colors.white38
+                                                      : Colors.white),
+                                              size: 18,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -1063,6 +1104,21 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                           ? GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () {
+                                if (!cart.canAddItem(product)) {
+                                  SensoryHaptics.error();
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                  return;
+                                }
                                 cart.addItemWithFeedback(
                                     context, product, _shop!);
                               },
@@ -1154,12 +1210,32 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                       child: GestureDetector(
                                         behavior: HitTestBehavior.opaque,
                                         onTap: () {
+                                          if (!cart.canIncrementProduct(product.id)) {
+                                            SensoryHaptics.error();
+                                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                                ),
+                                                duration: const Duration(seconds: 2),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                            return;
+                                          }
                                           cart.addItemWithFeedback(
                                               context, product, _shop!);
                                         },
-                                        child: const Center(
-                                          child: Icon(Icons.add_rounded,
-                                              color: Colors.white, size: 18),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.add_rounded,
+                                            color: cart.canIncrementProduct(product.id)
+                                                ? Colors.white
+                                                : Colors.white38,
+                                            size: 18,
+                                          ),
                                         ),
                                       ),
                                     ),

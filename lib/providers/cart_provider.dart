@@ -11,6 +11,7 @@ import '../config/payment_config.dart';
 import '../config/tax_config.dart';
 import '../providers/platform_config_provider.dart';
 import '../utils/delivery_calculator.dart';
+import '../utils/weight_engine.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart' show scaffoldMessengerKey;
 
@@ -124,6 +125,7 @@ class CartProvider extends ChangeNotifier {
   static const String _pendingCartGroupKey = 'enything_pending_cart_group_id';
   static const String _pendingOrderCancelKey = 'enything_pending_order_to_cancel';
   static const String _pendingActiveShopsKey = 'enything_pending_active_shops';
+  static const String _pendingActiveWeightKey = 'enything_pending_active_weight';
   final List<CartItem> _items = [];
   final Set<String> _inFlightRestores = {};
 
@@ -149,11 +151,14 @@ class CartProvider extends ChangeNotifier {
 
   List<ShopModel> _activePendingShops = [];
   List<ShopModel> get activePendingShops => List.unmodifiable(_activePendingShops);
+  double _activePendingWeight = 0.0;
+  double get activePendingWeight => _activePendingWeight;
   bool get isPendingReplacementActive =>
       _pendingCartGroupId != null || _activePendingShops.isNotEmpty;
 
-  void setActivePendingShops(List<ShopModel> shops) {
+  void setActivePendingShops(List<ShopModel> shops, [double activeWeight = 0.0]) {
     _activePendingShops = List.from(shops);
+    _activePendingWeight = math.max(0.0, activeWeight);
     _persistPendingFields();
     safeNotifyListeners();
   }
@@ -178,6 +183,11 @@ class CartProvider extends ChangeNotifier {
       } else {
         await prefs.remove(_pendingActiveShopsKey);
       }
+      if (_activePendingWeight > 0) {
+        await prefs.setDouble(_pendingActiveWeightKey, _activePendingWeight);
+      } else {
+        await prefs.remove(_pendingActiveWeightKey);
+      }
     } catch (_) {}
   }
 
@@ -188,6 +198,7 @@ class CartProvider extends ChangeNotifier {
       await prefs.remove(_pendingCartGroupKey);
       await prefs.remove(_pendingOrderCancelKey);
       await prefs.remove(_pendingActiveShopsKey);
+      await prefs.remove(_pendingActiveWeightKey);
     } catch (_) {}
   }
 
@@ -198,6 +209,7 @@ class CartProvider extends ChangeNotifier {
     _pendingCartGroupId = null;
     _pendingOrderIdToCancel = null;
     _activePendingShops = [];
+    _activePendingWeight = 0.0;
     _clearPersistedPendingFields();
     safeNotifyListeners();
   }
@@ -248,12 +260,65 @@ class CartProvider extends ChangeNotifier {
 
   int get totalItemCount => _items.fold(0, (sum, item) => sum + item.quantity);
 
+  /// Total physical logistical weight of the cart in Kilograms, computed using integer
+  /// grams to prevent floating-point arithmetic accumulation drift.
   double get totalWeight {
     int totalGrams = _items.fold(0, (sum, item) {
-      int unitGrams = (item.weightKg * 1000).round();
-      return sum + unitGrams;
+      int itemTotalGrams = (item.totalWeightKg * 1000).round();
+      return sum + itemTotalGrams;
     });
     return totalGrams / 1000.0;
+  }
+
+  /// Effective aggregate logistical weight including any active in-flight sibling orders
+  /// during partial replacement scenarios.
+  double get effectiveAggregateWeight => totalWeight + _activePendingWeight;
+
+  /// Remaining weight capacity allowed in the cart (in Kilograms) before hitting the 15kg cap.
+  double get remainingWeightCapacityKg {
+    const maxWeight = PaymentConfig.maxWeightKg;
+    return math.max(0.0, maxWeight - effectiveAggregateWeight);
+  }
+
+  /// Whether the cart has reached or exceeded the physical two-wheeler limit (15 kg).
+  bool get isMaxWeightReached => effectiveAggregateWeight >= PaymentConfig.maxWeightKg;
+
+  /// Whether the cart has entered the heavy order surcharge bracket (> 10 kg).
+  bool get isHeavyOrder {
+    final threshold = PlatformConfigProvider.instance?.heavyOrderThresholdKg ??
+        PaymentConfig.heavyOrderThreshold;
+    return effectiveAggregateWeight > threshold;
+  }
+
+  /// Proactively checks whether adding [quantity] units of [product] (with optional [selectedVariant])
+  /// is permitted within weight and item-count limits.
+  bool canAddItem(ProductModel product,
+      {ProductVariant? selectedVariant, int quantity = 1}) {
+    if (quantity <= 0) return true;
+    if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) return false;
+
+    final unitWeight = WeightEngine.resolveUnit(
+      product: product,
+      selectedVariant: selectedVariant,
+    );
+    final projectedAddition = unitWeight * quantity;
+    return (effectiveAggregateWeight + projectedAddition) <= PaymentConfig.maxWeightKg;
+  }
+
+  /// Proactively checks whether an existing cart item can be incremented by 1 unit.
+  bool canIncrementItem(CartItem item) {
+    if (totalItemCount + 1 > PaymentConfig.maxItemsPerOrder) return false;
+    return (effectiveAggregateWeight + item.unitWeightKg) <= PaymentConfig.maxWeightKg;
+  }
+
+  /// Proactively checks whether a product in the cart can be incremented by 1 unit.
+  bool canIncrementProduct(String productId, {String? variantName}) {
+    if (totalItemCount + 1 > PaymentConfig.maxItemsPerOrder) return false;
+    final idx = _items.indexWhere((item) =>
+        item.product.id == productId &&
+        (variantName == null || item.selectedVariant?.name == variantName));
+    if (idx == -1) return false;
+    return (effectiveAggregateWeight + _items[idx].unitWeightKg) <= PaymentConfig.maxWeightKg;
   }
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
@@ -373,14 +438,20 @@ class CartProvider extends ChangeNotifier {
       return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
     }
 
-    final unitWeightKg = CartItem(
-            product: product,
-            shop: shop,
-            quantity: 1,
-            selectedVariant: selectedVariant)
-        .weightKg;
-    if (totalWeight + (unitWeightKg * quantity) > PaymentConfig.maxWeightKg) {
-      return 'Maximum weight of ${PaymentConfig.maxWeightKg} kg allowed per order';
+    final unitWeightKg = WeightEngine.resolveUnit(
+      product: product,
+      selectedVariant: selectedVariant,
+    );
+
+    // Single item hard weight shield
+    if (unitWeightKg > PaymentConfig.maxWeightKg) {
+      return 'This single item (${unitWeightKg.toStringAsFixed(1)} kg) exceeds the maximum delivery limit (${PaymentConfig.maxWeightKg.toInt()} kg).';
+    }
+
+    final projectedWeight = effectiveAggregateWeight + (unitWeightKg * quantity);
+    if (projectedWeight > PaymentConfig.maxWeightKg) {
+      final remaining = remainingWeightCapacityKg;
+      return 'Maximum delivery weight of ${PaymentConfig.maxWeightKg.toInt()} kg reached (${remaining.toStringAsFixed(2)} kg capacity left).';
     }
 
     // Enforce max 3 unique shops (including active shops from pending replacement order if active)
@@ -475,7 +546,7 @@ class CartProvider extends ChangeNotifier {
     safeNotifyListeners();
   }
 
-  void updateQuantity(String productId, int quantity, {String? variantName}) {
+  String? updateQuantity(String productId, int quantity, {String? variantName}) {
     final idx = _items.indexWhere((item) =>
         item.product.id == productId &&
         item.selectedVariant?.name == variantName);
@@ -483,12 +554,48 @@ class CartProvider extends ChangeNotifier {
       if (quantity <= 0) {
         _items.removeAt(idx);
         scaffoldMessengerKey.currentState?.clearSnackBars();
-      } else {
-        _items[idx].quantity = quantity;
+        _saveCart(); // Bug #20
+        safeNotifyListeners();
+        return null;
       }
+
+      final currentQty = _items[idx].quantity;
+      final deltaQty = quantity - currentQty;
+
+      if (deltaQty > 0) {
+        if (totalItemCount + deltaQty > PaymentConfig.maxItemsPerOrder) {
+          const err = 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
+          _showTransientError(err);
+          return err;
+        }
+
+        final deltaWeight = _items[idx].unitWeightKg * deltaQty;
+        final projectedWeight = effectiveAggregateWeight + deltaWeight;
+        if (projectedWeight > PaymentConfig.maxWeightKg) {
+          final remaining = remainingWeightCapacityKg;
+          final err = 'Maximum delivery weight of ${PaymentConfig.maxWeightKg.toInt()} kg reached (${remaining.toStringAsFixed(2)} kg capacity left).';
+          _showTransientError(err);
+          return err;
+        }
+      }
+
+      _items[idx].quantity = quantity;
       _saveCart(); // Bug #20
       safeNotifyListeners();
+      return null;
     }
+    return 'Item not found in cart';
+  }
+
+  void _showTransientError(String err) {
+    scaffoldMessengerKey.currentState?.clearSnackBars();
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text(err),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void clear() {
@@ -604,6 +711,7 @@ class CartProvider extends ChangeNotifier {
               .toList();
         } catch (_) {}
       }
+      _activePendingWeight = prefs.getDouble(_pendingActiveWeightKey) ?? 0.0;
 
       safeNotifyListeners();
     } catch (e) {

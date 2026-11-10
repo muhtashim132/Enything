@@ -8,6 +8,7 @@ import '../models/shop_model.dart';
 import '../providers/cart_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/premium_effects.dart';
+import '../theme/sensory_haptics.dart';
 import '../widgets/product_detail_sheet.dart';
 import 'common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
@@ -836,6 +837,37 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                   );
                   return;
                 }
+                if (hasSingleVariant && singleItem != null) {
+                  if (!cart.canIncrementItem(singleItem)) {
+                    SensoryHaptics.error();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                        ),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                } else if (cart.isMaxWeightReached) {
+                  SensoryHaptics.error();
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                      ),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
                 HapticFeedback.lightImpact();
                 if (hasSingleVariant && singleItem != null) {
                   cart.addItemWithFeedback(
@@ -853,8 +885,17 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                 width: 28,
                 height: double.infinity,
                 alignment: Alignment.center,
-                child: const Icon(Icons.add_rounded,
-                    size: 15, color: Colors.white),
+                child: Icon(
+                  Icons.add_rounded,
+                  size: 15,
+                  color: (hasSingleVariant && singleItem != null)
+                      ? (cart.canIncrementItem(singleItem)
+                          ? Colors.white
+                          : Colors.white38)
+                      : (cart.isMaxWeightReached
+                          ? Colors.white38
+                          : Colors.white),
+                ),
               ),
             ),
           ],
@@ -864,6 +905,7 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
   }
 
   Widget _buildStepper(BuildContext context, int quantity) {
+    final cart = context.watch<CartProvider>();
     return Container(
       key: const ValueKey('stepper'),
       height: 32,
@@ -942,6 +984,21 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                     );
                     return;
                   }
+                  if (!cart.canIncrementProduct(product.id)) {
+                    SensoryHaptics.error();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                        ),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
                   HapticFeedback.lightImpact();
                   context
                       .read<CartProvider>()
@@ -951,8 +1008,13 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                   height: double.infinity,
                   alignment: Alignment.center,
                   padding: const EdgeInsets.only(right: 2),
-                  child: const Icon(Icons.add_rounded,
-                      size: 15, color: Colors.white),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 15,
+                    color: cart.canIncrementProduct(product.id)
+                        ? Colors.white
+                        : Colors.white38,
+                  ),
                 ),
               ),
             ),
@@ -963,14 +1025,28 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
   }
 
   Widget _buildAddButton(BuildContext context, bool isDark) {
+    final cart = context.read<CartProvider>();
     return GestureDetector(
       key: const ValueKey('add'),
       behavior: HitTestBehavior.opaque,
       onTap: () {
+        if (!cart.canAddItem(product)) {
+          SensoryHaptics.error();
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
         HapticFeedback.lightImpact();
-        context
-            .read<CartProvider>()
-            .addItemWithFeedback(context, product, shop);
+        cart.addItemWithFeedback(context, product, shop);
       },
       child: Container(
         height: 32,

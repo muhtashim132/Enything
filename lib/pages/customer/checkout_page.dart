@@ -1104,7 +1104,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             'variant_name': item.selectedVariant?.name,
             'quantity': item.quantity,
             'price': item.selectedVariant?.price ?? item.product.price,
-            'weight_kg': item.weightKg,
+            'weight_kg': item.unitWeightKg,
             'requires_prescription': item.product.requiresPrescription,
             'special_instructions': item.specialInstructions,
           };
@@ -1136,6 +1136,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (totalPayable < PaymentConfig.minimumOrderValue) {
         throw Exception(
           'Order total after discount is ₹${totalPayable.toStringAsFixed(2)}. Minimum payable amount is ₹${PaymentConfig.minimumOrderValue.toStringAsFixed(0)}.',
+        );
+      }
+
+      // 100x HARD WEIGHT GATE: Ensure combined order weight does not exceed physical two-wheeler limit
+      final currentOrderWeight = cart.totalWeight;
+      final combinedWeight = _activeWeight + currentOrderWeight;
+      if (combinedWeight > PaymentConfig.maxWeightKg) {
+        throw Exception(
+          'Total delivery weight (${combinedWeight.toStringAsFixed(2)} kg) exceeds the maximum physical two-wheeler limit of ${PaymentConfig.maxWeightKg.toInt()} kg. Please reduce items to proceed.',
         );
       }
 

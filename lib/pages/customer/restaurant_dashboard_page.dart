@@ -10,6 +10,7 @@ import '../../providers/cart_provider.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/sensory_haptics.dart';
 import '../../config/routes.dart';
 import '../../config/app_categories.dart';
 import '../../widgets/product_detail_sheet.dart';
@@ -719,6 +720,37 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                                 ),
                                 GestureDetector(
                                   onTap: () {
+                                    if (hasSingleVariant && singleItem != null) {
+                                      if (!cart.canIncrementItem(singleItem)) {
+                                        SensoryHaptics.error();
+                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                              style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                            ),
+                                            duration: const Duration(seconds: 2),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                    } else if (cart.isMaxWeightReached) {
+                                      SensoryHaptics.error();
+                                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                            style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                          ),
+                                          duration: const Duration(seconds: 2),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     HapticFeedback.lightImpact();
                                     if (_shop != null) {
                                       if (hasSingleVariant &&
@@ -737,8 +769,17 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                                       }
                                     }
                                   },
-                                  child: const Icon(Icons.add,
-                                      color: Colors.white, size: 18),
+                                  child: Icon(
+                                    Icons.add,
+                                    color: (hasSingleVariant && singleItem != null)
+                                        ? (cart.canIncrementItem(singleItem)
+                                            ? Colors.white
+                                            : Colors.white38)
+                                        : (cart.isMaxWeightReached
+                                            ? Colors.white38
+                                            : Colors.white),
+                                    size: 18,
+                                  ),
                                 ),
                               ],
                             ),
@@ -795,6 +836,21 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                       ? GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
+                            if (!cart.canAddItem(product)) {
+                              SensoryHaptics.error();
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
                             cart.addItemWithFeedback(context, product, _shop!);
                           },
                           child: Container(
@@ -863,14 +919,34 @@ class _RestaurantDashboardPageState extends State<RestaurantDashboardPage>
                                   child: GestureDetector(
                                     behavior: HitTestBehavior.opaque,
                                     onTap: () {
+                                      if (!cart.canIncrementProduct(product.id)) {
+                                        SensoryHaptics.error();
+                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Delivery weight limit reached (Max 15 kg for bike delivery)',
+                                              style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                                            ),
+                                            duration: const Duration(seconds: 2),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                        return;
+                                      }
                                       cart.addItemWithFeedback(
                                           context, product, _shop!);
                                     },
                                     child: Container(
                                       height: double.infinity,
                                       alignment: Alignment.center,
-                                      child: const Icon(Icons.add,
-                                          color: Colors.white, size: 18),
+                                      child: Icon(
+                                        Icons.add,
+                                        color: cart.canIncrementProduct(product.id)
+                                            ? Colors.white
+                                            : Colors.white38,
+                                        size: 18,
+                                      ),
                                     ),
                                   ),
                                 ),

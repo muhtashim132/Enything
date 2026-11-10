@@ -19,11 +19,17 @@ class CartItem {
 
   double get totalPrice => (selectedVariant?.price ?? product.price) * quantity;
 
-  double get weightKg => WeightEngine.resolve(
+  /// Physical logistical unit weight in kilograms (weight of 1 unit).
+  double get unitWeightKg => WeightEngine.resolveUnit(
         product: product,
         selectedVariant: selectedVariant,
-        quantity: quantity,
       );
+
+  /// Total physical logistical weight in kilograms for the current line-item quantity.
+  double get totalWeightKg => unitWeightKg * quantity;
+
+  /// Retained for backward-compatibility — alias for [totalWeightKg].
+  double get weightKg => totalWeightKg;
 
   CartItem copyWith({
     ProductModel? product,

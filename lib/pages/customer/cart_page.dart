@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -210,6 +211,7 @@ class CartPage extends StatelessWidget {
 
   Widget _buildQtyControl(
       BuildContext context, CartProvider cart, item, bool isDark) {
+    final canInc = cart.canIncrementItem(item);
     return Container(
       decoration: BoxDecoration(
         color: isDark
@@ -247,6 +249,16 @@ class CartPage extends StatelessWidget {
             ),
           ),
           _qtyBtn(Icons.add, () {
+            if (!canInc) {
+              HapticFeedback.heavyImpact();
+              AppToast.showWarning(
+                context,
+                title: 'Weight Limit Reached ⛔',
+                message:
+                    'Two-wheeler delivery cannot exceed ${PaymentConfig.maxWeightKg.toInt()} kg (${cart.remainingWeightCapacityKg.toStringAsFixed(2)} kg remaining).',
+              );
+              return;
+            }
             final err = cart.addItem(item.product, item.shop,
                 selectedVariant: item.selectedVariant);
             if (err != null) {
@@ -256,21 +268,26 @@ class CartPage extends StatelessWidget {
                 message: err,
               );
             }
-          }, isDark),
+          }, isDark, enabled: canInc),
         ],
       ),
     );
   }
 
-  Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark) {
+  Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark,
+      {bool enabled = true}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Icon(icon,
-            size: 18,
-            color: isDark ? AppColors.primaryLight : AppColors.primary),
+        child: Icon(
+          icon,
+          size: 18,
+          color: !enabled
+              ? (isDark ? Colors.white24 : Colors.grey.shade400)
+              : (isDark ? AppColors.primaryLight : AppColors.primary),
+        ),
       ),
     );
   }
@@ -378,7 +395,11 @@ class CartPage extends StatelessWidget {
       paymentMethod: 'upi',
     );
     final total = gstBreakdown.grandTotal;
-    final canCheckout = cart.meetsMinimumOrder && baseCharge >= 0 && !config.isMaintenanceMode;
+    final isOverweight = cart.effectiveAggregateWeight > PaymentConfig.maxWeightKg;
+    final canCheckout = cart.meetsMinimumOrder &&
+        baseCharge >= 0 &&
+        !config.isMaintenanceMode &&
+        !isOverweight;
 
     return SafeArea(
       top: false,
@@ -418,7 +439,11 @@ class CartPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // ── 100x Delivery Weight & Vehicle Capacity Gauge ───────────
+            _buildWeightCapacityGauge(context, cart, isDark),
+            const SizedBox(height: 14),
 
             // Price breakdown
             _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}',
@@ -612,11 +637,13 @@ class CartPage extends StatelessWidget {
                   child: Text(
                     config.isMaintenanceMode
                         ? 'Shopping Temporarily Paused'
-                        : baseCharge < 0
-                            ? 'Out of range'
-                            : cart.meetsMinimumOrder
-                                ? 'Proceed to Checkout • ₹${total.toStringAsFixed(0)}'
-                                : 'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
+                        : isOverweight
+                            ? 'Weight Limit Exceeded (${cart.effectiveAggregateWeight.toStringAsFixed(1)} kg / ${PaymentConfig.maxWeightKg.toInt()} kg)'
+                            : baseCharge < 0
+                                ? 'Out of range'
+                                : cart.meetsMinimumOrder
+                                    ? 'Proceed to Checkout • ₹${total.toStringAsFixed(0)}'
+                                    : 'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
                     style: GoogleFonts.outfit(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -675,6 +702,78 @@ class CartPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWeightCapacityGauge(
+      BuildContext context, CartProvider cart, bool isDark) {
+    final weight = cart.effectiveAggregateWeight;
+    const maxWeight = PaymentConfig.maxWeightKg;
+    final heavyThreshold =
+        PlatformConfigProvider.instance?.heavyOrderThresholdKg ??
+            PaymentConfig.heavyOrderThreshold;
+    final ratio = (weight / maxWeight).clamp(0.0, 1.0);
+
+    final bool isOverweight = weight > maxWeight;
+    final bool isHeavy = weight > heavyThreshold && !isOverweight;
+
+    final Color gaugeColor = isOverweight
+        ? AppColors.danger
+        : isHeavy
+            ? Colors.orange.shade700
+            : AppColors.success;
+
+    final String statusText = isOverweight
+        ? '⛔ Cart exceeds two-wheeler limit (${maxWeight.toInt()} kg)'
+        : isHeavy
+            ? '⚖️ Heavy order (+₹${cart.heavyOrderFee.toStringAsFixed(0)} fee applies)'
+            : '🛵 Standard bike delivery load';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: gaugeColor.withValues(alpha: isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: gaugeColor.withValues(alpha: isDark ? 0.3 : 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                statusText,
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: gaugeColor,
+                ),
+              ),
+              Text(
+                '${weight.toStringAsFixed(2)} / ${maxWeight.toInt()} kg',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 6,
+              backgroundColor: isDark ? Colors.white12 : Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(gaugeColor),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
