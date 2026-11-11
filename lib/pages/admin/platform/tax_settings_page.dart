@@ -6,6 +6,7 @@ import '../../../../theme/admin_theme.dart';
 import '../../../../providers/rbac_provider.dart';
 import '../../../../providers/platform_config_provider.dart';
 import '../../../../config/tax_config.dart';
+import '../../../../services/gst_recommendation_engine.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tax Settings Page (Updated: September 2025 GST Reform)
@@ -51,6 +52,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       icon: Icons.restaurant_rounded,
       color: AdminColors.warning,
       categories: [
+        'Food',
         'Restaurant',
         'Fast Food',
         'Bakery',
@@ -77,6 +79,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       color: AdminColors.info,
       categories: [
         'Grocery',
+        'Grocerylm',
         'Organic',
         'Supermarket / Hypermarket',
         'Beverages',
@@ -556,6 +559,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
         }
         // Reload engine so seller's next recommendation is fresh
         await _fetchProductOverrides();
+        GstRecommendationEngine.instance.reload();
         setState(() => _editingOverrideId = null);
         _showSnack('Saved: "$keyword" → ${rateLabel(rate)}');
       } catch (e) {
@@ -591,6 +595,7 @@ class _TaxSettingsPageState extends State<TaxSettingsPage> {
       try {
         await _db.from('product_gst_overrides').delete().eq('id', id);
         await _fetchProductOverrides();
+        GstRecommendationEngine.instance.reload();
         _showSnack('Keyword rule "$keyword" deleted.');
       } catch (e) {
         _showSnack('Failed to delete: $e', error: true);

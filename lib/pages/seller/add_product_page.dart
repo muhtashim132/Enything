@@ -202,12 +202,13 @@ class _AddProductPageState extends State<AddProductPage> {
     // Pre-load DB keyword rules so first recommendation is instant
     GstRecommendationEngine.instance.ensureLoaded();
     _fetchShopId();
-    // Debounced listener: re-run GST recommendation when product name changes
+    // Debounced listener: re-run GST recommendation when product name or price changes
     _nameController.addListener(_scheduleGstUpdate);
     _nameController.addListener(_markDirty);
     _nameController.addListener(_onNameChanged);
     _nameFocusNode.addListener(_onNameFocusChanged);
     _brandController.addListener(_markDirty);
+    _priceController.addListener(_scheduleGstUpdate);
     _priceController.addListener(_markDirty);
     _originalPriceController.addListener(_markDirty);
     _descriptionController.addListener(_markDirty);
@@ -270,6 +271,7 @@ class _AddProductPageState extends State<AddProductPage> {
           reason:
               '${(p.gstRateOverride! * 100).toStringAsFixed(0)}% — Previously saved',
           isAmbiguous: false,
+          alternatives: const [0.0, 0.05, 0.12, 0.18, 0.40],
         );
       }
       for (final tag in p.specialTags) {
@@ -1955,14 +1957,17 @@ class _AddProductPageState extends State<AddProductPage> {
     setState(() => _gstLoading = true);
     await GstRecommendationEngine.instance.ensureLoaded();
     final name = _nameController.text.trim();
-    final rec =
-        GstRecommendationEngine.instance.recommend(name, _productCategory);
+    final price = double.tryParse(_priceController.text.trim());
+    final rec = GstRecommendationEngine.instance
+        .recommend(name, _productCategory, itemPrice: price);
     if (!mounted) return;
     setState(() {
       _gstLoading = false;
       _gstRecommendation = rec;
-      // Auto-apply only when the user hasn't manually overridden
-      if (!_gstUserOverridden) {
+      // Auto-apply when user hasn't manually overridden, or when crossing price-slabs in Clothing/Footwear
+      final isSlabCat =
+          _productCategory == 'Clothing' || _productCategory == 'Footwear';
+      if (!_gstUserOverridden || isSlabCat) {
         _gstRateOverride = rec.rate;
       }
     });
@@ -1979,6 +1984,7 @@ class _AddProductPageState extends State<AddProductPage> {
     _nameController.removeListener(_markDirty);
     _brandController.removeListener(_markDirty);
     _brandController.dispose();
+    _priceController.removeListener(_scheduleGstUpdate);
     _priceController.removeListener(_markDirty);
     _originalPriceController.removeListener(_markDirty);
     _descriptionController.removeListener(_markDirty);
@@ -2753,33 +2759,40 @@ class _AddProductPageState extends State<AddProductPage> {
 
             // ── Slab selector ─────────────────────────────────────────────
             if (isSlabCat) ...[
-              // Clothing/Footwear: show price-based slab note
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border:
-                      Border.all(color: Colors.amber.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                        size: 14, color: Colors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        TaxConfig.slabDescription(_productCategory) ??
-                            '5% for ≤₹2,500 | 18% for >₹2,500',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.amber,
-                            fontWeight: FontWeight.w500),
+              // Clothing/Footwear: show price-based slab note with dynamic indicator
+              Builder(builder: (context) {
+                final price = double.tryParse(_priceController.text.trim());
+                final dynamicNote = price != null
+                    ? (price > TaxConfig.defaultSlabThreshold
+                        ? ' • Current Price ₹${price.toStringAsFixed(0)} > ₹2,500 (18% Standard Slab)'
+                        : ' • Current Price ₹${price.toStringAsFixed(0)} ≤ ₹2,500 (5% Concessional Slab)')
+                    : '';
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          size: 14, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${TaxConfig.slabDescription(_productCategory) ?? '5% for ≤₹2,500 | 18% for >₹2,500'}$dynamicNote',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.amber,
+                              fontWeight: FontWeight.w500),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                    ],
+                  ),
+                );
+              }),
               const SizedBox(height: 12),
             ],
 

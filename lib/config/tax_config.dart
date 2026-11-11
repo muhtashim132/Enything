@@ -140,6 +140,7 @@ class TaxConfig {
 
   static const Map<String, double> _categoryGstRate = {
     // ── Food: Enything is deemed supplier (Section 9(5)) ─────────────────────
+    'Food': 0.05, // 5% — Section 9(5) deemed supplier
     'Restaurant': 0.05, // 5% — no ITC for seller
     'Fast Food': 0.05,
     'Bakery': 0.05,
@@ -295,6 +296,7 @@ class TaxConfig {
   /// Enything collects and deposits the GST for these — seller doesn't touch it.
   static bool isEnythingDeemedSupplier(String category) {
     const s9_5Categories = {
+      'Food',
       'Restaurant',
       'Fast Food',
       'Bakery',
@@ -337,6 +339,7 @@ class TaxConfig {
   ///   — Zero-GST / genuinely exempt supplies (fresh produce, fresh meat/fish)
   static const Set<String> _tcsZeroCategories = {
     // ── Section 9(5) deemed-supplier food ── NO TCS (ECO is deemed supplier)
+    'Food',
     'Restaurant',
     'Fast Food',
     'Bakery',
@@ -355,8 +358,10 @@ class TaxConfig {
   /// Returns 0.0 for:
   ///   — Section 9(5) deemed-supplier food categories
   ///   — Zero-GST / genuinely exempt categories (fresh produce)
+  ///   — Any supply where effective [gstRate] is 0.0 (exempt/zero-rated under §52(1))
   /// Returns [gcTcsRate] (0.5%) for all other taxable non-food categories.
-  static double tcsRateForCategory(String category) {
+  static double tcsRateForCategory(String category, {double? gstRate}) {
+    if (gstRate == 0.0) return 0.0;
     return _tcsZeroCategories.contains(category) ? 0.0 : gcTcsRate;
   }
 
@@ -609,7 +614,9 @@ class OrderTaxBreakdown {
       }
 
       // ── TCS & TDS per-item accumulation ────────────────────────────────────
-      tcsTotal += lineBase * TaxConfig.tcsRateForCategory(category);
+      final isExempt = (gstRate == 0.0) || TaxConfig._tcsZeroCategories.contains(category);
+      final effectiveTcsRate = (isDeemed || isExempt) ? 0.0 : TaxConfig.gcTcsRate;
+      tcsTotal += lineBase * effectiveTcsRate;
       tdsTotal += lineBase * TaxConfig.itTdsRate;
     }
 

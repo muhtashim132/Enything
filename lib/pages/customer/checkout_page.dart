@@ -597,6 +597,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cart = context.read<CartProvider>();
     final auth = context.read<AuthProvider>();
     final location = context.read<LocationProvider>();
+    final couponProv = context.read<CouponProvider>();
 
     // 100x PRELAUNCH FIX: Empty cart guard
     if (cart.items.isEmpty || cart.shops.isEmpty) {
@@ -613,9 +614,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
         location.currentAddress.trim().isEmpty) {
       throw Exception('Please set your delivery address before placing an order.');
     }
-
-    // Capture coupon ID & discount before any await to avoid BuildContext-across-async-gaps warning
-    final couponProv = context.read<CouponProvider>();
 
     // O1 FIX: Coupon State Desync Guard
     // If the cart was modified after the coupon was applied (e.g., items removed),
@@ -1113,18 +1111,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
         });
 
         final itemsToInsert = shopItems.map((item) {
+          final itemPrice = item.selectedVariant?.price ?? item.product.price;
+          final cat = item.product.category;
+          final effectiveGstRate = item.product.gstRateOverride ??
+              (PlatformConfigProvider.instance
+                      ?.getGstRate(cat, itemPrice: itemPrice) ??
+                  TaxConfig.gstRateForCategory(cat, itemPrice: itemPrice));
+          final lineBase = itemPrice * item.quantity;
+          final lineGst = double.parse((lineBase * effectiveGstRate).toStringAsFixed(2));
+
           return {
             'id': const Uuid().v4(),
             'created_at': nowUtc,
             'order_id': orderId,
+            'shop_id': shop.id,
             'product_id': item.product.id,
             'product_name': item.product.name,
             'variant_name': item.selectedVariant?.name,
             'quantity': item.quantity,
-            'price': item.selectedVariant?.price ?? item.product.price,
+            'price': itemPrice,
             'weight_kg': item.unitWeightKg,
             'requires_prescription': item.product.requiresPrescription,
             'special_instructions': item.specialInstructions,
+            'gst_rate': effectiveGstRate,
+            'gst_amount': lineGst,
           };
         }).toList();
         allItems.addAll(itemsToInsert);

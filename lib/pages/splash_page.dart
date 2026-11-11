@@ -459,117 +459,156 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                 child: _aurora(size.width * 0.95, const Color(0xFF6230C8),
                     0.15 + (1 - _bgAnim.value) * 0.12),
               ),
-              // Blue center glow behind logo
-              Opacity(
-                opacity: (_logoFade.value * 0.20).clamp(0.0, 1.0),
-                child: _aurora(
-                    size.shortestSide * 0.70, const Color(0xFF5B8BFF), 1.0),
-              ),
-
-              // ── Expanding rings ──────────────────────────────────────────
-              ...[
-                (
-                  _ring1,
-                  size.shortestSide * 0.42,
-                  const Color(0xFF5B8BFF),
-                  2.0
-                ),
-                (
-                  _ring2,
-                  size.shortestSide * 0.30,
-                  const Color(0xFF4C6EF5),
-                  1.4
-                ),
-                (
-                  _ring3,
-                  size.shortestSide * 0.22,
-                  const Color(0xFF5B8BFF),
-                  0.9
-                ),
-              ].map((r) => _RingWidget(
-                  progress: r.$1.value,
-                  maxRadius: r.$2,
-                  color: r.$3,
-                  strokeW: r.$4)),
 
               // ── Star field ───────────────────────────────────────────────
               CustomPaint(size: size, painter: _StarPainter(_bgCtrl.value)),
 
-              // ── Central content — visually centered ────────────────────────
+              // ── Central content — visually & optically centered ────────────
               Align(
-                alignment: const Alignment(0, -0.12),
+                alignment: const Alignment(0, -0.10),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Logo
-                    FadeTransition(
-                      opacity: _logoFade,
-                      child: ScaleTransition(
-                        scale: _logoScale,
-                        child: ScaleTransition(
-                          scale: _pulseAnim,
-                          child: _EnythingLogo(
-                            logoSize: size.shortestSide * 0.22,
-                            shimmer: _shimmerAnim,
-                            assemblyAnim: _logoCtrl,
+                    // Concentric Logo & Light Anchor
+                    SizedBox(
+                      width: (size.shortestSide * 0.25).clamp(90.0, 108.0),
+                      height: (size.shortestSide * 0.25).clamp(90.0, 108.0),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Concentric ambient blue halo centered directly behind the logo
+                          OverflowBox(
+                            maxWidth: size.shortestSide * 0.85,
+                            maxHeight: size.shortestSide * 0.85,
+                            child: Opacity(
+                              opacity: (_logoFade.value * 0.40).clamp(0.0, 1.0),
+                              child: _aurora(
+                                size.shortestSide * 0.85,
+                                const Color(0xFF5B8BFF),
+                                1.0,
+                              ),
+                            ),
                           ),
-                        ),
+
+                          // Concentric shockwave rings expanding from the logo center
+                          ...[
+                            (
+                              _ring1,
+                              size.shortestSide * 0.46,
+                              const Color(0xFF5B8BFF),
+                              2.0
+                            ),
+                            (
+                              _ring2,
+                              size.shortestSide * 0.32,
+                              const Color(0xFF4C6EF5),
+                              1.4
+                            ),
+                            (
+                              _ring3,
+                              size.shortestSide * 0.24,
+                              const Color(0xFF5B8BFF),
+                              0.9
+                            ),
+                          ].map((r) => OverflowBox(
+                                maxWidth: r.$2 * 2,
+                                maxHeight: r.$2 * 2,
+                                child: _RingWidget(
+                                  progress: r.$1.value,
+                                  maxRadius: r.$2,
+                                  color: r.$3,
+                                  strokeW: r.$4,
+                                ),
+                              )),
+
+                          // Frosted Squircle Logo
+                          FadeTransition(
+                            opacity: _logoFade,
+                            child: ScaleTransition(
+                              scale: _logoScale,
+                              child: ScaleTransition(
+                                scale: _pulseAnim,
+                                child: _EnythingLogo(
+                                  logoSize: (size.shortestSide * 0.25)
+                                      .clamp(90.0, 108.0),
+                                  shimmer: _shimmerAnim,
+                                  assemblyAnim: _logoCtrl,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 22),
 
                     // Text block
                     FadeTransition(
                       opacity: _textFade,
                       child: Transform.translate(
                         offset: Offset(0, _textSlide.value),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // ENYTHING wordmark
-                            ShaderMask(
-                              shaderCallback: (b) => const LinearGradient(
-                                colors: [
-                                  Color(0xFF8BAAFF),
-                                  Color(0xFF5B8BFF),
-                                  Color(0xFF4C6EF5)
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ).createShader(b),
-                              child: Text(
-                                'ENYTHING',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 52,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 8,
-                                  height: 1.0,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // ENYTHING wordmark with subpixel optical letterSpacing compensation
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Transform.translate(
+                                  // Compensate for Skia/Impeller trailing letterSpacing whitespace (8px / 2 = 4px)
+                                  offset: const Offset(4.0, 0),
+                                  child: ShaderMask(
+                                    shaderCallback: (b) => const LinearGradient(
+                                      colors: [
+                                        Color(0xFF99B8FF),
+                                        Color(0xFF5B8BFF),
+                                        Color(0xFF4C6EF5),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ).createShader(b),
+                                    child: Text(
+                                      'ENYTHING',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.outfit(
+                                        color: Colors.white,
+                                        fontSize: 38,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 8.0,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
 
-                            const SizedBox(height: 14),
+                              const SizedBox(height: 12),
 
-                            FadeTransition(
-                              opacity: _taglineFade,
-                              child: Text(
-                                'Everything. Everywhere. Instantly.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
+                              FadeTransition(
+                                opacity: _taglineFade,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'Everything. Everywhere. Instantly.',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.outfit(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.55),
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -577,9 +616,10 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                 ),
               ),
 
-              // ── Bottom loading indicator ─────────────────────────────────
+              // ── Bottom loading indicator (safe area responsive & dynamic pulse) ──
               Positioned(
-                bottom: 52,
+                bottom: math.max(
+                    32.0, MediaQuery.of(context).padding.bottom + 16.0),
                 child: FadeTransition(
                   opacity: _taglineFade,
                   child: AnimatedBuilder(
@@ -589,16 +629,27 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
                       children: List.generate(3, (i) {
                         final wave =
                             (math.sin((_bgCtrl.value * 6) - i * 1.0) + 1) / 2;
+                        final dotSize = 5.5 + wave * 2.5;
                         return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: i == 1 ? 9 : 5.5,
-                          height: i == 1 ? 9 : 5.5,
+                          margin: const EdgeInsets.symmetric(horizontal: 4.5),
+                          width: dotSize,
+                          height: dotSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: Color.lerp(
-                                Colors.white.withValues(alpha: 0.15),
-                                const Color(0xFF5B8BFF),
-                                wave),
+                              Colors.white.withValues(alpha: 0.18),
+                              const Color(0xFF5B8BFF),
+                              wave,
+                            ),
+                            boxShadow: [
+                              if (wave > 0.6)
+                                BoxShadow(
+                                  color: const Color(0xFF5B8BFF)
+                                      .withValues(alpha: (wave - 0.6) * 0.8),
+                                  blurRadius: 6,
+                                  spreadRadius: 1,
+                                ),
+                            ],
                           ),
                         );
                       }),
@@ -808,7 +859,9 @@ class _RingWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (progress <= 0) return const SizedBox.shrink();
-    return SizedBox.expand(
+    return SizedBox(
+      width: maxRadius * 2,
+      height: maxRadius * 2,
       child: CustomPaint(
         painter: _RingPainter(
             radius: maxRadius * progress,
