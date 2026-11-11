@@ -11,6 +11,7 @@ const corsHeaders = {
 /** Decode a PEM private key string into an ArrayBuffer for Web Crypto. */
 function pemToArrayBuffer(pem: string): ArrayBuffer {
   const base64 = pem
+    .replace(/\\n/g, '\n')
     .replace(/-----BEGIN PRIVATE KEY-----/g, '')
     .replace(/-----END PRIVATE KEY-----/g, '')
     .replace(/\s/g, '');

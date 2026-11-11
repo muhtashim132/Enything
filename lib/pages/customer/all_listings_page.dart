@@ -599,12 +599,16 @@ class _AllListingsPageState extends State<AllListingsPage> {
         return;
       }
 
-      final fetchQuery = Supabase.instance.client
+      var fetchQuery = Supabase.instance.client
           .from('products')
           .select()
           .inFilter('shop_id', shopIds)
           .eq('is_deleted', false)
           .eq('is_available', true);
+
+      if (widget.categoryFilter != null && widget.categoryFilter!.isNotEmpty) {
+        fetchQuery = fetchQuery.inFilter('category', widget.categoryFilter!);
+      }
 
       final response = await fetchQuery
           .order('rating', ascending: false)

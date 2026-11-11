@@ -277,7 +277,7 @@ class CartPage extends StatelessWidget {
   Widget _qtyBtn(IconData icon, VoidCallback onTap, bool isDark,
       {bool enabled = true}) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -669,29 +669,32 @@ class CartPage extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                color: isBold
-                    ? (isDark ? Colors.white : AppColors.textPrimary)
-                    : (isDark ? Colors.white54 : AppColors.textSecondary),
-                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-                fontSize: isBold ? 16 : 14,
-              ),
-            ),
-            if (hint != null)
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                hint,
+                label,
                 style: GoogleFonts.outfit(
-                  color: isDark ? Colors.white30 : AppColors.textLight,
-                  fontSize: 10,
+                  color: isBold
+                      ? (isDark ? Colors.white : AppColors.textPrimary)
+                      : (isDark ? Colors.white54 : AppColors.textSecondary),
+                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: isBold ? 16 : 14,
                 ),
               ),
-          ],
+              if (hint != null)
+                Text(
+                  hint,
+                  style: GoogleFonts.outfit(
+                    color: isDark ? Colors.white30 : AppColors.textLight,
+                    fontSize: 10,
+                  ),
+                ),
+            ],
+          ),
         ),
+        const SizedBox(width: 8),
         Text(
           value,
           style: GoogleFonts.outfit(

@@ -274,7 +274,9 @@ Deno.serve(async (req: Request) => {
           
           if (idsToUpdate.length > 0) {
             const refundAmount = Number(refund?.amount) ? Number(refund.amount) / 100.0 : 0.0;
-            for (const id of idsToUpdate) {
+            // Prevent duplicate refund allocation across sibling orders when noteOrderId is absent:
+            const targetIds = noteOrderId ? idsToUpdate : [idsToUpdate[0]];
+            for (const id of targetIds) {
               const matchedOrder = orders.find((o: any) => o.id === id);
               const currentTotalRefunded = Number(matchedOrder?.total_refunded || 0);
               const newTotalRefunded = refundAmount > 0 ? (currentTotalRefunded + refundAmount) : currentTotalRefunded;
@@ -288,7 +290,7 @@ Deno.serve(async (req: Request) => {
                 .eq("id", id);
             }
 
-            console.log(`Refund ${refundId} logged for ${idsToUpdate.length} orders via webhook.`);
+            console.log(`Refund ${refundId} logged for ${targetIds.length} order(s) via webhook.`);
           } else {
             console.log(`Refund ${refundId} already logged or no matching un-refunded orders found for payment ${paymentId}.`);
           }

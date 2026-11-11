@@ -327,7 +327,19 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
       AndroidFlutterLocalNotificationsPlugin>();
 
   // Background Ongoing Order Tracking Notification for Android
+  final isTerminalStatus = orderStatus == 'delivered' ||
+      orderStatus == 'cancelled' ||
+      orderStatus == 'seller_rejected' ||
+      orderStatus == 'partner_rejected' ||
+      orderStatus == 'timeout' ||
+      orderStatus == 'shop_dispute_cancel' ||
+      orderStatus == 'failed' ||
+      orderStatus == 'returned' ||
+      orderStatus == 'refunded' ||
+      orderStatus == 'no_rider';
+
   if (orderId != null &&
+      !isTerminalStatus &&
       (role == 'customer' ||
           orderStatus == 'confirmed' ||
           orderStatus == 'preparing' ||
@@ -506,37 +518,37 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
         'FCM background: OS auto-displayed notification for "$title" — skipping plugin.show() to prevent duplicate card.');
   }
 
-  // Trigger native screen wake and keyguard dismissal
+  // Trigger native screen wake and keyguard dismissal for urgent merchant/rider alarms
   if (isUrgent) {
     try {
       const screenChannel = MethodChannel('com.enything/screen_wake');
       await screenChannel.invokeMethod('wakeScreen');
     } catch (_) {}
-  }
 
-  // Play continuous/initial bell sound via AudioPlayer
-  try {
-    final player = AudioPlayer();
-    await player.setReleaseMode(ReleaseMode.release);
-    await player.play(AssetSource('sounds/enything_bell.wav'));
-    debugPrint('FCM background: enything_bell.wav playing via AudioPlayer');
-    bool isDisposed = false;
-    player.onPlayerComplete.listen((_) {
-      if (!isDisposed) {
-        isDisposed = true;
-        player.dispose();
-      }
-    });
-    Future.delayed(const Duration(seconds: 15), () {
-      if (!isDisposed) {
-        isDisposed = true;
-        try {
+    // Play continuous/initial bell sound via AudioPlayer ONLY for urgent merchant/rider alarms
+    try {
+      final player = AudioPlayer();
+      await player.setReleaseMode(ReleaseMode.release);
+      await player.play(AssetSource('sounds/enything_bell.wav'));
+      debugPrint('FCM background: enything_bell.wav playing via AudioPlayer');
+      bool isDisposed = false;
+      player.onPlayerComplete.listen((_) {
+        if (!isDisposed) {
+          isDisposed = true;
           player.dispose();
-        } catch (_) {}
-      }
-    });
-  } catch (e) {
-    debugPrint('FCM background: AudioPlayer bell failed: $e');
+        }
+      });
+      Future.delayed(const Duration(seconds: 15), () {
+        if (!isDisposed) {
+          isDisposed = true;
+          try {
+            player.dispose();
+          } catch (_) {}
+        }
+      });
+    } catch (e) {
+      debugPrint('FCM background: AudioPlayer bell failed: $e');
+    }
   }
 
   if (isUrgent) {

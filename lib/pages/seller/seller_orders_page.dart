@@ -87,6 +87,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     _fcmSub?.cancel();
     _debounceTimer?.cancel();
     _tabController.dispose();
+    BellAlertService.instance.clearAll();
     super.dispose();
   }
 
@@ -1182,7 +1183,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) {
+      messageController.dispose();
+      return;
+    }
 
     try {
       final latestOrderRow = await _supabase
@@ -1337,6 +1341,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
     } catch (e) {
       debugPrint('Reject error: $e');
       _showSnack('Failed to reject: $e', isError: true);
+    } finally {
+      messageController.dispose();
     }
   }
 
@@ -3688,7 +3694,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           },
         );
       },
-    );
+    ).then((_) {
+      notesController.dispose();
+    });
   }
 
   void _showBulkDeclineDialog(OrderModel order) {
@@ -3762,7 +3770,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           ],
         );
       },
-    );
+    ).then((_) {
+      reasonController.dispose();
+    });
   }
 
   Future<void> _incrementBulkBatch(

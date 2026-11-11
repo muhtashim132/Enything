@@ -9,16 +9,20 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 Deno.serve(async (req) => {
   try {
-    // 100x Security Gate: Verify authorization
+    // 100x Security Gate: Strictly verify authorization (Service Role or Webhook Secret)
     const authHeader = req.headers.get("Authorization");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const internalSecret = Deno.env.get("DATABASE_WEBHOOK_SECRET") ?? "";
     const receivedSecret = req.headers.get("X-Webhook-Secret") ?? "";
 
-    if (internalSecret && receivedSecret !== internalSecret) {
-      if (!authHeader || (!authHeader.includes(serviceRoleKey) && !authHeader.startsWith("Bearer "))) {
-        return new Response("Unauthorized", { status: 401 });
-      }
+    const isWebhookSecretValid = Boolean(internalSecret && receivedSecret === internalSecret);
+    const isServiceRoleValid = Boolean(serviceRoleKey && authHeader && authHeader.includes(serviceRoleKey));
+
+    if (!isWebhookSecretValid && !isServiceRoleValid) {
+      return new Response(JSON.stringify({ error: "Unauthorized: Service role or webhook secret required." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
     const payload = await req.json().catch(() => ({}));
@@ -189,7 +193,7 @@ Deno.serve(async (req) => {
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Basic ${razorpayAuth}`,
-          "X-Razorpay-Idempotency-Key": idempotencyKey,
+          "X-Refund-Idempotency": idempotencyKey,
         },
         body: JSON.stringify({
           amount: amountInPaise,

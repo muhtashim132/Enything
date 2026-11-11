@@ -1033,13 +1033,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final shopTds = shopBreakdown.tdsAmount;
         final shopGrandTotal = shopBreakdown.grandTotal;
 
-        // 100x Precision: Assign exact coupon remainder to the final shop to prevent drift
+        // 100x Precision: Assign exact coupon remainder to the final shop to prevent drift,
+        // strictly clamped by shopGrandTotal to prevent negative grand totals.
         final double currentShopCoupon;
         if (shopIndex == cart.shops.length - 1) {
-          currentShopCoupon = math.max(
-              0.0,
+          final remainder =
               ((appliedCouponDiscount - allocatedCouponSum) * 100).round() /
-                  100.0);
+                  100.0;
+          currentShopCoupon =
+              math.min(shopGrandTotal, math.max(0.0, remainder));
         } else {
           currentShopCoupon = math.min(
               shopGrandTotal,
@@ -2521,6 +2523,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+        ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF16192E) : Colors.white,
@@ -2533,10 +2538,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
             )
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Center(
               child: Container(
                 width: 40,
@@ -2725,6 +2731,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

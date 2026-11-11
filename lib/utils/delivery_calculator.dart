@@ -26,7 +26,7 @@ class DeliveryCalculator {
   /// Dynamic per-km delivery charge: ceil(distanceKm) * ratePerKm, with flatDeliveryFee as floor.
   /// Returns -1 if beyond maxRadiusKm.
   static double calculateDeliveryCharges(double distanceKm, double orderValue) {
-    if (distanceKm > maxRadiusKm) return -1;
+    if (distanceKm < 0 || distanceKm > maxRadiusKm) return -1;
     final km = math.max(1, distanceKm.ceil());
     return math.max(flatDeliveryFee, km * _ratePerKm);
   }
@@ -39,7 +39,8 @@ class DeliveryCalculator {
   }
 
   /// Whether a shop at [distanceKm] is within the delivery zone.
-  static bool isWithinRange(double distanceKm) => distanceKm <= maxRadiusKm;
+  static bool isWithinRange(double distanceKm) =>
+      distanceKm >= 0 && distanceKm <= maxRadiusKm;
 
   // ---------------------------------------------------------------------------
   // Haversine distance between two LatLng points (in km)

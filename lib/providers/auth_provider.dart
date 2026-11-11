@@ -623,11 +623,24 @@ class AuthProvider extends ChangeNotifier {
             'role': 'admin'
           };
         } else {
-          // User verified OTP but never completed profile setup!
-          _user = null;
-          _isProfileFetched = true;
-          safeNotifyListeners();
-          return;
+          final isPgrstNotFound = e is PostgrestException &&
+              (e.code == 'PGRST116' ||
+                  e.message.contains('0 rows') ||
+                  e.message.contains('JSON object requested'));
+          if (isPgrstNotFound) {
+            // User verified OTP but never completed profile setup!
+            _user = null;
+            _isProfileFetched = true;
+            safeNotifyListeners();
+            return;
+          } else {
+            // Transient network error or 5xx server glitch:
+            // Do NOT mark user as nonexistent or kick them to role selection!
+            debugPrint('Transient error fetching profile for $userId: $e');
+            _error = 'Unable to connect to server. Please check your internet connection.';
+            safeNotifyListeners();
+            return;
+          }
         }
       }
 
@@ -811,20 +824,31 @@ class AuthProvider extends ChangeNotifier {
 
   // ─── OTP Auth (Phone) via Supabase Edge Functions + Fast2SMS ───────────
 
+  /// Normalizes phone numbers to standard 12-digit Indian format (91 + 10 digits)
+  /// so that different representations (+91..., 91..., 0..., or 10 digits) map
+  /// to the exact same deterministic auth credentials without splitting accounts.
+  static String _normalizePhoneDigits(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 10) {
+      return '91${digits.substring(digits.length - 10)}';
+    }
+    return digits;
+  }
+
   /// Derives a stable email+password pair from a phone number so we can
   /// create a real Supabase Auth session after OTP verification.
   String _emailFromPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final digits = _normalizePhoneDigits(phone);
     return '$digits@auth.enything.app';
   }
 
   String _legacyPasswordFromPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final digits = _normalizePhoneDigits(phone);
     return 'Enything$digits#Auth2025';
   }
 
   String _passwordFromPhone(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final digits = _normalizePhoneDigits(phone);
     final bytes = utf8.encode('Enything_${digits}_Secured#2026');
     final digest = sha256.convert(bytes);
     return 'EnY\$${digest.toString().substring(0, 16)}';
@@ -941,19 +965,42 @@ class AuthProvider extends ChangeNotifier {
             }
           }
         } on AuthException {
-          // User doesn't exist yet — create them
-          try {
-            final signUpRes = await _supabase.auth.signUp(
-              email: email,
-              password: password,
-              data: {'phone': phone},
-            );
-            userId = signUpRes.user?.id;
-          } on AuthException catch (e) {
-            _error = e.message;
-            _isLoading = false;
-            safeNotifyListeners();
-            return null;
+          // Check if user has an existing account created before phone normalization (without 91 prefix)
+          final rawDigits = phone.replaceAll(RegExp(r'\D'), '');
+          final rawEmail = '$rawDigits@auth.enything.app';
+          if (rawEmail != email) {
+            try {
+              final rawRes = await _supabase.auth.signInWithPassword(
+                email: rawEmail,
+                password: legacyPassword,
+              );
+              userId = rawRes.user?.id;
+              if (userId != null) {
+                try {
+                  await _supabase.auth.updateUser(UserAttributes(
+                    email: email,
+                    password: password,
+                  ));
+                } catch (_) {}
+              }
+            } catch (_) {}
+          }
+
+          if (userId == null) {
+            // User doesn't exist yet — create them
+            try {
+              final signUpRes = await _supabase.auth.signUp(
+                email: email,
+                password: password,
+                data: {'phone': phone},
+              );
+              userId = signUpRes.user?.id;
+            } on AuthException catch (e) {
+              _error = e.message;
+              _isLoading = false;
+              safeNotifyListeners();
+              return null;
+            }
           }
         }
       }

@@ -230,6 +230,7 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
       _supabase.removeChannel(ch);
     }
     _riderPositionNotifier.dispose();
+    _mapCtrl.dispose();
     super.dispose();
   }
 
@@ -402,7 +403,12 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
         : [widget.group];
 
     return allGroups.where((g) {
-      if (g.deliveryLat == null || g.deliveryLat == 0.0) return false;
+      if (g.deliveryLat == null ||
+          g.deliveryLat == 0.0 ||
+          g.deliveryLng == null ||
+          g.deliveryLng == 0.0) {
+        return false;
+      }
       return !_isGroupCancelled(g);
     }).toList();
   }
@@ -472,8 +478,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
 
       // Check if this shop already exists by shopId or within 25m geographic radius
       final existingIndex = stops.indexWhere((s) {
-        if (o.shopId != null && o.shopId!.isNotEmpty) {
-          return s.orders.any((ord) => ord.shopId == o.shopId);
+        if (o.shopId != null &&
+            o.shopId!.isNotEmpty &&
+            s.orders.any((ord) => ord.shopId == o.shopId)) {
+          return true;
         }
         return Geolocator.distanceBetween(s.lat, s.lng, sLat, sLng) < 25.0;
       });
@@ -523,8 +531,10 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     if (unpickedShops.isNotEmpty) {
       final unvisited = List<UnifiedShopStop>.from(unpickedShops);
       final riderPos = _riderPositionNotifier.value;
+      final validRiderPos =
+          (riderPos != null && riderPos.latitude != 0.0) ? riderPos : null;
       LatLng currentPos =
-          riderPos ?? LatLng(unvisited.first.lat, unvisited.first.lng);
+          validRiderPos ?? LatLng(unvisited.first.lat, unvisited.first.lng);
 
       while (unvisited.isNotEmpty) {
         unvisited.sort((a, b) {
@@ -548,9 +558,11 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     if (undeliveredGroups.isNotEmpty) {
       final unvisitedGroups = List<OrderGroup>.from(undeliveredGroups);
       final riderPos = _riderPositionNotifier.value;
+      final validRiderPos =
+          (riderPos != null && riderPos.latitude != 0.0) ? riderPos : null;
       LatLng dropRef = shopPts.isNotEmpty
           ? shopPts.last
-          : (riderPos ??
+          : (validRiderPos ??
               LatLng(undeliveredGroups.first.deliveryLat!,
                   undeliveredGroups.first.deliveryLng!));
 
@@ -616,7 +628,11 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     final activeGroups = _effectiveCustomerGroups;
 
     final customerPts = activeGroups
-        .where((g) => g.deliveryLat != null && g.deliveryLat != 0.0)
+        .where((g) =>
+            g.deliveryLat != null &&
+            g.deliveryLat != 0.0 &&
+            g.deliveryLng != null &&
+            g.deliveryLng != 0.0)
         .map((g) => LatLng(g.deliveryLat!, g.deliveryLng!))
         .toList();
 

@@ -97,6 +97,7 @@ test_mockup.png
 # Binary release bundles
 *.aab
 *.apk
+*.ipa
 
 # Xcode user state
 *.xcuserstate

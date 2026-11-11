@@ -86,9 +86,15 @@ class _SellerKycUploadPageState extends State<SellerKycUploadPage> {
               ? res['category'] as String
               : (res['shop_type'] as String?);
           setState(() {
-            _shopId ??= res['id'] as String?;
-            _shopCategory ??= rawCat;
-            _shopName ??= res['name'] as String?;
+            if (_shopId == null || _shopId!.isEmpty) {
+              _shopId = res['id'] as String?;
+            }
+            if (_shopCategory == null || _shopCategory!.isEmpty) {
+              _shopCategory = rawCat;
+            }
+            if (_shopName == null || _shopName!.isEmpty) {
+              _shopName = res['name'] as String?;
+            }
           });
         }
       } else if (_shopId != null && _shopId!.isNotEmpty) {

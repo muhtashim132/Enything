@@ -977,12 +977,12 @@ class PlatformConfigProvider extends ChangeNotifier {
     }
   }
 
-  /// Per-km delivery charge: ceil(distanceKm) × ratePerKm.
+  /// Per-km delivery charge: ceil(distanceKm) × ratePerKm, floored at deliveryBaseFee.
   /// Returns -1 if beyond maxDeliveryRadiusKm.
   double calculateDeliveryCharge(double distanceKm) {
-    if (distanceKm > _maxDeliveryRadiusKm) return -1;
+    if (distanceKm < 0 || distanceKm > _maxDeliveryRadiusKm) return -1;
     final km = distanceKm.ceil().clamp(1, _maxDeliveryRadiusKm.ceil().toInt());
-    return km * _deliveryRatePerKm;
+    return max(_deliveryBaseFee, km * _deliveryRatePerKm);
   }
 
   double _getValue(String key) {

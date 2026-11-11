@@ -36,7 +36,8 @@ class GeoUtils {
     double diff = (to - from) % 360.0;
     if (diff > 180.0) diff -= 360.0;
     if (diff < -180.0) diff += 360.0;
-    return (from + diff * t) % 360.0;
+    final res = (from + diff * t) % 360.0;
+    return (res + 360.0) % 360.0;
   }
 
   /// Linear interpolation between two coordinates.
@@ -107,7 +108,7 @@ class GeoUtils {
   /// Estimates travel time given distance and average speed (default 22 km/h city delivery speed).
   static String estimateTravelTime(double distanceKm,
       {double avgSpeedKmh = 22.0}) {
-    if (distanceKm <= 0.05) return '< 1 min';
+    if (distanceKm <= 0.05 || avgSpeedKmh <= 0.0) return '< 1 min';
     final mins = ((distanceKm / avgSpeedKmh) * 60).round();
     if (mins < 1) return '< 1 min';
     return '$mins min';
@@ -119,6 +120,12 @@ class GeoUtils {
   /// 3. OpenRouteService API (if ORS_API_KEY present in .env)
   /// 4. Direct geodesic line fallback
   static Future<List<LatLng>> fetchRoadRoute(LatLng from, LatLng to) async {
+    final distM = Geolocator.distanceBetween(
+        from.latitude, from.longitude, to.latitude, to.longitude);
+    if (distM <= 5.0) {
+      return [from, to];
+    }
+
     final cacheKey =
         '${from.latitude.toStringAsFixed(4)},${from.longitude.toStringAsFixed(4)}->'
         '${to.latitude.toStringAsFixed(4)},${to.longitude.toStringAsFixed(4)}';

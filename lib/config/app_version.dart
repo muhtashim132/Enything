@@ -4,9 +4,9 @@
 
 class AppVersion {
   static const String appName = 'Enything';
-  static const String version = '1.0.7';
-  static const int buildNumber = 19;
-  static const String releaseDate = '2026-10-27';
+  static const String version = '1.0.8';
+  static const int buildNumber = 20;
+  static const String releaseDate = '2026-11-12';
 
   static String get fullVersionString => 'Version $version (Build $buildNumber)';
   static String get displayString => 'v$version';
@@ -14,34 +14,34 @@ class AppVersion {
   /// What's New highlights for release notes and in-app display
   static const List<Map<String, String>> whatsNewHighlights = [
     {
-      'icon': '🏬',
-      'title': 'Supermart & Multi-Department Schedules',
+      'icon': '🛡️',
+      'title': '100x Forensic Stability & Performance',
       'description':
-          'Transparent aisle-based commissions (Grocery 6%, Cosmetics 10%, Tech 10%, Produce 5%) with itemized settlement.',
+          'Hardened order lifecycle state machine, universal transaction isolation locks, and zero-leak memory management.',
     },
     {
-      'icon': '🍏',
-      'title': 'Live Activities & Dynamic Island',
+      'icon': '🧾',
+      'title': 'Statutory GST & Itemized Tax Compliance',
       'description':
-          'Glanceable real-time order tracking on iOS Lock Screen and Dynamic Island with seamless status transitions.',
+          'Transparent statutory GST breakdowns under Section 9(5), accurate itemized tax slabs, and exact delivery fee calculations.',
     },
     {
-      'icon': '🥗',
-      'title': 'Dietary Filters & Category Isolation',
+      'icon': '📍',
+      'title': 'Intelligent Route & Co-Located Clustering',
       'description':
-          'Quick one-tap Veg/Non-Veg discovery for restaurants and groceries with strict prescription safeguards for pharmacy items.',
+          'Unified multi-merchant pickup stops, sub-5m route caching, and precision navigation with zero compass drift.',
     },
     {
-      'icon': '🕐',
-      'title': 'Closed Store Discovery & Operating Hours',
+      'icon': '💳',
+      'title': '100% Prepaid Model with Zero COD Risk',
       'description':
-          'View upcoming opening times, pre-order from scheduled shops, and browse local stores even when temporarily closed.',
+          'Seamless online UPI and card payments ensuring instantaneous rider earnings and merchant ledger settlement.',
     },
     {
-      'icon': '📱',
-      'title': 'Modernized Ergonomic Navigation',
+      'icon': '🔍',
+      'title': 'Active Salt & Composition Medicine Search',
       'description':
-          'Adaptive bottom navigation bar, edge-to-edge layout, and enhanced memory performance on all devices.',
+          'Instant discovery for pharmaceuticals by salt composition, brand names, and active ingredients across verified stores.',
     },
   ];
 }

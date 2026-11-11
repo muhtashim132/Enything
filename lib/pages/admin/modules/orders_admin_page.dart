@@ -642,7 +642,7 @@ class _OrderCardState extends State<_OrderCard> {
     final amount = (o['grand_total_collected'] != null && grandTotal >= 0)
         ? grandTotal
         : parseNum(o['total_amount']);
-    final paymentMethod = parseStr(o['payment_method'], 'COD');
+    final paymentMethod = parseStr(o['payment_method'], 'PREPAID');
 
     final partnerId = parseStr(o['delivery_partner_id'], 'Not Assigned');
     final safePartnerId = partnerId.length > 8

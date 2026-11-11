@@ -98,6 +98,7 @@ class _SellerOrderMapPageState extends State<SellerOrderMapPage>
       _isIntentionalDisconnect = true;
       _supabase.removeChannel(_channel!);
     }
+    _mapCtrl.dispose();
     super.dispose();
   }
 

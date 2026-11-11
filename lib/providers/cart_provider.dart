@@ -291,11 +291,22 @@ class CartProvider extends ChangeNotifier {
   }
 
   /// Proactively checks whether adding [quantity] units of [product] (with optional [selectedVariant])
-  /// is permitted within weight and item-count limits.
+  /// is permitted within weight, item-count, and multi-shop limit (max 3 stores).
   bool canAddItem(ProductModel product,
       {ProductVariant? selectedVariant, int quantity = 1}) {
     if (quantity <= 0) return true;
     if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) return false;
+
+    // 100x Multi-Shop Limit Guard: Prevent adding items from a 4th unique physical store
+    final pendingShopIds = isPendingReplacementActive
+        ? _activePendingShops.map((s) => s.id).toSet()
+        : <String>{};
+    final currentShopIds = shops.map((s) => s.id).toSet();
+    final allEffectiveShopIds = {...pendingShopIds, ...currentShopIds};
+    if (!allEffectiveShopIds.contains(product.shopId) &&
+        allEffectiveShopIds.length >= 3) {
+      return false;
+    }
 
     final unitWeight = WeightEngine.resolveUnit(
       product: product,

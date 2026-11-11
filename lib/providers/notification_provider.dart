@@ -1469,6 +1469,22 @@ class NotificationProvider extends ChangeNotifier {
           '❌ Payment Failed',
           'Your payment could not be processed. Please try again.'
         );
+      case 'timeout':
+        return (
+          '⌛ Order Timed Out',
+          'The order could not be accepted in time and has been cancelled. Any pre-authorized payment will be refunded.'
+        );
+      case 'shop_dispute_cancel':
+        return (
+          '⚠️ Order Cancelled by Support',
+          'Your order was cancelled due to a store dispute. A full refund has been initiated.'
+        );
+      case 'no_rider':
+      case 'partner_rejected':
+        return (
+          '🛵 Delivery Partner Unavailable',
+          'No delivery partner was available for your order at this time. The order has been cancelled.'
+        );
       default:
         return (null, null);
     }

@@ -232,11 +232,27 @@ class SearchRelevanceEngine {
     }
 
     // ── 8. MEDICINE SALT / COMPOSITION MATCH ──────────────────────────────────
+    final isPharmacy = product.category.toLowerCase().contains('pharmacy') ||
+        product.category.toLowerCase().contains('medical') ||
+        product.requiresPrescription ||
+        cleanMedType.isNotEmpty;
     if (cleanMedType.isNotEmpty) {
       if (cleanMedType == cleanQuery || cleanMedType.startsWith(cleanQuery)) {
         score += 15000.0;
       } else if (cleanMedType.contains(cleanQuery)) {
         score += 6000.0;
+      }
+    }
+    // Boost chemical salt composition described in pharmacy description
+    if (isPharmacy && cleanDesc.isNotEmpty && cleanDesc.contains(cleanQuery)) {
+      final descTokens = cleanDesc
+          .split(RegExp(r'[\s\-_/|,()\[\]"]+'))
+          .where((t) => t.isNotEmpty)
+          .toList();
+      if (descTokens.contains(cleanQuery)) {
+        score += 15000.0; // Exact active salt token match
+      } else {
+        score += 6000.0; // Infix salt substring match
       }
     }
 
