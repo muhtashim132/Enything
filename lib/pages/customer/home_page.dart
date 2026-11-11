@@ -4020,7 +4020,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ),
                                     const SizedBox(height: 12),
                                     SizedBox(
-                                      height: 258,
+                                      height: 245,
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         physics: const BouncingScrollPhysics(),
@@ -7133,7 +7133,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final carouselItems = products.take(12).toList();
 
     return SizedBox(
-      height: 258,
+      height: 245,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
