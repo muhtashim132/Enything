@@ -69,8 +69,9 @@ class UnifiedShopStop {
         o.status == 'delivered')) {
       return 'picked_up';
     }
-    if (active.any((o) => o.status == 'ready_for_pickup'))
+    if (active.any((o) => o.status == 'ready_for_pickup')) {
       return 'ready_for_pickup';
+    }
     if (active.any((o) => o.status == 'preparing')) return 'preparing';
     return active.first.status;
   }
@@ -457,8 +458,9 @@ class _OrderRouteMapPageState extends State<OrderRouteMapPage> {
     final active = groupOrders
         .where((o) => !_kTerminalStatuses.contains(o.status))
         .toList();
-    if (active.isEmpty)
+    if (active.isEmpty) {
       return false; // If all were cancelled, it's NOT delivered!
+    }
     return active.every((o) => o.status == 'delivered');
   }
 

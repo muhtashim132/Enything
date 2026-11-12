@@ -21,6 +21,8 @@ import '../../theme/premium_effects.dart';
 import '../../config/routes.dart';
 import '../../theme/sensory_haptics.dart';
 import '../../widgets/common/premium_product_image.dart';
+import '../../utils/app_toast.dart';
+import '../../utils/closed_store_feedback.dart';
 
 class ProductDetailsPage extends StatefulWidget {
   final String productId;
@@ -38,6 +40,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   int _currentImageIndex = 0;
   ProductVariant? _selectedVariant;
   final PageController _pageController = PageController();
+  final ScrollController _scrollController = ScrollController();
   final GlobalKey _variantKey = GlobalKey();
   bool _highlightVariants = false;
   int _highlightPulseCount = 0;
@@ -47,6 +50,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   void dispose() {
     _dismissWarningBanner();
     _pageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -263,6 +267,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           isDark ? const Color(0xFF0E0E1A) : const Color(0xFFF4F6FB),
       body: MaxWidthContainer(
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             SliverAppBar(
               expandedHeight: 380,
@@ -293,7 +298,18 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                   onTap: () {
                     if (auth.currentUserId != null) {
                       favs.toggleProductFavorite(
-                          auth.currentUserId!, _product!.id);
+                        auth.currentUserId!,
+                        _product!.id,
+                        product: _product,
+                        shop: _shop,
+                      );
+                    } else {
+                      AppToast.showInfo(
+                        context,
+                        title: 'Sign In Required 🔐',
+                        message:
+                            'Please sign in to save items to your favorites.',
+                      );
                     }
                   },
                   child: Container(
@@ -353,13 +369,35 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         children: [
                           PageView.builder(
                             controller: _pageController,
-                            itemCount: _product!.images.length,
+                            itemCount: (_selectedVariant != null &&
+                                    _selectedVariant!.imageUrl != null &&
+                                    _selectedVariant!.imageUrl!.isNotEmpty)
+                                ? _product!.images.length + 1
+                                : (_product!.images.isEmpty
+                                    ? 1
+                                    : _product!.images.length),
                             onPageChanged: (i) =>
                                 setState(() => _currentImageIndex = i),
                             itemBuilder: (ctx, i) {
-                              final imgUrl = i == 0
-                                  ? _product!.displayImage
-                                  : _product!.images[i];
+                              String imgUrl = '';
+                              if (_selectedVariant != null &&
+                                  _selectedVariant!.imageUrl != null &&
+                                  _selectedVariant!.imageUrl!.isNotEmpty) {
+                                if (i == 0) {
+                                  imgUrl = _selectedVariant!.imageUrl!;
+                                } else {
+                                  int imgIndex = i - 1;
+                                  if (imgIndex < _product!.images.length) {
+                                    imgUrl = _product!.images[imgIndex];
+                                  }
+                                }
+                              } else {
+                                imgUrl = _product!.images.isEmpty
+                                    ? _product!.displayImage
+                                    : (i == 0
+                                        ? _product!.displayImage
+                                        : _product!.images[i]);
+                              }
                               return PremiumProductImage(
                                 imageUrl: imgUrl,
                                 isDark: isDark,
@@ -386,7 +424,12 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                               ),
                             ),
                           ),
-                          if (_product!.images.length > 1)
+                          if (((_selectedVariant != null &&
+                                      _selectedVariant!.imageUrl != null &&
+                                      _selectedVariant!.imageUrl!.isNotEmpty)
+                                  ? _product!.images.length + 1
+                                  : _product!.images.length) >
+                              1)
                             Positioned(
                               bottom: 24,
                               left: 0,
@@ -394,7 +437,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: List.generate(
-                                  _product!.images.length,
+                                  (_selectedVariant != null &&
+                                          _selectedVariant!.imageUrl != null &&
+                                          _selectedVariant!.imageUrl!.isNotEmpty)
+                                      ? _product!.images.length + 1
+                                      : _product!.images.length,
                                   (i) => AnimatedContainer(
                                     duration: PremiumAnimations.normal,
                                     width: i == _currentImageIndex ? 24 : 8,
@@ -705,6 +752,17 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                                   milliseconds: 300),
                                               curve: Curves.easeInOut);
                                         }
+                                        // 100x UX: Glides viewport smoothly to top so customer immediately sees the variant photo
+                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                          if (_scrollController.hasClients &&
+                                              _scrollController.offset > 0) {
+                                            _scrollController.animateTo(
+                                              0.0,
+                                              duration: const Duration(milliseconds: 380),
+                                              curve: Curves.easeOutCubic,
+                                            );
+                                          }
+                                        });
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
@@ -1029,13 +1087,17 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF0A1260), Color(0xFF1E3FD8)],
+                          gradient: LinearGradient(
+                            colors: cart.recentNotification!.isError
+                                ? const [Color(0xFF7F1D1D), Color(0xFFDC2626)]
+                                : const [Color(0xFF0A1260), Color(0xFF1E3FD8)],
                           ),
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF1E3FD8)
+                              color: (cart.recentNotification!.isError
+                                      ? const Color(0xFFDC2626)
+                                      : const Color(0xFF1E3FD8))
                                   .withValues(alpha: 0.35),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
@@ -1044,8 +1106,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.check_circle_rounded,
-                                color: Colors.white, size: 18),
+                            Icon(
+                              cart.recentNotification!.isError
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.check_circle_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
@@ -1089,7 +1156,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                 child: Text(
                                   'View Cart',
                                   style: GoogleFonts.outfit(
-                                    color: const Color(0xFF1E3FD8),
+                                    color: cart.recentNotification!.isError
+                                        ? const Color(0xFFDC2626)
+                                        : const Color(0xFF1E3FD8),
                                     fontWeight: FontWeight.w800,
                                     fontSize: 11,
                                   ),
@@ -1111,8 +1180,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       isDark ? PremiumShadows.cardDark : PremiumShadows.cardLight,
                 ),
             child: () {
+              final isShopOpen = _shop != null ? _shop!.isOpenRightNow : true;
               final canInc = _product != null ? cart.canAddItem(_product!, selectedVariant: _selectedVariant) : true;
-              return quantity > 0
+              return (quantity > 0 && isShopOpen)
                 ? Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1135,16 +1205,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                       _qtyBtn(Icons.add, () {
                         if (!canInc) {
                           SensoryHaptics.error();
-                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
+                          final eligibilityErr = cart.checkAddItemEligibility(
+                            _product!,
+                            shop: _shop,
+                            selectedVariant: _selectedVariant,
+                          );
+                          AppToast.showWarning(
+                            context,
+                            title: 'Cart Notice 🛒',
+                            message: eligibilityErr ??
                                 'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                              ),
-                              duration: const Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                            ),
                           );
                           return;
                         }
@@ -1199,24 +1269,55 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
                     if (!canOrder) {
                       final lockLabel = !isShopOpen
-                          ? 'STORE CURRENTLY CLOSED'
+                          ? (_shop?.openTime != null && _shop!.openTime!.trim().isNotEmpty
+                              ? 'STORE CLOSED • OPENS AT ${_shop!.openTime!.trim()}'
+                              : 'STORE CURRENTLY CLOSED')
                           : (!isVariantAvailable
                               ? 'VARIANT OUT OF STOCK'
                               : 'OUT OF STOCK');
-                      return Container(
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white12 : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Center(
-                          child: Text(
-                            lockLabel,
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: isDark ? Colors.white38 : Colors.grey.shade600,
-                              letterSpacing: 1,
+                      return GestureDetector(
+                        onTap: () {
+                          if (!isShopOpen) {
+                            ClosedStoreFeedback.showClosedStoreNotice(
+                              context,
+                              shopName: _shop?.name ?? 'Store',
+                              openTime: _shop?.openTime,
+                            );
+                          } else {
+                            ClosedStoreFeedback.showProductUnavailableNotice(
+                              context,
+                              productName: _product?.name ?? 'Product',
+                            );
+                          }
+                        },
+                        child: Container(
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white12 : Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (!isShopOpen) ...[
+                                  Icon(
+                                    Icons.lock_clock_outlined,
+                                    size: 16,
+                                    color: isDark ? Colors.white38 : Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Text(
+                                  lockLabel,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? Colors.white38 : Colors.grey.shade600,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -1268,16 +1369,25 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                   _shop!,
                                   selectedVariant: _selectedVariant,
                                 );
-                                ScaffoldMessenger.of(context).clearSnackBars();
                                 if (err != null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(err),
-                                      backgroundColor: const Color(0xFFEF4444),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
-                                  );
+                                  SensoryHaptics.error();
+                                  if (err.contains('Maximum 3 shops')) {
+                                    _showBuyNowMultiShopDialog(
+                                      context,
+                                      _product!,
+                                      _shop!,
+                                      cart,
+                                      selectedVariant: _selectedVariant,
+                                    );
+                                  } else {
+                                    AppToast.showError(
+                                      context,
+                                      title: 'Cannot Proceed 🛒',
+                                      message: err,
+                                    );
+                                  }
                                 } else {
+                                  SensoryHaptics.light();
                                   Navigator.pushNamed(context, AppRoutes.cart);
                                 }
                               }
@@ -1344,6 +1454,150 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         child: Icon(icon,
             color: enabled ? AppColors.primary : Colors.grey, size: 20),
       ),
+    );
+  }
+
+  void _showBuyNowMultiShopDialog(
+    BuildContext context,
+    ProductModel product,
+    ShopModel shop,
+    CartProvider cart, {
+    ProductVariant? selectedVariant,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) {
+        final isDark = Theme.of(sheetCtx).brightness == Brightness.dark;
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.storefront_rounded,
+                          color: Colors.orange, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Multi-Shop Limit (Max 3)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Your cart already contains items from 3 different shops. To ensure fast and reliable bike delivery, orders are limited to 3 shops at a time.',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13.5,
+                    height: 1.4,
+                    color: isDark ? Colors.white70 : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(sheetCtx);
+                      Navigator.pushNamed(context, AppRoutes.cart);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'View Current Cart (${cart.shops.length} Shops)',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      cart.clear();
+                      cart.addItem(
+                        product,
+                        shop,
+                        selectedVariant: selectedVariant,
+                      );
+                      Navigator.pop(sheetCtx);
+                      Navigator.pushNamed(context, AppRoutes.cart);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(
+                        color: isDark ? Colors.white24 : Colors.grey.shade300,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'Clear Cart & Buy This Item Now',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: isDark ? Colors.white70 : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(sheetCtx),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.outfit(
+                        color: isDark ? Colors.white38 : AppColors.textLight,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -112,6 +112,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final rem = _maxVehiclePayloadKg - _riderCommittedWeightKg;
     return rem > 0.0 ? rem : 0.0;
   }
+
   DateTime? _lastBackPressTime;
   final ScrollController _scrollController = ScrollController();
   Set<String> _knownAvailableGroupIds = {};
@@ -563,7 +564,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     }
     _isOrdersLoadInProgress = true;
     _needsReload = false;
-    if (mounted && (isInitial || (_availableGroups.isEmpty && _myGroups.isEmpty))) {
+    if (mounted &&
+        (isInitial || (_availableGroups.isEmpty && _myGroups.isEmpty))) {
       setState(() => _isLoading = true);
     }
     final auth = context.read<AuthProvider>();
@@ -622,7 +624,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (_riderLat == null || _riderLng == null) {
         available = [];
       } else {
-        available = await _supabase.rpc('get_nearby_unassigned_orders', params: {
+        available =
+            await _supabase.rpc('get_nearby_unassigned_orders', params: {
           'p_rider_lat': _riderLat,
           'p_rider_lng': _riderLng,
           'p_radius_km': _maxRadiusKm,
@@ -861,7 +864,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _showSnack('Rider not logged in.', isError: true);
       return;
     }
-    _showSnack('Dispatching practice delivery with audio bell...', isError: false);
+    _showSnack('Dispatching practice delivery with audio bell...',
+        isError: false);
     final orderId =
         await PracticeOrderService.instance.createSelfPracticeOrderForRider(
       riderId,
@@ -1062,7 +1066,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
       if (currentPartnerId != null && currentPartnerId != currentUserId) {
         if (mounted) {
-          _showSnack('⚠️ Another rider just accepted this order.', isError: true);
+          _showSnack('⚠️ Another rider just accepted this order.',
+              isError: true);
         }
         return false;
       }
@@ -1805,7 +1810,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     if (_isMapOpening) return;
     _isMapOpening = true;
     // Resolve shop coords: prefer joined cache, fall back to snapshot on order
-    final targetOrders = group.activeOrders.isNotEmpty ? group.activeOrders : group.orders;
+    final targetOrders =
+        group.activeOrders.isNotEmpty ? group.activeOrders : group.orders;
     final shops = targetOrders.map((order) {
       final shopInfo = _shopInfoCache[order.shopId];
       final sLat = shopInfo?.lat ?? order.shopLat;
@@ -1842,7 +1848,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   !_myGroups.any((g) => g.groupId == group.groupId)),
           onAccept: () {
             if (_myGroups.length >= 3 &&
-                !_myGroups.any((g) => g.groupId == group.groupId)) return;
+                !_myGroups.any((g) => g.groupId == group.groupId)) {
+              return;
+            }
             Navigator.pop(context);
             _acceptOrderGroup(group);
           },
@@ -1859,45 +1867,44 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
     final size = MediaQuery.of(context).size;
 
     return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) return;
-          if (_scrollController.hasClients && _scrollController.offset > 0) {
-            _scrollController.animateTo(
-              0,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-            );
-            return;
-          }
-          final now = DateTime.now();
-          if (_lastBackPressTime == null ||
-              now.difference(_lastBackPressTime!) >
-                  const Duration(seconds: 2)) {
-            _lastBackPressTime = now;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Press back again to exit'),
-                duration: Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          } else {
-            // ignore: use_build_context_synchronously
-            SystemNavigator.pop(animated: true);
-          }
-        },
-        child: AnnotatedRegion<SystemUiOverlayStyle>(
-          value: SystemUiOverlayStyle.light,
-          child: Scaffold(
-            backgroundColor:
-                isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
-            body: RefreshIndicator(
-              onRefresh: _loadOrders,
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_scrollController.hasClients && _scrollController.offset > 0) {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+          );
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Press back again to exit'),
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          // ignore: use_build_context_synchronously
+          SystemNavigator.pop(animated: true);
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: Scaffold(
+          backgroundColor:
+              isDark ? const Color(0xFF080812) : const Color(0xFFF0F4FF),
+          body: RefreshIndicator(
+            onRefresh: _loadOrders,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
                 // ── Animated Header ───────────────────────────────────────────
                 SliverAppBar(
                   expandedHeight: 220,
@@ -2340,17 +2347,31 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                         context,
                                         MaterialPageRoute(
                                           builder: (_) {
-                                            final allShops = _myGroups.expand((g) {
-                                              final targetOrders = g.activeOrders.isNotEmpty ? g.activeOrders : g.orders;
-                                              return targetOrders.map((o) {
-                                                final info = _shopInfoCache[o.shopId];
-                                                return (
-                                                  lat: info?.lat ?? o.shopLat ?? 0.0,
-                                                  lng: info?.lng ?? o.shopLng ?? 0.0,
-                                                  name: info?.name ?? 'Shop',
-                                                );
-                                              });
-                                            }).where((s) => s.lat != 0.0 && s.lng != 0.0).toList();
+                                            final allShops = _myGroups
+                                                .expand((g) {
+                                                  final targetOrders =
+                                                      g.activeOrders.isNotEmpty
+                                                          ? g.activeOrders
+                                                          : g.orders;
+                                                  return targetOrders.map((o) {
+                                                    final info = _shopInfoCache[
+                                                        o.shopId];
+                                                    return (
+                                                      lat: info?.lat ??
+                                                          o.shopLat ??
+                                                          0.0,
+                                                      lng: info?.lng ??
+                                                          o.shopLng ??
+                                                          0.0,
+                                                      name:
+                                                          info?.name ?? 'Shop',
+                                                    );
+                                                  });
+                                                })
+                                                .where((s) =>
+                                                    s.lat != 0.0 &&
+                                                    s.lng != 0.0)
+                                                .toList();
 
                                             return OrderRouteMapPage(
                                               group: _myGroups.first,
@@ -2407,8 +2428,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                 children: [
                                   Row(children: [
                                     const Icon(Icons.two_wheeler_rounded,
-                                        size: 15,
-                                        color: Color(0xFF4C6EF5)),
+                                        size: 15, color: Color(0xFF4C6EF5)),
                                     const SizedBox(width: 6),
                                     Text(
                                       '${_myGroups.length} Active Orders',
@@ -2494,8 +2514,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           margin: const EdgeInsets.only(bottom: 16),
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF4B4B)
-                                .withValues(alpha: 0.12),
+                            color:
+                                const Color(0xFFFF4B4B).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                                 color: const Color(0xFFFF4B4B)
@@ -2867,7 +2887,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.science_rounded, color: Colors.white, size: 16),
+                  const Icon(Icons.science_rounded,
+                      color: Colors.white, size: 16),
                   const SizedBox(width: 8),
                   Text(
                     '🧪 PRACTICE DELIVERY · TRAINING SIMULATION',
@@ -3072,12 +3093,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                           '${item.quantity}x ${item.productName}${item.isDeclined ? " (Out of Stock)" : (!item.isActive ? " (Cancelled)" : "")}',
                                           style: GoogleFonts.outfit(
                                             fontSize: 12,
-                                            color: (!item.isActive || item.isDeclined)
+                                            color: (!item.isActive ||
+                                                    item.isDeclined)
                                                 ? Colors.grey
                                                 : (isDark
                                                     ? Colors.white54
                                                     : Colors.black54),
-                                            decoration: (!item.isActive || item.isDeclined)
+                                            decoration: (!item.isActive ||
+                                                    item.isDeclined)
                                                 ? TextDecoration.lineThrough
                                                 : null,
                                           )))
@@ -3184,7 +3207,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           // 100x FIX (Domain 2): Hoarding Limit & Vehicle Weight Capacity UI Lockout
                           final isLinkedAddon =
                               _myGroups.any((g) => g.groupId == group.groupId);
-                          final isAtCapacity = _myGroups.length >= 3 && !isLinkedAddon;
+                          final isAtCapacity =
+                              _myGroups.length >= 3 && !isLinkedAddon;
                           final exceedsWeight = !isLinkedAddon &&
                               ((_riderCommittedWeightKg + group.totalWeightKg) >
                                   _maxVehiclePayloadKg);
@@ -3217,10 +3241,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14)),
-                              elevation: (isExpired || isAtCapacity || exceedsWeight)
-                                  ? 0
-                                  : 4,
-                              shadowColor: (isExpired || isAtCapacity || exceedsWeight)
+                              elevation:
+                                  (isExpired || isAtCapacity || exceedsWeight)
+                                      ? 0
+                                      : 4,
+                              shadowColor: (isExpired ||
+                                      isAtCapacity ||
+                                      exceedsWeight)
                                   ? Colors.transparent
                                   : AppColors.success.withValues(alpha: 0.4),
                             ),
@@ -3332,8 +3359,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFF0284C7), Color(0xFF4F46E5)],
@@ -3505,7 +3532,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 const SizedBox(height: 14),
 
                 // Render individual shop pickup cards strictly for active orders
-                ...group.activeOrders.map((o) => _buildShopPickupTile(o, isDark)),
+                ...group.activeOrders
+                    .map((o) => _buildShopPickupTile(o, isDark)),
 
                 // Master Actions with dynamic order count labels
                 if (group.allPickedUp && !group.allOutForDelivery)
@@ -3527,18 +3555,19 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           final Set<String> notifiedCustomerIds = {};
                           for (int i = 0; i < pickedUpOrders.length; i++) {
                             final o = pickedUpOrders[i];
-                            final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
-                            if (shouldNotify) notifiedCustomerIds.add(o.customerId);
-                            await _updateStatus(
-                                o, 'out_for_delivery',
+                            final shouldNotify =
+                                !notifiedCustomerIds.contains(o.customerId);
+                            if (shouldNotify)
+                              notifiedCustomerIds.add(o.customerId);
+                            await _updateStatus(o, 'out_for_delivery',
                                 skipReload: true, notifyCustomer: shouldNotify);
                           }
                           _loadOrders(isInitial: true);
                         },
                         icon: const Icon(Icons.rocket_launch, size: 18),
                         label: Text(label,
-                            style:
-                                GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w700)),
                         style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF4C6EF5),
                             foregroundColor: Colors.white),
@@ -3550,7 +3579,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     final deliverableOrders = group.activeOrders
                         .where((o) => o.status != 'delivered')
                         .toList();
-                    if (deliverableOrders.isEmpty) return const SizedBox.shrink();
+                    if (deliverableOrders.isEmpty)
+                      return const SizedBox.shrink();
                     final label = deliverableOrders.length > 1
                         ? 'Mark ${deliverableOrders.length} Orders Delivered'
                         : 'Mark Delivered';
@@ -3572,10 +3602,11 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                           final Set<String> notifiedCustomerIds = {};
                           for (int i = 0; i < deliverableOrders.length; i++) {
                             final o = deliverableOrders[i];
-                            final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
-                            if (shouldNotify) notifiedCustomerIds.add(o.customerId);
-                            final success = await _updateStatus(
-                                o, 'delivered',
+                            final shouldNotify =
+                                !notifiedCustomerIds.contains(o.customerId);
+                            if (shouldNotify)
+                              notifiedCustomerIds.add(o.customerId);
+                            final success = await _updateStatus(o, 'delivered',
                                 skipReload: true,
                                 skipRating: true,
                                 notifyCustomer: shouldNotify);
@@ -3604,8 +3635,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                         },
                         icon: const Icon(Icons.check_circle_outline, size: 18),
                         label: Text(label,
-                            style:
-                                GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w700)),
                         style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.success,
                             foregroundColor: Colors.white),
@@ -3723,15 +3754,18 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   if (order.hasDeclinedItems) ...[
                     Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.amber.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: Colors.amber.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 12, color: Colors.amber),
+                          const Icon(Icons.info_outline,
+                              size: 12, color: Colors.amber),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -3757,7 +3791,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                               style: GoogleFonts.outfit(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
-                                  color: (!i.isActive || i.isDeclinedOrSwapped) ? Colors.grey : AppColors.accent)),
+                                  color: (!i.isActive || i.isDeclinedOrSwapped)
+                                      ? Colors.grey
+                                      : AppColors.accent)),
                           Expanded(
                             child: Text(
                               i.productName,
@@ -3765,8 +3801,13 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                   fontSize: 13,
                                   color: (!i.isActive || i.isDeclinedOrSwapped)
                                       ? Colors.grey
-                                      : (isDark ? Colors.white70 : Colors.black87),
-                                  decoration: (!i.isActive || i.isDeclinedOrSwapped) ? TextDecoration.lineThrough : null),
+                                      : (isDark
+                                          ? Colors.white70
+                                          : Colors.black87),
+                                  decoration:
+                                      (!i.isActive || i.isDeclinedOrSwapped)
+                                          ? TextDecoration.lineThrough
+                                          : null),
                             ),
                           ),
                           if (i.isSwapped) ...[
@@ -3824,12 +3865,12 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (nextStatus == null ||
-                        _updatingOrderIds.contains(order.id))
-                    ? null
-                    : () {
-                        _updateStatus(order, nextStatus!);
-                      },
+                onPressed:
+                    (nextStatus == null || _updatingOrderIds.contains(order.id))
+                        ? null
+                        : () {
+                            _updateStatus(order, nextStatus!);
+                          },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
@@ -3985,8 +4026,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             icon: const Icon(Icons.science_rounded, size: 18),
             label: Text(
               '🧪 Try Practice Delivery',
-              style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.w700, fontSize: 13),
+              style:
+                  GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
             ),
           ),
         ]),
@@ -4441,8 +4482,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
               ),
               const SizedBox(height: 28),
               ElevatedButton.icon(
-                onPressed: () =>
-                    context.read<LocationProvider>().requestLocation(isUserAction: true),
+                onPressed: () => context
+                    .read<LocationProvider>()
+                    .requestLocation(isUserAction: true),
                 icon: const Icon(Icons.my_location),
                 label: const Text('Enable Location'),
               ),
@@ -4574,8 +4616,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ],
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: (status == 'delivered'
                               ? AppColors.success

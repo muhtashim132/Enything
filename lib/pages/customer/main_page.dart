@@ -593,9 +593,15 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               index: _navIndex,
               children: [
                 CustomerHomeView(key: _homeKey),
-                const FavoritesPage(),
-                const OrderHistoryPage(),
-                const ProfileSettingsPage(),
+                FavoritesPage(
+                  isEmbedded: true,
+                  onExplore: () => setState(() => _navIndex = 0),
+                ),
+                OrderHistoryPage(
+                  isEmbedded: true,
+                  onExplore: () => setState(() => _navIndex = 0),
+                ),
+                const ProfileSettingsPage(isEmbedded: true),
               ],
             ),
             const Positioned(
@@ -835,17 +841,19 @@ class _CustomerMainPageState extends State<CustomerMainPage>
           child: Container(
             height: 68,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF0A1260),
-                  Color(0xFF1E3FD8),
-                ],
+              gradient: LinearGradient(
+                colors: cart.recentNotification?.isError == true
+                    ? const [Color(0xFF7F1D1D), Color(0xFFDC2626)]
+                    : const [Color(0xFF0A1260), Color(0xFF1E3FD8)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1E3FD8).withValues(alpha: 0.45),
+                  color: (cart.recentNotification?.isError == true
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF1E3FD8))
+                      .withValues(alpha: 0.45),
                   blurRadius: 24,
                   offset: const Offset(0, 6),
                 ),
@@ -1046,7 +1054,9 @@ class _CustomerMainPageState extends State<CustomerMainPage>
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF1E3FD8),
+              foregroundColor: notification.isError
+                  ? const Color(0xFFDC2626)
+                  : const Color(0xFF1E3FD8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -1058,7 +1068,9 @@ class _CustomerMainPageState extends State<CustomerMainPage>
               style: GoogleFonts.outfit(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
-                color: const Color(0xFF1E3FD8),
+                color: notification.isError
+                    ? const Color(0xFFDC2626)
+                    : const Color(0xFF1E3FD8),
               ),
             ),
           ),

@@ -20,7 +20,8 @@ import '../../utils/responsive_layout.dart';
 import '../../widgets/seller/seller_deductible_card.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
-  const ProfileSettingsPage({super.key});
+  final bool isEmbedded;
+  const ProfileSettingsPage({super.key, this.isEmbedded = false});
 
   @override
   State<ProfileSettingsPage> createState() => _ProfileSettingsPageState();
@@ -70,26 +71,28 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage>
                   ? AppColors.darkBg
                   : AppColors.roleColor(user.activeSessionRole),
               surfaceTintColor: Colors.transparent,
-              leading: Navigator.canPop(context)
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: PressScaleButton(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          margin: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
+              leading: widget.isEmbedded
+                  ? const SizedBox.shrink()
+                  : (Navigator.canPop(context)
+                      ? Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: PressScaleButton(
+                            onTap: () => Navigator.maybePop(context),
+                            child: Container(
+                              margin: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+                        )
+                      : const SizedBox.shrink()),
               flexibleSpace: FlexibleSpaceBar(
                 collapseMode: CollapseMode.parallax,
                 background: _buildHeroCard(user, isDark),

@@ -571,7 +571,9 @@ class WeightEngine {
       if (n.contains('soap') || n.contains('bar')) return 0.125;
       if (n.contains('toothpaste') ||
           n.contains('paste') ||
-          n.contains('colgate')) return 0.15;
+          n.contains('colgate')) {
+        return 0.15;
+      }
       // Spices & condiments
       if (n.contains('masala') ||
           n.contains('chilli powder') ||
@@ -607,7 +609,9 @@ class WeightEngine {
       if (n.contains('watermelon') || n.contains('pumpkin')) return 2.50;
       if (n.contains('papaya') ||
           n.contains('pineapple') ||
-          n.contains('cabbage')) return 1.20;
+          n.contains('cabbage')) {
+        return 1.20;
+      }
       if (n.contains('coconut')) return 0.60;
       return 0.80; // Standard produce basket ~800g
     }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/product_model.dart';
 import '../../models/shop_model.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/location_provider.dart';
 import '../../providers/platform_config_provider.dart';
@@ -1146,7 +1148,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                 if (filteredProducts.isNotEmpty)
                                   SliverPadding(
                                     padding:
-                                        const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                                        const EdgeInsets.fromLTRB(16, 8, 16, 16),
                                     sliver: SliverGrid.builder(
                                       gridDelegate:
                                           SliverGridDelegateWithFixedCrossAxisCount(
@@ -1158,7 +1160,13 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                       itemCount: displayProducts.length,
                                       itemBuilder: (context, index) {
                                         final product = displayProducts[index];
-                                        final shop = _productShops[product.id];
+                                        final shop = _productShops[product.id] ??
+                                            _productShops.values
+                                                .cast<ShopModel?>()
+                                                .firstWhere(
+                                                  (s) => s?.id == product.shopId,
+                                                  orElse: () => null,
+                                                );
                                         return RepaintBoundary(
                                           key: ValueKey('cat_p_${product.id}'),
                                           child: ProductCard(
@@ -1301,7 +1309,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                 SliverToBoxAdapter(
                                   child: Padding(
                                     padding:
-                                        const EdgeInsets.only(top: 8, bottom: 90),
+                                        const EdgeInsets.only(top: 8, bottom: 16),
                                     child: Center(
                                       child: TextButton(
                                         onPressed: () {
@@ -1333,6 +1341,14 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
                                     ),
                                   ),
                                 ),
+                              // 100x Dynamic Bottom Clearance: Prevents FloatingCartBar overlap without empty void
+                              SliverToBoxAdapter(
+                                child: SizedBox(
+                                  height: _getBottomClearance(
+                                      context,
+                                      context.watch<CartProvider>().totalItemCount > 0),
+                                ),
+                              ),
                             ],
                           ),
                           const FloatingCartBar(),
@@ -1431,5 +1447,23 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         ),
       ),
     );
+  }
+
+  /// 100x Dynamic Bottom Clearance: Calculates exact clearance so content
+  /// never overlaps FloatingCartBar when active, and never creates a dead void when empty.
+  double _getBottomClearance(BuildContext context, bool hasCartItems) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final padding = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = math.max(viewPadding, padding);
+
+    if (!hasCartItems) {
+      return math.max(bottomInset, 16.0) + 16.0;
+    }
+
+    final insetAdjustment = bottomInset >= 36.0
+        ? bottomInset + 4.0
+        : (bottomInset > 0 ? bottomInset : 0.0);
+    // FloatingCartBar height: 56.0 dp, offset: 16.0 dp, desired cushion: 20.0 dp
+    return 56.0 + 16.0 + insetAdjustment + 20.0;
   }
 }

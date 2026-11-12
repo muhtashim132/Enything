@@ -11,6 +11,7 @@ import '../theme/premium_effects.dart';
 import '../widgets/3d/perspective_card.dart';
 import '../utils/delivery_calculator.dart';
 import '../utils/closed_store_feedback.dart';
+import '../utils/app_toast.dart';
 
 /// A full-width, Swiggy/Zomato-style restaurant card used exclusively
 /// when browsing the Food category.
@@ -325,7 +326,15 @@ class _RestaurantShopCardState extends State<RestaurantShopCard>
                               HapticFeedback.lightImpact();
                               if (auth.currentUserId != null) {
                                 favs.toggleShopFavorite(
-                                    auth.currentUserId!, shop.id);
+                                    auth.currentUserId!, shop.id,
+                                    shop: shop);
+                              } else {
+                                AppToast.showInfo(
+                                  context,
+                                  title: 'Sign In Required 🔐',
+                                  message:
+                                      'Please sign in to save shops to your favorites.',
+                                );
                               }
                             },
                             child: AnimatedContainer(

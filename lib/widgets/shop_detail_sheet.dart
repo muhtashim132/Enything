@@ -14,6 +14,7 @@ import '../utils/share_utils.dart';
 import 'common/sheet_skeleton_loader.dart';
 import '../providers/cart_provider.dart';
 import '../config/routes.dart';
+import '../utils/app_toast.dart';
 
 bool _isShopSheetOpen = false;
 
@@ -298,7 +299,15 @@ class _SheetContentState extends State<_SheetContent> {
                 GestureDetector(
                   onTap: () {
                     if (auth.currentUserId != null) {
-                      favs.toggleShopFavorite(auth.currentUserId!, shop.id);
+                      favs.toggleShopFavorite(auth.currentUserId!, shop.id,
+                          shop: shop);
+                    } else {
+                      AppToast.showInfo(
+                        context,
+                        title: 'Sign In Required 🔐',
+                        message:
+                            'Please sign in to save shops to your favorites.',
+                      );
                     }
                   },
                   child: AnimatedContainer(
@@ -407,6 +416,10 @@ class _SheetContentState extends State<_SheetContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (!shop.isOpenRightNow) ...[
+                      _buildClosedShopBanner(context, shop, isDark),
+                      const SizedBox(height: 12),
+                    ],
                     // Stats row
                     Row(
                       children: [
@@ -1141,6 +1154,67 @@ class _SheetContentState extends State<_SheetContent> {
           Text(label,
               style: GoogleFonts.outfit(
                   fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClosedShopBanner(
+      BuildContext context, ShopModel shop, bool isDark) {
+    final openTime = shop.openTime;
+    final timeStr = (openTime != null && openTime.isNotEmpty)
+        ? ' • Opens at $openTime'
+        : '';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF271B0B) : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.6),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.nightlight_round,
+              color: Color(0xFFF59E0B),
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Shop Currently Closed$timeStr',
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isDark
+                        ? const Color(0xFFFDE68A)
+                        : const Color(0xFF92400E),
+                  ),
+                ),
+                Text(
+                  'Orders are temporarily paused. You can still browse products.',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11.5,
+                    color: isDark ? Colors.white70 : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

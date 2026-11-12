@@ -13,6 +13,7 @@ import '../widgets/product_detail_sheet.dart';
 import 'common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
 import '../config/app_categories.dart';
+import '../utils/app_toast.dart';
 
 class ProductSearchCard extends StatefulWidget {
   final ProductModel product;
@@ -837,34 +838,19 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                   );
                   return;
                 }
-                if (hasSingleVariant && singleItem != null) {
-                  if (!cart.canIncrementItem(singleItem)) {
-                    SensoryHaptics.error();
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                        ),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                    return;
-                  }
-                } else if (cart.isMaxWeightReached) {
+                final err = cart.checkAddItemEligibility(
+                  product,
+                  shop: shop,
+                  selectedVariant: (hasSingleVariant && singleItem != null)
+                      ? singleItem.selectedVariant
+                      : null,
+                );
+                if (err != null) {
                   SensoryHaptics.error();
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                      ),
-                      duration: const Duration(seconds: 2),
-                      behavior: SnackBarBehavior.floating,
-                    ),
+                  AppToast.showWarning(
+                    context,
+                    title: 'Cart Notice 🛒',
+                    message: err,
                   );
                   return;
                 }
@@ -984,18 +970,13 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
                     );
                     return;
                   }
-                  if (!cart.canIncrementProduct(product.id)) {
+                  final err = cart.checkAddItemEligibility(product, shop: shop);
+                  if (err != null) {
                     SensoryHaptics.error();
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                        ),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                    AppToast.showWarning(
+                      context,
+                      title: 'Cart Notice 🛒',
+                      message: err,
                     );
                     return;
                   }
@@ -1030,18 +1011,13 @@ class _ProductSearchCardState extends State<ProductSearchCard> {
       key: const ValueKey('add'),
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        if (!cart.canAddItem(product)) {
+        final eligibilityErr = cart.checkAddItemEligibility(product, shop: shop);
+        if (eligibilityErr != null) {
           SensoryHaptics.error();
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-              ),
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-            ),
+          AppToast.showWarning(
+            context,
+            title: 'Cart Notice 🛒',
+            message: eligibilityErr,
           );
           return;
         }

@@ -14,6 +14,8 @@ import '../theme/sensory_haptics.dart';
 import '../config/routes.dart';
 import 'common/sheet_skeleton_loader.dart';
 import 'product_detail_sheet.dart';
+import '../utils/app_toast.dart';
+import '../utils/closed_store_feedback.dart';
 
 bool _isRestaurantSheetOpen = false;
 
@@ -166,6 +168,8 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                             ),
                             _buildHeroAppBar(isDark),
                             _buildInfoStrip(isDark),
+                            if (_shop != null && !_shop!.isOpenRightNow)
+                              _buildClosedRestaurantBanner(isDark),
                             _buildCategoryTabs(isDark),
                             _buildMenuGrid(isDark),
                             const SliverToBoxAdapter(
@@ -217,7 +221,14 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
         GestureDetector(
           onTap: () {
             if (auth.currentUserId != null) {
-              favs.toggleShopFavorite(auth.currentUserId!, _shop!.id);
+              favs.toggleShopFavorite(auth.currentUserId!, _shop!.id,
+                  shop: _shop);
+            } else {
+              AppToast.showInfo(
+                context,
+                title: 'Sign In Required 🔐',
+                message: 'Please sign in to save shops to your favorites.',
+              );
             }
           },
           child: AnimatedContainer(
@@ -899,7 +910,9 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                   ),
                   const SizedBox(height: 8),
                   // ADD / Stepper
-                  product.variants.isNotEmpty
+                  (_shop != null && !_shop!.isOpenRightNow)
+                      ? _buildClosedMenuItemButton(isDark)
+                      : product.variants.isNotEmpty
                       ? (totalQuantity > 0
                           ? Builder(builder: (ctx) {
                               final productItems =
@@ -984,34 +997,19 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                         child: GestureDetector(
                                           behavior: HitTestBehavior.opaque,
                                           onTap: () {
-                                            if (hasSingleVariant && singleItem != null) {
-                                              if (!cart.canIncrementItem(singleItem)) {
-                                                SensoryHaptics.error();
-                                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                                                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                                                    ),
-                                                    duration: const Duration(seconds: 2),
-                                                    behavior: SnackBarBehavior.floating,
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                            } else if (cart.isMaxWeightReached) {
+                                            final err = cart.checkAddItemEligibility(
+                                              product,
+                                              shop: _shop,
+                                              selectedVariant: (hasSingleVariant && singleItem != null)
+                                                  ? singleItem.selectedVariant
+                                                  : null,
+                                            );
+                                            if (err != null) {
                                               SensoryHaptics.error();
-                                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                                                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                                                  ),
-                                                  duration: const Duration(seconds: 2),
-                                                  behavior: SnackBarBehavior.floating,
-                                                ),
+                                              AppToast.showWarning(
+                                                context,
+                                                title: 'Cart Notice 🛒',
+                                                message: err,
                                               );
                                               return;
                                             }
@@ -1104,18 +1102,13 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                           ? GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () {
-                                if (!cart.canAddItem(product)) {
+                                final err = cart.checkAddItemEligibility(product, shop: _shop);
+                                if (err != null) {
                                   SensoryHaptics.error();
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                                        style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                                      ),
-                                      duration: const Duration(seconds: 2),
-                                      behavior: SnackBarBehavior.floating,
-                                    ),
+                                  AppToast.showWarning(
+                                    context,
+                                    title: 'Cart Notice 🛒',
+                                    message: err,
                                   );
                                   return;
                                 }
@@ -1210,18 +1203,13 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
                                       child: GestureDetector(
                                         behavior: HitTestBehavior.opaque,
                                         onTap: () {
-                                          if (!cart.canIncrementProduct(product.id)) {
+                                          final err = cart.checkAddItemEligibility(product, shop: _shop);
+                                          if (err != null) {
                                             SensoryHaptics.error();
-                                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                                                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                                                ),
-                                                duration: const Duration(seconds: 2),
-                                                behavior: SnackBarBehavior.floating,
-                                              ),
+                                            AppToast.showWarning(
+                                              context,
+                                              title: 'Cart Notice 🛒',
+                                              message: err,
                                             );
                                             return;
                                           }
@@ -1269,6 +1257,115 @@ class _RestaurantDashboardSheetState extends State<RestaurantDashboardSheet>
           child: Text('🍴', style: TextStyle(fontSize: 30)),
         ),
       );
+
+  Widget _buildClosedMenuItemButton(bool isDark) {
+    return InkWell(
+      onTap: () {
+        if (_shop != null) {
+          ClosedStoreFeedback.showClosedStoreNotice(
+            context,
+            shopName: _shop!.name,
+            openTime: _shop!.openTime,
+          );
+        }
+      },
+      borderRadius: BorderRadius.circular(11),
+      child: Container(
+        width: 100,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2D2418) : const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.35 : 0.5),
+            width: 1.0,
+          ),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_clock_outlined,
+                size: 13,
+                color: isDark ? const Color(0xFFFDE68A) : const Color(0xFFB45309),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'CLOSED',
+                style: GoogleFonts.outfit(
+                  color: isDark ? const Color(0xFFFDE68A) : const Color(0xFFB45309),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClosedRestaurantBanner(bool isDark) {
+    final openTime = _shop?.openTime;
+    final timeStr = (openTime != null && openTime.isNotEmpty)
+        ? ' • Opens at $openTime'
+        : '';
+    return SliverToBoxAdapter(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF271B0B) : const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.6),
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.nightlight_round,
+                color: Color(0xFFF59E0B),
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Restaurant Currently Closed$timeStr',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                    ),
+                  ),
+                  Text(
+                    'Orders are temporarily paused. You can still browse the menu.',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.white70 : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Sticky cart bottom bar

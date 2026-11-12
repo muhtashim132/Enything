@@ -80,7 +80,6 @@ class MaxWidthContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: alignment,
-      heightFactor: 1.0,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,

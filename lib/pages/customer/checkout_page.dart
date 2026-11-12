@@ -669,6 +669,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
       // Add Shop Open validation
       final closedShops = cart.shops.where((s) => !s.isOpenRightNow).toList();
       if (closedShops.isNotEmpty) {
+        if (mounted) {
+          AppToast.showError(
+            context,
+            title: 'Store Closed 🌙',
+            message:
+                '${closedShops.first.name} is currently closed and not accepting orders.',
+          );
+        }
         throw Exception(
             "${closedShops.first.name} is currently closed and not accepting orders.");
       }
@@ -1376,6 +1384,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
               'Failed to clean up uploaded prescriptions: $cleanupError');
         }
       }
+      if (mounted) {
+        final errorMsg = e.toString().replaceFirst('Exception: ', '');
+        AppToast.showError(
+          context,
+          title: 'Order Notice ⚠️',
+          message: errorMsg,
+        );
+      }
       rethrow;
     } finally {
       _isCreatingOrder = false;
@@ -2047,20 +2063,80 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     );
                   },
                 ),
+                // ── Closed Store Banner ──────────────────────────────────
+                if (cart.hasClosedShops)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF271B0B) : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.6),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.nightlight_round, color: Color(0xFFF59E0B), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Store Currently Closed 🌙',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${cart.closedShops.map((s) => s.name).join(", ")} is closed. Please return to your cart to update items.',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11.5,
+                                    color: isDark ? const Color(0xFFFEF3C7) : const Color(0xFF78350F),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(
+                              'Edit Cart',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFF59E0B),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ValueListenableBuilder<bool>(
                   valueListenable: _isProcessing,
                   builder: (context, isProcessing, _) {
                     final config = context.watch<PlatformConfigProvider>();
                     final isMaintenance = config.isMaintenanceMode;
+                    final hasClosed = cart.hasClosedShops;
                     return SlideToAction(
                       label: isMaintenance
-                          ? 'Shopping Temporarily Paused'
-                          : 'Slide to Place Order • ₹${total.toStringAsFixed(0)}',
+                          ? 'Platform Maintenance • Ordering Paused'
+                          : hasClosed
+                              ? '${cart.closedShops.first.name} is Closed'
+                              : 'Slide to Place Order • ₹${total.toStringAsFixed(0)}',
                       onConfirmed: _placeOrder,
                       isLoading: isProcessing,
-                      enabled: !isProcessing && !isMaintenance,
+                      enabled: !isProcessing && !isMaintenance && !hasClosed,
                       isDark: isDark,
-                      activeTrackColor: isMaintenance
+                      activeTrackColor: (isMaintenance || hasClosed)
                           ? Colors.grey
                           : AppColors.secondary,
                       height: 56,

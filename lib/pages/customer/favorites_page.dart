@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
-import '../../models/product_model.dart';
-import '../../models/shop_model.dart';
+import '../../config/routes.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/shop_card.dart';
 import '../../widgets/restaurant_shop_card.dart';
-
 import 'package:google_fonts/google_fonts.dart';
 import '../../utils/responsive_layout.dart';
 import '../../widgets/shop_detail_sheet.dart';
 import '../../widgets/restaurant_dashboard_sheet.dart';
 
 class FavoritesPage extends StatefulWidget {
-  const FavoritesPage({super.key});
+  final bool isEmbedded;
+  final VoidCallback? onExplore;
+
+  const FavoritesPage({
+    super.key,
+    this.isEmbedded = false,
+    this.onExplore,
+  });
 
   @override
   State<FavoritesPage> createState() => _FavoritesPageState();
@@ -26,18 +31,18 @@ class FavoritesPage extends StatefulWidget {
 class _FavoritesPageState extends State<FavoritesPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  SupabaseClient get _supabase => Supabase.instance.client;
-
-  List<ProductModel> _favoriteProducts = [];
-  List<ShopModel> _favoriteShops = [];
-  final Map<String, ShopModel> _productShops = {};
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadFavorites();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      if (auth.currentUserId != null) {
+        context.read<FavoritesProvider>().fetchFavorites(auth.currentUserId!);
+      }
+    });
   }
 
   @override
@@ -46,130 +51,92 @@ class _FavoritesPageState extends State<FavoritesPage>
     super.dispose();
   }
 
-  Future<void> _loadFavorites() async {
-    setState(() => _isLoading = true);
-    final favs = context.read<FavoritesProvider>();
-
-    try {
-      if (favs.favoriteProductIds.isNotEmpty) {
-        final productRes = await _supabase
-            .from('products')
-            .select()
-            .eq('is_deleted', false)
-            .inFilter('id', favs.favoriteProductIds.toList())
-            .limit(100);
-        _favoriteProducts =
-            (productRes as List).map((p) => ProductModel.fromMap(p)).toList();
-
-        final missingShopIds = _favoriteProducts
-            .map((p) => p.shopId)
-            .where((id) => id.isNotEmpty && !_productShops.containsKey(id))
-            .toSet()
-            .toList();
-        if (missingShopIds.isNotEmpty) {
-          final shopsRes = await _supabase
-              .from('shops')
-              .select()
-              .inFilter('id', missingShopIds);
-          for (final s in (shopsRes as List)) {
-            final sm = ShopModel.fromMap(s);
-            _productShops[sm.id] = sm;
-          }
-        }
-      } else {
-        _favoriteProducts = [];
-      }
-
-      if (favs.favoriteShopIds.isNotEmpty) {
-        final shopRes = await _supabase
-            .from('shops')
-            .select()
-            .inFilter('id', favs.favoriteShopIds.toList())
-            .limit(100);
-        _favoriteShops =
-            (shopRes as List).map((s) => ShopModel.fromMap(s)).toList();
-      } else {
-        _favoriteShops = [];
-      }
-    } catch (e) {
-      debugPrint('Error loading full favorite objects: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  Future<void> _handleRefresh() async {
+    final auth = context.read<AuthProvider>();
+    if (auth.currentUserId != null) {
+      await context
+          .read<FavoritesProvider>()
+          .fetchFavorites(auth.currentUserId!);
     }
   }
 
-  Widget _buildEmptyState(
-      String title, String subtitle, IconData icon, bool isDark) {
+  Widget _buildEmptyState({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isDark,
+    required VoidCallback onAction,
+    required String actionLabel,
+  }) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
-                  AppColors.primaryLight
-                      .withValues(alpha: isDark ? 0.12 : 0.06),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              size: 56,
-              color: isDark ? AppColors.primaryLight : AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            title,
-            style: GoogleFonts.outfit(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              color: isDark ? Colors.white54 : AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 32),
-          GestureDetector(
-            onTap: () {
-              if (Navigator.canPop(context)) {
-                Navigator.pop(context);
-              } else {
-                Navigator.maybePop(context);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                gradient: AppColors.ctaGradient,
-                borderRadius: PremiumRadius.mediumBorder,
-                boxShadow: PremiumShadows.floatingButtonLight,
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+                    AppColors.primaryLight
+                        .withValues(alpha: isDark ? 0.12 : 0.06),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
               ),
-              child: Text(
-                'Start Exploring',
-                style: GoogleFonts.outfit(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
+              child: Icon(
+                icon,
+                size: 56,
+                color: isDark ? AppColors.primaryLight : AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                color: isDark ? Colors.white54 : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 32),
+            GestureDetector(
+              onTap: onAction,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: AppColors.ctaGradient,
+                  borderRadius: PremiumRadius.mediumBorder,
+                  boxShadow: PremiumShadows.floatingButtonLight,
+                ),
+                child: Text(
+                  actionLabel,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -177,13 +144,23 @@ class _FavoritesPageState extends State<FavoritesPage>
   @override
   Widget build(BuildContext context) {
     final favProvider = context.watch<FavoritesProvider>();
+    final auth = context.watch<AuthProvider>();
     final isDark = context.watch<ThemeProvider>().isDarkMode;
 
-    // Keep lists in sync if user un-favorites something while on this page
-    _favoriteProducts
-        .removeWhere((p) => !favProvider.favoriteProductIds.contains(p.id));
-    _favoriteShops
-        .removeWhere((s) => !favProvider.favoriteShopIds.contains(s.id));
+    final favoriteProducts = favProvider.favoriteProducts;
+    final favoriteShops = favProvider.favoriteShops;
+    final productShops = favProvider.productShops;
+    final isLoggedIn = auth.currentUserId != null;
+
+    void onExploreAction() {
+      if (widget.onExplore != null) {
+        widget.onExplore!();
+      } else if (!widget.isEmbedded && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.customerHome);
+      }
+    }
 
     return Scaffold(
       backgroundColor:
@@ -192,23 +169,27 @@ class _FavoritesPageState extends State<FavoritesPage>
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: Navigator.canPop(context)
-            ? GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  margin: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.07)
-                        : const Color(0xFFF0F0F8),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 16,
-                      color: isDark ? Colors.white70 : AppColors.textPrimary),
-                ),
-              )
-            : null,
+        automaticallyImplyLeading: false,
+        leading: widget.isEmbedded
+            ? null
+            : (Navigator.canPop(context)
+                ? GestureDetector(
+                    onTap: () => Navigator.maybePop(context),
+                    child: Container(
+                      margin: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.07)
+                            : const Color(0xFFF0F0F8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.arrow_back_ios_new_rounded,
+                          size: 16,
+                          color:
+                              isDark ? Colors.white70 : AppColors.textPrimary),
+                    ),
+                  )
+                : null),
         title: Text(
           'Favorites',
           style: GoogleFonts.outfit(
@@ -239,10 +220,10 @@ class _FavoritesPageState extends State<FavoritesPage>
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.3),
+                    color: AppColors.primary.withValues(alpha: 0.25),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
-                  )
+                  ),
                 ],
               ),
               labelStyle:
@@ -258,108 +239,201 @@ class _FavoritesPageState extends State<FavoritesPage>
         ),
       ),
       body: MaxWidthContainer(
-        child: _isLoading
+        child: favProvider.isLoading &&
+                favoriteProducts.isEmpty &&
+                favoriteShops.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
                 controller: _tabController,
                 children: [
-                  // Products Tab
-                  _favoriteProducts.isEmpty
-                      ? _buildEmptyState(
-                          'No favorite items yet',
-                          'Tap the heart icon on any item you love\nto save it for later.',
-                          Icons.favorite_border_rounded,
-                          isDark)
-                      : RefreshIndicator(
-                          onRefresh: _loadFavorites,
+                  // ── Tab 1: Products ─────────────────────────────────
+                  !isLoggedIn
+                      ? RefreshIndicator(
+                          onRefresh: _handleRefresh,
                           color: AppColors.primary,
                           backgroundColor:
                               isDark ? AppColors.darkSurface : Colors.white,
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              const crossAxisCount = 2;
-                              const crossAxisSpacing = 16.0;
-                              // The parent has padding 16 left and 16 right = 32
-                              final availableWidth = constraints.maxWidth - 32;
-                              final itemWidth = (availableWidth -
-                                      (crossAxisSpacing *
-                                          (crossAxisCount - 1))) /
-                                  crossAxisCount;
-                              final itemHeight = itemWidth + 134;
-                              final childAspectRatio = itemWidth / itemHeight;
-
-                              return GridView.builder(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: childAspectRatio,
-                                  mainAxisSpacing: 16,
-                                  crossAxisSpacing: crossAxisSpacing,
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: _buildEmptyState(
+                                  title: 'Sign in to view favorites',
+                                  subtitle:
+                                      'Save your favorite products to access them anytime.',
+                                  icon: Icons.favorite_border_rounded,
+                                  isDark: isDark,
+                                  actionLabel: 'Sign In 🔐',
+                                  onAction: () => Navigator.pushNamed(
+                                      context, AppRoutes.login),
                                 ),
-                                itemCount: _favoriteProducts.length,
-                                itemBuilder: (context, index) {
-                                  final prod = _favoriteProducts[index];
-                                  return ProductCard(
-                                    product: prod,
-                                    shop: _productShops[prod.shopId],
+                              ),
+                            ],
+                          ),
+                        )
+                      : favoriteProducts.isEmpty
+                          ? RefreshIndicator(
+                              onRefresh: _handleRefresh,
+                              color: AppColors.primary,
+                              backgroundColor:
+                                  isDark ? AppColors.darkSurface : Colors.white,
+                              child: CustomScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                slivers: [
+                                  SliverFillRemaining(
+                                    hasScrollBody: false,
+                                    child: _buildEmptyState(
+                                      title: 'No favorite items yet',
+                                      subtitle:
+                                          'Tap the heart or bookmark icon on any item you love\nto save it for later.',
+                                      icon: Icons.favorite_border_rounded,
+                                      isDark: isDark,
+                                      actionLabel: 'Start Exploring',
+                                      onAction: onExploreAction,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _handleRefresh,
+                              color: AppColors.primary,
+                              backgroundColor:
+                                  isDark ? AppColors.darkSurface : Colors.white,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  const crossAxisCount = 2;
+                                  const crossAxisSpacing = 16.0;
+                                  final availableWidth =
+                                      constraints.maxWidth - 32;
+                                  final itemWidth = (availableWidth -
+                                          (crossAxisSpacing *
+                                              (crossAxisCount - 1))) /
+                                      crossAxisCount;
+                                  final itemHeight = itemWidth + 134;
+                                  final childAspectRatio =
+                                      itemWidth / itemHeight;
+
+                                  return GridView.builder(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 16, 16, 120),
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      childAspectRatio: childAspectRatio,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: crossAxisSpacing,
+                                    ),
+                                    itemCount: favoriteProducts.length,
+                                    itemBuilder: (context, index) {
+                                      final prod = favoriteProducts[index];
+                                      return ProductCard(
+                                        product: prod,
+                                        shop: productShops[prod.shopId],
+                                      );
+                                    },
                                   );
                                 },
-                              );
-                            },
-                          ),
-                        ),
+                              ),
+                            ),
 
-                  // Shops Tab
-                  _favoriteShops.isEmpty
-                      ? _buildEmptyState(
-                          'No favorite shops yet',
-                          'Save your go-to restaurants and stores\nfor quick access.',
-                          Icons.storefront_outlined,
-                          isDark)
-                      : RefreshIndicator(
-                          onRefresh: _loadFavorites,
+                  // ── Tab 2: Shops & Restaurants ───────────────────────
+                  !isLoggedIn
+                      ? RefreshIndicator(
+                          onRefresh: _handleRefresh,
                           color: AppColors.primary,
                           backgroundColor:
                               isDark ? AppColors.darkSurface : Colors.white,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                            itemCount: _favoriteShops.length,
-                            itemBuilder: (context, index) {
-                              final shop = _favoriteShops[index];
-                              final isFood = shop.category
-                                      .toLowerCase()
-                                      .contains('food') ||
-                                  shop.category
-                                      .toLowerCase()
-                                      .contains('restaurant');
-
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: SizedBox(
-                                  height: 280,
-                                  child: isFood
-                                      ? RestaurantShopCard(
-                                          shop: shop,
-                                          onTap: () =>
-                                              showRestaurantDashboardSheet(
-                                            context,
-                                            shop.id,
-                                          ),
-                                        )
-                                      : ShopCard(
-                                          shop: shop,
-                                          onTap: () => showShopDetailSheet(
-                                            context,
-                                            shop.id,
-                                          ),
-                                        ),
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: _buildEmptyState(
+                                  title: 'Sign in to view favorites',
+                                  subtitle:
+                                      'Save your favorite restaurants and stores to access them anytime.',
+                                  icon: Icons.storefront_outlined,
+                                  isDark: isDark,
+                                  actionLabel: 'Sign In 🔐',
+                                  onAction: () => Navigator.pushNamed(
+                                      context, AppRoutes.login),
                                 ),
-                              );
-                            },
+                              ),
+                            ],
                           ),
-                        ),
+                        )
+                      : favoriteShops.isEmpty
+                          ? RefreshIndicator(
+                              onRefresh: _handleRefresh,
+                              color: AppColors.primary,
+                              backgroundColor:
+                                  isDark ? AppColors.darkSurface : Colors.white,
+                              child: CustomScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                slivers: [
+                                  SliverFillRemaining(
+                                    hasScrollBody: false,
+                                    child: _buildEmptyState(
+                                      title: 'No favorite shops yet',
+                                      subtitle:
+                                          'Save your go-to restaurants and stores\nfor quick access.',
+                                      icon: Icons.storefront_outlined,
+                                      isDark: isDark,
+                                      actionLabel: 'Start Exploring',
+                                      onAction: onExploreAction,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _handleRefresh,
+                              color: AppColors.primary,
+                              backgroundColor:
+                                  isDark ? AppColors.darkSurface : Colors.white,
+                              child: ListView.builder(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                                itemCount: favoriteShops.length,
+                                itemBuilder: (context, index) {
+                                  final shop = favoriteShops[index];
+                                  final isFood = shop.category
+                                          .toLowerCase()
+                                          .contains('food') ||
+                                      shop.category
+                                          .toLowerCase()
+                                          .contains('restaurant');
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: SizedBox(
+                                      height: 280,
+                                      child: isFood
+                                          ? RestaurantShopCard(
+                                              shop: shop,
+                                              onTap: () =>
+                                                  showRestaurantDashboardSheet(
+                                                context,
+                                                shop.id,
+                                              ),
+                                            )
+                                          : ShopCard(
+                                              shop: shop,
+                                              onTap: () => showShopDetailSheet(
+                                                context,
+                                                shop.id,
+                                              ),
+                                            ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                 ],
               ),
       ),

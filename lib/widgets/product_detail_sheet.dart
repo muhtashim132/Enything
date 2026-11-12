@@ -22,6 +22,7 @@ import '../widgets/shop_detail_sheet.dart';
 import '../widgets/restaurant_dashboard_sheet.dart';
 import 'common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
+import '../utils/app_toast.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public helper — call this instead of Navigator.pushNamed for productDetails
@@ -338,6 +339,25 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                                     duration: const Duration(milliseconds: 300),
                                     curve: Curves.easeInOut);
                               }
+                              // 100x UX: Glides viewport smoothly to top so customer immediately sees the variant photo
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (scrollController.hasClients &&
+                                    scrollController.offset > 0) {
+                                  scrollController.animateTo(
+                                    0.0,
+                                    duration: const Duration(milliseconds: 380),
+                                    curve: Curves.easeOutCubic,
+                                  );
+                                }
+                                if (_draggableController.isAttached &&
+                                    _draggableController.size < 0.65) {
+                                  _draggableController.animateTo(
+                                    0.65,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOutCubic,
+                                  );
+                                }
+                              });
                             },
                             highlightVariants: _highlightVariants,
                             highlightPulseCount: _highlightPulseCount,
@@ -566,7 +586,18 @@ class _SheetContent extends StatelessWidget {
                           onTap: () {
                             if (auth.currentUserId != null) {
                               favs.toggleProductFavorite(
-                                  auth.currentUserId!, product.id);
+                                auth.currentUserId!,
+                                product.id,
+                                product: product,
+                                shop: shop,
+                              );
+                            } else {
+                              AppToast.showInfo(
+                                context,
+                                title: 'Sign In Required 🔐',
+                                message:
+                                    'Please sign in to save items to your favorites.',
+                              );
                             }
                           },
                         ),
@@ -677,6 +708,46 @@ class _SheetContent extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
+                      ],
+
+                      // 100x Closed Store In-Sheet Banner Alert
+                      if (shop != null && (!shop!.isActive || !shop!.isOpenRightNow)) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF2D2418) : const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(0xFFF59E0B).withValues(alpha: 0.35)
+                                  : const Color(0xFFFDE68A),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.lock_clock_outlined,
+                                size: 16,
+                                color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  (shop!.openTime != null && shop!.openTime!.trim().isNotEmpty)
+                                      ? 'Store Currently Closed • Opens at ${shop!.openTime!.trim()}'
+                                      : 'Store Currently Closed • Not Accepting Orders',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
 
                       // Product name
@@ -1205,13 +1276,18 @@ class _SheetContent extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0A1260), Color(0xFF1E3FD8)],
+                    gradient: LinearGradient(
+                      colors: cart.recentNotification!.isError
+                          ? const [Color(0xFF7F1D1D), Color(0xFFDC2626)]
+                          : const [Color(0xFF0A1260), Color(0xFF1E3FD8)],
                     ),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF1E3FD8).withValues(alpha: 0.35),
+                        color: (cart.recentNotification!.isError
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFF1E3FD8))
+                            .withValues(alpha: 0.35),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -1219,8 +1295,13 @@ class _SheetContent extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_rounded,
-                          color: Colors.white, size: 18),
+                      Icon(
+                        cart.recentNotification!.isError
+                            ? Icons.warning_amber_rounded
+                            : Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -1265,7 +1346,9 @@ class _SheetContent extends StatelessWidget {
                           child: Text(
                             'View Cart',
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF1E3FD8),
+                              color: cart.recentNotification!.isError
+                                  ? const Color(0xFFDC2626)
+                                  : const Color(0xFF1E3FD8),
                               fontWeight: FontWeight.w800,
                               fontSize: 11,
                             ),
@@ -1333,7 +1416,9 @@ class _SheetContent extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Shop Currently Closed',
+                        (shop!.openTime != null && shop!.openTime!.trim().isNotEmpty)
+                            ? 'Shop Closed • Opens at ${shop!.openTime!.trim()}'
+                            : 'Shop Currently Closed',
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -1397,16 +1482,16 @@ class _SheetContent extends StatelessWidget {
                     _qtyBtn(Icons.add, () {
                       if (!canInc) {
                         SensoryHaptics.error();
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
+                        final eligibilityErr = cart.checkAddItemEligibility(
+                          product,
+                          shop: shop,
+                          selectedVariant: selectedVariant,
+                        );
+                        AppToast.showWarning(
+                          context,
+                          title: 'Cart Notice 🛒',
+                          message: eligibilityErr ??
                               'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                              style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                            ),
-                            duration: const Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
                         );
                         return;
                       }
@@ -1505,16 +1590,26 @@ class _SheetContent extends StatelessWidget {
                               shop!,
                               selectedVariant: selectedVariant,
                             );
-                            ScaffoldMessenger.of(context).clearSnackBars();
                             if (err != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(err),
-                                  backgroundColor: const Color(0xFFEF4444),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
+                              SensoryHaptics.error();
+                              if (err.contains('Maximum 3 shops')) {
+                                _showBuyNowMultiShopDialog(
+                                  context,
+                                  product,
+                                  shop!,
+                                  cart,
+                                  selectedVariant: selectedVariant,
+                                );
+                              } else {
+                                AppToast.showError(
+                                  context,
+                                  title: 'Cannot Proceed 🛒',
+                                  message: err,
+                                );
+                              }
                             } else {
+                              SensoryHaptics.light();
+                              Navigator.pop(context);
                               Navigator.pushNamed(context, AppRoutes.cart);
                             }
                           }
@@ -1566,6 +1661,154 @@ class _SheetContent extends StatelessWidget {
                 : (isDark ? Colors.white24 : Colors.grey.shade400),
             size: 18),
       ),
+    );
+  }
+
+  void _showBuyNowMultiShopDialog(
+    BuildContext context,
+    ProductModel product,
+    ShopModel shop,
+    CartProvider cart, {
+    ProductVariant? selectedVariant,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) {
+        final isDark = Theme.of(sheetCtx).brightness == Brightness.dark;
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.storefront_rounded,
+                          color: Colors.orange, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Multi-Shop Limit (Max 3)',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Your cart already contains items from 3 different shops. To ensure fast and reliable bike delivery, orders are limited to 3 shops at a time.',
+                  style: GoogleFonts.outfit(
+                    fontSize: 13.5,
+                    height: 1.4,
+                    color: isDark ? Colors.white70 : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                // Action 1: View Current Cart
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(sheetCtx);
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, AppRoutes.cart);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'View Current Cart (${cart.shops.length} Shops)',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Action 2: Clear & Buy This Now
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      cart.clear();
+                      cart.addItem(
+                        product,
+                        shop,
+                        selectedVariant: selectedVariant,
+                      );
+                      Navigator.pop(sheetCtx);
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, AppRoutes.cart);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(
+                        color: isDark ? Colors.white24 : Colors.grey.shade300,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      'Clear Cart & Buy This Item Now',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: isDark ? Colors.white70 : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(sheetCtx),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.outfit(
+                        color: isDark ? Colors.white38 : AppColors.textLight,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

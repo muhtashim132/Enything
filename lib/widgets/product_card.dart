@@ -18,6 +18,7 @@ import '../widgets/common/premium_product_image.dart';
 import '../utils/closed_store_feedback.dart';
 import '../config/app_categories.dart';
 import '../config/payment_config.dart';
+import '../utils/app_toast.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -68,7 +69,18 @@ class _ProductCardState extends State<ProductCard> {
         ? product.originalPrice! - product.price
         : 0.0;
 
-    final isShopClosed = shop != null && !shop!.isOpenRightNow;
+    final resolvedShop = shop ??
+        (product.shopId.isNotEmpty
+            ? context
+                .watch<CartProvider>()
+                .shops
+                .cast<ShopModel?>()
+                .firstWhere(
+                  (s) => s?.id == product.shopId,
+                  orElse: () => null,
+                )
+            : null);
+    final isShopClosed = resolvedShop != null && !resolvedShop.isOpenRightNow;
     final isOutOfStock =
         product.totalQuantity != null && product.totalQuantity! <= 0;
     final isProductUnavailable = !product.isAvailable || isOutOfStock;
@@ -87,8 +99,10 @@ class _ProductCardState extends State<ProductCard> {
       onTap: isShopClosed
           ? () => ClosedStoreFeedback.showClosedStoreNotice(
                 context,
-                shopName: shop?.name ?? 'Store',
-                openTime: shop?.openTime,
+                shopName: (resolvedShop?.name.isNotEmpty == true)
+                    ? resolvedShop!.name
+                    : (shop?.name ?? 'Store'),
+                openTime: resolvedShop?.openTime ?? shop?.openTime,
               )
           : (isProductUnavailable
               ? () => ClosedStoreFeedback.showProductUnavailableNotice(
@@ -298,7 +312,18 @@ class _ProductCardState extends State<ProductCard> {
                           HapticFeedback.lightImpact();
                           if (auth.currentUserId != null) {
                             favs.toggleProductFavorite(
-                                auth.currentUserId!, product.id);
+                              auth.currentUserId!,
+                              product.id,
+                              product: product,
+                              shop: shop,
+                            );
+                          } else {
+                            AppToast.showInfo(
+                              context,
+                              title: 'Sign In Required 🔐',
+                              message:
+                                  'Please sign in to save items to your favorites.',
+                            );
                           }
                         },
                         child: AnimatedContainer(
@@ -689,16 +714,20 @@ class _ProductCardState extends State<ProductCard> {
                             },
                             child: isLocked
                                 ? _buildUnavailableButton(isDark,
-                                    isShopClosed: isShopClosed)
+                                    isShopClosed: isShopClosed,
+                                    currentShop: resolvedShop)
                                 : product.variants.isNotEmpty
                                     ? (totalQuantity > 0
                                         ? _buildVariantStepper(
-                                            cart, totalQuantity, isDark)
+                                            cart, totalQuantity, isDark,
+                                            targetShop: resolvedShop)
                                         : _buildVariantAddButton(isDark))
                                     : totalQuantity > 0
                                         ? _buildStepper(
-                                            cart, totalQuantity, isDark)
-                                        : _buildAddButton(cart, isDark),
+                                            cart, totalQuantity, isDark,
+                                            targetShop: resolvedShop)
+                                        : _buildAddButton(cart, isDark,
+                                            targetShop: resolvedShop),
                           ),
                         ],
                       ),
@@ -883,7 +912,9 @@ class _ProductCardState extends State<ProductCard> {
   }
 
   Widget _buildVariantStepper(
-      CartProvider cart, int totalQuantity, bool isDark) {
+      CartProvider cart, int totalQuantity, bool isDark,
+      {ShopModel? targetShop}) {
+    final effectiveShop = targetShop ?? shop;
     final productItems = cart.getItemsForProduct(product.id);
     final hasSingleVariant = productItems.length == 1;
     final singleItem = hasSingleVariant ? productItems.first : null;
@@ -1023,44 +1054,29 @@ class _ProductCardState extends State<ProductCard> {
                     );
                     return;
                   }
-                  if (hasSingleVariant && singleItem != null) {
-                    if (!cart.canIncrementItem(singleItem)) {
-                      SensoryHaptics.error();
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                            style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                          ),
-                          duration: const Duration(seconds: 2),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                      return;
-                    }
-                  } else if (cart.isMaxWeightReached) {
+                  final err = cart.checkAddItemEligibility(
+                    product,
+                    shop: effectiveShop,
+                    selectedVariant: (hasSingleVariant && singleItem != null)
+                        ? singleItem.selectedVariant
+                        : null,
+                  );
+                  if (err != null) {
                     SensoryHaptics.error();
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                        ),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                    AppToast.showWarning(
+                      context,
+                      title: 'Cart Notice 🛒',
+                      message: err,
                     );
                     return;
                   }
                   HapticFeedback.lightImpact();
-                  if (shop != null) {
+                  if (effectiveShop != null) {
                     if (hasSingleVariant && singleItem != null) {
                       cart.addItemWithFeedback(
                         context,
                         product,
-                        shop!,
+                        effectiveShop,
                         selectedVariant: singleItem.selectedVariant,
                       );
                     } else {
@@ -1093,7 +1109,9 @@ class _ProductCardState extends State<ProductCard> {
     );
   }
 
-  Widget _buildAddButton(CartProvider cart, bool isDark) {
+  Widget _buildAddButton(CartProvider cart, bool isDark,
+      {ShopModel? targetShop}) {
+    final effectiveShop = targetShop ?? shop;
     return GestureDetector(
       key: const ValueKey('add'),
       behavior: HitTestBehavior.opaque,
@@ -1103,23 +1121,19 @@ class _ProductCardState extends State<ProductCard> {
           showProductDetailSheet(context, product.id, highlightVariants: true);
           return;
         }
-        if (!cart.canAddItem(product)) {
+        final eligibilityErr =
+            cart.checkAddItemEligibility(product, shop: effectiveShop);
+        if (eligibilityErr != null) {
           SensoryHaptics.error();
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-              ),
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-            ),
+          AppToast.showWarning(
+            context,
+            title: 'Cart Notice 🛒',
+            message: eligibilityErr,
           );
           return;
         }
-        if (shop != null) {
-          cart.addItemWithFeedback(context, product, shop!);
+        if (effectiveShop != null) {
+          cart.addItemWithFeedback(context, product, effectiveShop);
         } else {
           showProductDetailSheet(context, product.id);
         }
@@ -1185,7 +1199,9 @@ class _ProductCardState extends State<ProductCard> {
     );
   }
 
-  Widget _buildStepper(CartProvider cart, int quantity, bool isDark) {
+  Widget _buildStepper(CartProvider cart, int quantity, bool isDark,
+      {ShopModel? targetShop}) {
+    final effectiveShop = targetShop ?? shop;
     return Container(
       key: const ValueKey('stepper'),
       height: 28,
@@ -1264,26 +1280,22 @@ class _ProductCardState extends State<ProductCard> {
                     );
                     return;
                   }
-                  if (!cart.canIncrementProduct(product.id)) {
+                  final err =
+                      cart.checkAddItemEligibility(product, shop: effectiveShop);
+                  if (err != null) {
                     SensoryHaptics.error();
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Delivery weight limit reached (Max 15 kg for bike delivery)',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
-                        ),
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                    AppToast.showWarning(
+                      context,
+                      title: 'Cart Notice 🛒',
+                      message: err,
                     );
                     return;
                   }
                   SensoryHaptics.medium();
-                  if (shop != null) {
+                  if (effectiveShop != null) {
                     context
                         .read<CartProvider>()
-                        .addItemWithFeedback(context, product, shop!);
+                        .addItemWithFeedback(context, product, effectiveShop);
                   }
                 },
                 child: Container(
@@ -1306,15 +1318,16 @@ class _ProductCardState extends State<ProductCard> {
     );
   }
 
-  Widget _buildUnavailableButton(bool isDark, {bool isShopClosed = false}) {
+  Widget _buildUnavailableButton(bool isDark,
+      {bool isShopClosed = false, ShopModel? currentShop}) {
     final label = isShopClosed ? 'STORE CLOSED' : 'UNAVAILABLE';
     return GestureDetector(
       onTap: () {
         if (isShopClosed) {
           ClosedStoreFeedback.showClosedStoreNotice(
             context,
-            shopName: shop?.name ?? 'Store',
-            openTime: shop?.openTime,
+            shopName: currentShop?.name ?? shop?.name ?? 'Store',
+            openTime: currentShop?.openTime ?? shop?.openTime,
           );
         } else {
           ClosedStoreFeedback.showProductUnavailableNotice(

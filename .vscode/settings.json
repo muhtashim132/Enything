@@ -11,5 +11,20 @@
     ],
     "python.autoComplete.extraPaths": [
         "/Users/muhtaashimnazki/Library/Python/3.9/lib/python/site-packages"
+    ],
+    "editor.formatOnSaveTimeout": 1000,
+    "editor.codeActionsOnSaveTimeout": 1000,
+    "files.autoSave": "onFocusChange",
+    "files.hotExit": "off",
+    "[dart]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnSaveTimeout": 1000,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        }
+    },
+    "dart.vmAdditionalArgs": [
+        "--max-old-space-size=2048"
     ]
 }

@@ -14,13 +14,19 @@ import '../utils/delivery_calculator.dart';
 import '../utils/weight_engine.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart' show scaffoldMessengerKey;
+import '../utils/app_toast.dart';
+import '../theme/sensory_haptics.dart';
 
 class CartNotification {
   final String id;
   final String title;
   final String message;
+  final bool isError;
   CartNotification(
-      {required this.id, required this.title, required this.message});
+      {required this.id,
+      required this.title,
+      required this.message,
+      this.isError = false});
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +74,8 @@ Map<String, dynamic> _shopToJson(ShopModel s) => {
       'prep_time_minutes': s.prepTimeMinutes,
       'is_veg_only': s.isVegOnly,
       'opening_hours': s.openingHours,
+      'open_time': s.openTime,
+      'close_time': s.closeTime,
       'address': s.address,
       // Store lat/lng manually since ShopModel uses POINT format in DB
       '_lat': s.location.latitude,
@@ -75,6 +83,7 @@ Map<String, dynamic> _shopToJson(ShopModel s) => {
       'category': s.category,
       'categories': s.categories,
       'is_active': s.isActive,
+      'is_accepting_orders': s.isAcceptingOrders,
       'rating': s.rating,
       'total_reviews': s.totalReviews,
       'total_orders': s.totalOrders,
@@ -94,11 +103,14 @@ ShopModel _shopFromJson(Map<String, dynamic> m) {
     prepTimeMinutes: m['prep_time_minutes'] ?? 30,
     isVegOnly: m['is_veg_only'] ?? false,
     openingHours: m['opening_hours'],
+    openTime: m['open_time'] ?? m['opening_time'],
+    closeTime: m['close_time'] ?? m['closing_time'],
     address: m['address'] ?? '',
     location: LatLng(lat, lng),
     category: m['category'] ?? 'Other',
     categories: List<String>.from(m['categories'] ?? []),
     isActive: m['is_active'] ?? true,
+    isAcceptingOrders: m['is_accepting_orders'] ?? true,
     rating: (m['rating'] ?? 4.0).toDouble(),
     totalReviews: m['total_reviews'] ?? 0,
     totalOrders: m['total_orders'] ?? 0,
@@ -290,30 +302,165 @@ class CartProvider extends ChangeNotifier {
     return effectiveAggregateWeight > threshold;
   }
 
-  /// Proactively checks whether adding [quantity] units of [product] (with optional [selectedVariant])
-  /// is permitted within weight, item-count, and multi-shop limit (max 3 stores).
-  bool canAddItem(ProductModel product,
-      {ProductVariant? selectedVariant, int quantity = 1}) {
-    if (quantity <= 0) return true;
-    if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) return false;
+  // ── 100x Closed Shop Detection & Multi-Shop Resolution ─────────────────────
 
-    // 100x Multi-Shop Limit Guard: Prevent adding items from a 4th unique physical store
+  /// Whether any shop in the cart is currently closed, outside operating hours, or inactive.
+  bool get hasClosedShops => shops.any((s) => !s.isOpenRightNow);
+
+  /// Whether every shop in the cart is currently closed.
+  bool get areAllShopsClosed => shops.isNotEmpty && shops.every((s) => !s.isOpenRightNow);
+
+  /// Returns the subset of shops in the cart that are currently closed.
+  List<ShopModel> get closedShops => shops.where((s) => !s.isOpenRightNow).toList();
+
+  /// Returns the subset of shops in the cart that are currently open.
+  List<ShopModel> get openShops => shops.where((s) => s.isOpenRightNow).toList();
+
+  /// 1-tap removal of all cart items originating from a specific shop.
+  void removeItemsFromShop(String shopId) {
+    _items.removeWhere((item) => item.shop.id == shopId);
+    _saveCart();
+    safeNotifyListeners();
+  }
+
+  /// Non-blocking live database sync of shop statuses, operating hours, and order acceptance.
+  Future<void> syncLiveShopStatuses() async {
+    if (_items.isEmpty) return;
+    final shopIds = shops.map((s) => s.id).toSet().toList();
+    if (shopIds.isEmpty) return;
+
+    try {
+      final res = await Supabase.instance.client
+          .from('shops')
+          .select('id, name, is_active, is_accepting_orders, is_open, is_manually_closed, open_time, close_time, opening_time, closing_time')
+          .inFilter('id', shopIds);
+
+      if (res is List && res.isNotEmpty) {
+        final Map<String, Map<String, dynamic>> shopMap = {
+          for (final row in res) (row['id'] as String): row,
+        };
+
+        bool changed = false;
+        for (int i = 0; i < _items.length; i++) {
+          final sId = _items[i].shop.id;
+          final updated = shopMap[sId];
+          if (updated != null) {
+            final oldShop = _items[i].shop;
+            final isAct = updated['is_active'] as bool? ?? oldShop.isActive;
+            final isAcc = updated['is_accepting_orders'] as bool? ??
+                updated['is_open'] as bool? ??
+                oldShop.isAcceptingOrders;
+            final oTime = updated['open_time'] as String? ??
+                updated['opening_time'] as String? ??
+                oldShop.openTime;
+            final cTime = updated['close_time'] as String? ??
+                updated['closing_time'] as String? ??
+                oldShop.closeTime;
+
+            if (isAct != oldShop.isActive ||
+                isAcc != oldShop.isAcceptingOrders ||
+                oTime != oldShop.openTime ||
+                cTime != oldShop.closeTime) {
+              final newShop = ShopModel(
+                id: oldShop.id,
+                sellerId: oldShop.sellerId,
+                name: updated['name'] ?? oldShop.name,
+                shopType: oldShop.shopType,
+                cuisineType: oldShop.cuisineType,
+                fssaiNumber: oldShop.fssaiNumber,
+                prepTimeMinutes: oldShop.prepTimeMinutes,
+                isVegOnly: oldShop.isVegOnly,
+                openingHours: oldShop.openingHours,
+                openTime: oTime,
+                closeTime: cTime,
+                address: oldShop.address,
+                location: oldShop.location,
+                category: oldShop.category,
+                categories: oldShop.categories,
+                isActive: isAct,
+                isAcceptingOrders: isAcc,
+                rating: oldShop.rating,
+                totalReviews: oldShop.totalReviews,
+                totalOrders: oldShop.totalOrders,
+                bannerImage: oldShop.bannerImage,
+                distanceKm: oldShop.distanceKm,
+                acceptsBulkOrders: oldShop.acceptsBulkOrders,
+                maxBulkItemsPerSlot: oldShop.maxBulkItemsPerSlot,
+                minBulkLeadTimeHours: oldShop.minBulkLeadTimeHours,
+                maxBulkLeadTimeHours: oldShop.maxBulkLeadTimeHours,
+                bulkSlotDurationMinutes: oldShop.bulkSlotDurationMinutes,
+              );
+              _items[i] = _items[i].copyWith(shop: newShop);
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          _saveCart();
+          safeNotifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[CartProvider] syncLiveShopStatuses error: $e');
+    }
+  }
+
+  /// 100x Centralized Eligibility Engine: Evaluates all business, logistic,
+  /// and multi-shop constraints before attempting to add [product].
+  /// Returns exact user-facing error message String if ineligible, or null if permitted.
+  String? checkAddItemEligibility(ProductModel product,
+      {ShopModel? shop, ProductVariant? selectedVariant, int quantity = 1}) {
+    if (quantity <= 0) return null;
+
+    if (shop != null && !shop.isOpenRightNow) {
+      return 'This shop is currently closed. Cannot accept orders right now.';
+    }
+
+    if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) {
+      return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
+    }
+
+    final targetShopId = shop?.id ?? product.shopId;
     final pendingShopIds = isPendingReplacementActive
         ? _activePendingShops.map((s) => s.id).toSet()
         : <String>{};
     final currentShopIds = shops.map((s) => s.id).toSet();
     final allEffectiveShopIds = {...pendingShopIds, ...currentShopIds};
-    if (!allEffectiveShopIds.contains(product.shopId) &&
+
+    if (!allEffectiveShopIds.contains(targetShopId) &&
         allEffectiveShopIds.length >= 3) {
-      return false;
+      if (pendingShopIds.isNotEmpty) {
+        return 'Maximum 3 shops allowed per order (${pendingShopIds.length} active in your pending order).';
+      }
+      return 'Maximum 3 shops allowed per order. Please complete your current order first.';
     }
 
-    final unitWeight = WeightEngine.resolveUnit(
+    final unitWeightKg = WeightEngine.resolveUnit(
       product: product,
       selectedVariant: selectedVariant,
     );
-    final projectedAddition = unitWeight * quantity;
-    return (effectiveAggregateWeight + projectedAddition) <= PaymentConfig.maxWeightKg;
+
+    if (unitWeightKg > PaymentConfig.maxWeightKg) {
+      return 'This single item (${unitWeightKg.toStringAsFixed(1)} kg) exceeds the maximum delivery limit (${PaymentConfig.maxWeightKg.toInt()} kg).';
+    }
+
+    final projectedWeight =
+        effectiveAggregateWeight + (unitWeightKg * quantity);
+    if (projectedWeight > PaymentConfig.maxWeightKg) {
+      final remaining = remainingWeightCapacityKg;
+      return 'Maximum delivery weight of ${PaymentConfig.maxWeightKg.toInt()} kg reached (${remaining.toStringAsFixed(2)} kg capacity left).';
+    }
+
+    return null;
+  }
+
+  /// Proactively checks whether adding [quantity] units of [product] (with optional [selectedVariant])
+  /// is permitted within weight, item-count, and multi-shop limit (max 3 stores).
+  bool canAddItem(ProductModel product,
+      {ShopModel? shop, ProductVariant? selectedVariant, int quantity = 1}) {
+    return checkAddItemEligibility(product,
+            shop: shop, selectedVariant: selectedVariant, quantity: quantity) ==
+        null;
   }
 
   /// Proactively checks whether an existing cart item can be incremented by 1 unit.
@@ -441,42 +588,14 @@ class CartProvider extends ChangeNotifier {
       {int quantity = 1,
       ProductVariant? selectedVariant,
       bool suppressSave = false}) {
-    if (!shop.isOpenRightNow) {
-      return 'This shop is currently closed. Cannot accept orders right now.';
-    }
-
-    if (totalItemCount + quantity > PaymentConfig.maxItemsPerOrder) {
-      return 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
-    }
-
-    final unitWeightKg = WeightEngine.resolveUnit(
-      product: product,
+    final eligibilityErr = checkAddItemEligibility(
+      product,
+      shop: shop,
       selectedVariant: selectedVariant,
+      quantity: quantity,
     );
-
-    // Single item hard weight shield
-    if (unitWeightKg > PaymentConfig.maxWeightKg) {
-      return 'This single item (${unitWeightKg.toStringAsFixed(1)} kg) exceeds the maximum delivery limit (${PaymentConfig.maxWeightKg.toInt()} kg).';
-    }
-
-    final projectedWeight = effectiveAggregateWeight + (unitWeightKg * quantity);
-    if (projectedWeight > PaymentConfig.maxWeightKg) {
-      final remaining = remainingWeightCapacityKg;
-      return 'Maximum delivery weight of ${PaymentConfig.maxWeightKg.toInt()} kg reached (${remaining.toStringAsFixed(2)} kg capacity left).';
-    }
-
-    // Enforce max 3 unique shops (including active shops from pending replacement order if active)
-    final pendingShopIds = isPendingReplacementActive
-        ? _activePendingShops.map((s) => s.id).toSet()
-        : <String>{};
-    final currentShops = shops.map((s) => s.id).toSet();
-    final allEffectiveShopIds = {...pendingShopIds, ...currentShops};
-
-    if (!allEffectiveShopIds.contains(shop.id) && allEffectiveShopIds.length >= 3) {
-      if (pendingShopIds.isNotEmpty) {
-        return 'Maximum 3 shops allowed per order (${pendingShopIds.length} active in your pending order).';
-      }
-      return 'Maximum 3 shops allowed per order. Please complete your current order first.';
+    if (eligibilityErr != null) {
+      return eligibilityErr;
     }
 
     final existingIdx = _items.indexWhere((item) =>
@@ -509,14 +628,33 @@ class CartProvider extends ChangeNotifier {
     scaffoldMessengerKey.currentState?.clearSnackBars();
 
     if (err != null) {
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: const Color(0xFFEF4444), // AppColors.danger fallback
-          behavior: SnackBarBehavior.floating,
-        ),
+      SensoryHaptics.error();
+      // 100x FIX: Display top overlay toast (never obscured by bottom sheets or modal barriers)
+      AppToast.showError(
+        context,
+        title: 'Cart Notice 🛒',
+        message: err,
       );
+
+      // 100x FIX: Also set in-sheet notification with isError: true so modal sheets update immediately
+      final notifId = DateTime.now().millisecondsSinceEpoch.toString();
+      _recentNotification = CartNotification(
+        id: notifId,
+        title: 'Could Not Add Item',
+        message: err,
+        isError: true,
+      );
+      safeNotifyListeners();
+
+      _notificationTimer?.cancel();
+      _notificationTimer = Timer(const Duration(seconds: 4), () {
+        if (_recentNotification?.id == notifId) {
+          _recentNotification = null;
+          safeNotifyListeners();
+        }
+      });
     } else {
+      SensoryHaptics.light();
       final pendingShopIds = isPendingReplacementActive
           ? _activePendingShops.map((s) => s.id).toSet()
           : <String>{};
@@ -535,7 +673,7 @@ class CartProvider extends ChangeNotifier {
       // 100x SYNC: Set global 3-second notification in CartProvider for both in-sheet & home bottom-nav
       final notifId = DateTime.now().millisecondsSinceEpoch.toString();
       _recentNotification =
-          CartNotification(id: notifId, title: title, message: msg);
+          CartNotification(id: notifId, title: title, message: msg, isError: false);
       safeNotifyListeners();
 
       _notificationTimer?.cancel();
@@ -574,6 +712,12 @@ class CartProvider extends ChangeNotifier {
       final deltaQty = quantity - currentQty;
 
       if (deltaQty > 0) {
+        if (!_items[idx].shop.isOpenRightNow) {
+          const err = 'This shop is currently closed. Cannot accept orders right now.';
+          _showTransientError(err);
+          return err;
+        }
+
         if (totalItemCount + deltaQty > PaymentConfig.maxItemsPerOrder) {
           const err = 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
           _showTransientError(err);

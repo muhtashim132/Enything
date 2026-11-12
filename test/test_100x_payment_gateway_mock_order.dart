@@ -70,14 +70,14 @@ void main() {
   });
 
   tearDownAll(() async {
-    // Restore platform maintenance mode to live configured state
+    // Restore platform maintenance mode to standard active state (false)
     await Process.run('supabase', [
       'db',
       'query',
       '--linked',
-      "UPDATE platform_config SET value = 'true'::jsonb WHERE key = 'maintenance_mode';",
+      "UPDATE platform_config SET value = 'false'::jsonb WHERE key = 'maintenance_mode';",
     ]);
-    print('🔒 Maintenance mode restored to true.');
+    print('🔓 Maintenance mode restored to false.');
   });
 
   group('100x MOCK ORDER PLACEMENT, PAYMENT PAGE & GATEWAY VERIFICATION SUITE', () {

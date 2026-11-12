@@ -742,8 +742,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         final bExact = bName == cleanQ || bName.contains(cleanQ);
         if (aExact != bExact) return aExact ? -1 : 1;
 
-        final aMatches = qTerms.isNotEmpty && qTerms.every((t) => aName.contains(t));
-        final bMatches = qTerms.isNotEmpty && qTerms.every((t) => bName.contains(t));
+        final aMatches =
+            qTerms.isNotEmpty && qTerms.every((t) => aName.contains(t));
+        final bMatches =
+            qTerms.isNotEmpty && qTerms.every((t) => bName.contains(t));
         if (aMatches != bMatches) return aMatches ? -1 : 1;
       }
 
@@ -1592,11 +1594,25 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
       // 100x Noise & Stop-Word Stripping for multi-word queries:
       // (e.g. "serum for face" -> ['serum', 'face'], "milk and bread" -> ['milk', 'bread'])
-      const stopWords = {'for', 'in', 'of', 'with', 'and', 'the', 'a', 'an', 'at', 'by', 'to', '&'};
+      const stopWords = {
+        'for',
+        'in',
+        'of',
+        'with',
+        'and',
+        'the',
+        'a',
+        'an',
+        'at',
+        'by',
+        'to',
+        '&'
+      };
       final List<String> filteredTerms = rawTerms.length > 1
           ? rawTerms.where((t) => !stopWords.contains(t)).toList()
           : rawTerms;
-      final List<String> terms = filteredTerms.isNotEmpty ? filteredTerms : rawTerms;
+      final List<String> terms =
+          filteredTerms.isNotEmpty ? filteredTerms : rawTerms;
 
       List<String> matchedSubcategories = [];
 
@@ -1620,7 +1636,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         effectiveCategories = [];
         for (final cat in _selectedFilterCategories) {
           final subs = _tabCategories[cat] ?? [cat];
-          effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
+          effectiveCategories
+              .addAll(subs.where((c) => config.isActiveCategory(c)));
         }
       } else {
         // 100x Omni-Search: When no filter category chip is selected, search across ALL categories platform-wide!
@@ -1669,9 +1686,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               await _supabase.rpc('search_products_geospatial', params: {
             'p_lat': lat,
             'p_lng': lng,
-            'p_query': demoIntent.hasDemographicIntent && !demoIntent.isPureDemographic
-                ? demoIntent.strippedProductQuery
-                : query,
+            'p_query':
+                demoIntent.hasDemographicIntent && !demoIntent.isPureDemographic
+                    ? demoIntent.strippedProductQuery
+                    : query,
             'p_categories': effectiveCategories,
             'p_radius_km': maxRadius,
             'p_limit': 150,
@@ -1696,11 +1714,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // Proactively retrieve available lifestyle, beauty, and apparel products from nearby stores.
         if (demoIntent.hasDemographicIntent && shopsByName.isNotEmpty) {
           try {
-            final nearbyShopIds = shopsByName.map((s) => s['id'] as String).toList();
+            final nearbyShopIds =
+                shopsByName.map((s) => s['id'] as String).toList();
             final existingIds = rawProductsByName.map((p) => p['id']).toSet();
 
             for (int i = 0; i < nearbyShopIds.length; i += 25) {
-              final chunk = nearbyShopIds.sublist(i, math.min(i + 25, nearbyShopIds.length));
+              final chunk = nearbyShopIds.sublist(
+                  i, math.min(i + 25, nearbyShopIds.length));
               var q = _supabase
                   .from('products')
                   .select()
@@ -1713,10 +1733,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     '("Food","Restaurant","Fast Food","Bakery","Sweets & Mithai","Butcher","Fish & Seafood","Dairy & Eggs","Fruits & Vegs","Grocery","Grocerylm","Grocery (Low Margin)","Ice Cream","Paan Shop","Beverages")');
               } else if (demoIntent.strippedProductQuery.isNotEmpty) {
                 final sq = demoIntent.strippedProductQuery;
-                q = q.or('name.ilike.%$sq%,description.ilike.%$sq%,brand.ilike.%$sq%,category.ilike.%$sq%');
+                q = q.or(
+                    'name.ilike.%$sq%,description.ilike.%$sq%,brand.ilike.%$sq%,category.ilike.%$sq%');
               }
 
-              final extraProds = await q.order('rating', ascending: false).limit(150);
+              final extraProds =
+                  await q.order('rating', ascending: false).limit(150);
               for (final ep in extraProds) {
                 if (!existingIds.contains(ep['id'])) {
                   rawProductsByName.add(ep);
@@ -1752,7 +1774,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           return false;
         }).toList();
 
-        final matchingShopIds = matchingShops.map((s) => s['id'] as String).toSet();
+        final matchingShopIds =
+            matchingShops.map((s) => s['id'] as String).toSet();
         if (matchingShopIds.isNotEmpty) {
           try {
             final storeProdsRaw = await _supabase
@@ -1794,8 +1817,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 (nearbyShops as List).map((s) => s['id'] as String).toList();
 
             for (int i = 0; i < allShopIds.length; i += 25) {
-              final chunk = allShopIds.sublist(
-                  i, math.min(i + 25, allShopIds.length));
+              final chunk =
+                  allShopIds.sublist(i, math.min(i + 25, allShopIds.length));
               var q = _supabase
                   .from('products')
                   .select()
@@ -1835,8 +1858,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             final searchable =
                 '${p['name']} ${p['description'] ?? ''} ${p['brand'] ?? ''} ${p['category'] ?? ''} ${p['sub_category'] ?? ''} ${p['menu_category'] ?? ''} ${p['medicine_type'] ?? ''}'
                     .toLowerCase();
-            final cleanSearchable = searchable.replaceAll(RegExp(r'[,()"\x27\-]'), '');
-            final spacedSearchable = searchable.replaceAll(RegExp(r'[,()"\x27\-]'), ' ');
+            final cleanSearchable =
+                searchable.replaceAll(RegExp(r'[,()"\x27\-]'), '');
+            final spacedSearchable =
+                searchable.replaceAll(RegExp(r'[,()"\x27\-]'), ' ');
             final matchesAllTerms = terms.every((t) {
               if (DemographicUtils.isDemographicKeyword(t)) {
                 return DemographicUtils.rawProductMatchesTerm(
@@ -1847,10 +1872,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               }
               final cleanT = t.replaceAll(RegExp(r'[,()"\x27\-]'), '');
               // Direct or punctuation-agnostic match (e.g. loreal matches l'oreal)
-              if (searchable.contains(t) || cleanSearchable.contains(cleanT) || spacedSearchable.contains(t)) return true;
+              if (searchable.contains(t) ||
+                  cleanSearchable.contains(cleanT) ||
+                  spacedSearchable.contains(t)) return true;
               if (t.endsWith('s') && t.length > 3) {
                 final stem = t.substring(0, t.length - 1);
-                if (searchable.contains(stem) || cleanSearchable.contains(stem)) return true;
+                if (searchable.contains(stem) || cleanSearchable.contains(stem))
+                  return true;
               }
               return false;
             });
@@ -1901,8 +1929,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             if (catShopIds.isNotEmpty && terms.isNotEmpty) {
               // 100x Safe Chunked Query with SQL text filter (Never do unfiltered download of whole shops!)
               for (int i = 0; i < catShopIds.length; i += 25) {
-                final chunk = catShopIds.sublist(
-                    i, math.min(i + 25, catShopIds.length));
+                final chunk =
+                    catShopIds.sublist(i, math.min(i + 25, catShopIds.length));
                 var q = _supabase
                     .from('products')
                     .select()
@@ -1961,10 +1989,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           final idList = productShopIds.toList();
           for (int i = 0; i < idList.length; i += 30) {
             final chunk = idList.sublist(i, math.min(i + 30, idList.length));
-            final shopRows = await _supabase
-                .from('shops')
-                .select('*')
-                .inFilter('id', chunk);
+            final shopRows =
+                await _supabase.from('shops').select('*').inFilter('id', chunk);
             for (final s in shopRows as List) {
               final sm = s as Map<String, dynamic>;
               shopById[sm['id'] as String] = sm;
@@ -2055,7 +2081,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category))
+            continue;
           if (!locationProvider.hasLocation &&
               effectiveCategories != null &&
               !effectiveCategories.contains(shop.category)) {
@@ -2273,7 +2300,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   /// Queries exact total active products in database for nearby shops by department,
   /// perfectly mirroring the query pattern and shop matching of AllListingsPage and
   /// CategoryProductsPage so that dashboard badges match opened catalog views 100%.
-  Future<Map<String, int>> _fetchDepartmentTotalCounts(List<ShopModel> nearbyShops) async {
+  Future<Map<String, int>> _fetchDepartmentTotalCounts(
+      List<ShopModel> nearbyShops) async {
     final Map<String, int> counts = {};
     if (nearbyShops.isEmpty) return counts;
 
@@ -2282,7 +2310,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       'Pharmacy': _tabCategories['Pharmacy'] ?? ['Pharmacy', 'Medical Store'],
       'Cosmetics': _tabCategories['Cosmetics'] ?? ['Cosmetics & Beauty'],
       'Stationery': _tabCategories['Stationery'] ?? ['Stationery'],
-      'Grocery': _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? ['Grocery'],
+      'Grocery': _tabCategories['Supermarket'] ??
+          _tabCategories['Grocery'] ??
+          ['Grocery'],
       'Clothing': _tabCategories['Clothing'] ?? ['Clothing'],
     };
 
@@ -2291,20 +2321,32 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         departments.entries.map((entry) async {
           final deptKey = entry.key;
           final categories = entry.value;
-          final lowerCats = categories.map((c) => c.trim().toLowerCase()).toSet();
+          final lowerCats =
+              categories.map((c) => c.trim().toLowerCase()).toSet();
 
           // Exactly match the shop filtering logic of _openCategoryListing:
-          final matchingShopIds = nearbyShops.where((s) {
-            if (lowerCats.contains(s.category.trim().toLowerCase())) return true;
-            if (s.categories.any((c) => lowerCats.contains(c.trim().toLowerCase()))) return true;
-            if (lowerCats.any((t) => t.contains('cosmetic') || t.contains('beauty') || t.contains('grocery'))) {
-              final sCat = s.category.trim().toLowerCase();
-              if (sCat.contains('supermarket') || sCat.contains('hypermarket') || sCat.contains('departmental')) {
-                return true;
-              }
-            }
-            return false;
-          }).map((s) => s.id).toList();
+          final matchingShopIds = nearbyShops
+              .where((s) {
+                if (lowerCats.contains(s.category.trim().toLowerCase()))
+                  return true;
+                if (s.categories
+                    .any((c) => lowerCats.contains(c.trim().toLowerCase())))
+                  return true;
+                if (lowerCats.any((t) =>
+                    t.contains('cosmetic') ||
+                    t.contains('beauty') ||
+                    t.contains('grocery'))) {
+                  final sCat = s.category.trim().toLowerCase();
+                  if (sCat.contains('supermarket') ||
+                      sCat.contains('hypermarket') ||
+                      sCat.contains('departmental')) {
+                    return true;
+                  }
+                }
+                return false;
+              })
+              .map((s) => s.id)
+              .toList();
 
           if (matchingShopIds.isEmpty) {
             counts[deptKey] = 0;
@@ -2321,9 +2363,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                 .eq('is_deleted', false)
                 .eq('is_available', true);
 
-            if (countResp is List) {
-              counts[deptKey] = countResp.length;
-            }
+            counts[deptKey] = countResp.length;
           } catch (e) {
             debugPrint('Failed to count department $deptKey: $e');
           }
@@ -2340,6 +2380,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   Future<void> _loadAllData() async {
     final currentFetchId = ++_fetchId;
     _isFetching = true;
+
+    if (mounted) {
+      setState(() {
+        _comingSoonMessage = null;
+        _comingSoonSubMessage = null;
+      });
+    }
 
     // Only show the shimmer on the very first load. On subsequent loads
     // (e.g., GPS update or category deselect) keep old data visible.
@@ -2365,7 +2412,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           _cacheTimestamp != null &&
           now.difference(_cacheTimestamp!) < _cacheTtl &&
           (loc == null || isLocationSame) &&
-          _selectedFilterCategories.isEmpty; // don't use stale cache when filtering
+          _selectedFilterCategories
+              .isEmpty; // don't use stale cache when filtering
       if (isCacheWarm && _hasLoadedOnce) {
         if (mounted && _fetchId == currentFetchId) {
           _invalidateSortMemo();
@@ -2374,6 +2422,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             _products = _cachedProducts!;
             _productShops = _cachedProductShops!;
             _departmentProductCounts = _cachedDepartmentProductCounts ?? {};
+            _comingSoonMessage = null;
+            _comingSoonSubMessage = null;
             _isLoading = false;
           });
         }
@@ -2386,7 +2436,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (_selectedFilterCategories.isNotEmpty) {
         for (final cat in _selectedFilterCategories) {
           final subs = _tabCategories[cat] ?? [cat];
-          effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
+          effectiveCategories
+              .addAll(subs.where((c) => config.isActiveCategory(c)));
         }
       } else {
         effectiveCategories = config.activeCategoryNames;
@@ -2461,7 +2512,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           return true;
         }
         // 100x Multi-department omnibus store check: Supermarkets & Hypermarkets carry cosmetics departments
-        if (lowerTargets.any((t) => t.contains('cosmetic') || t.contains('beauty'))) {
+        if (lowerTargets
+            .any((t) => t.contains('cosmetic') || t.contains('beauty'))) {
           final sCat = s.category.trim().toLowerCase();
           if (sCat.contains('supermarket') ||
               sCat.contains('hypermarket') ||
@@ -2488,10 +2540,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           .where((s) => isShopInCategories(s, _tabCategories['Clothing'] ?? []))
           .take(10);
       final cosmeticsShops = nearby
-          .where((s) => isShopInCategories(s, _tabCategories['Cosmetics'] ?? []))
+          .where(
+              (s) => isShopInCategories(s, _tabCategories['Cosmetics'] ?? []))
           .take(8);
       final stationeryShops = nearby
-          .where((s) => isShopInCategories(s, _tabCategories['Stationery'] ?? []))
+          .where(
+              (s) => isShopInCategories(s, _tabCategories['Stationery'] ?? []))
           .take(8);
       final otherShops = nearby
           .where((s) =>
@@ -2549,7 +2603,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category))
+            continue;
 
           final matchesCategory = AppCategories.matchesBrowsingCategory(
             productCategory: product.category,
@@ -2577,14 +2632,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         // If a dedicated department (e.g. Cosmetics & Beauty) has nearby stores
         // but was starved out by another department's high-volume items in a multi-department store,
         // proactively fetch a dedicated department sample so the showcase carousel always renders!
-        final cosmeticCats = _tabCategories['Cosmetics & Beauty'] ?? ['Cosmetics & Beauty'];
-        final hasCosmeticsInFeed = prods.any((p) =>
-            AppCategories.matchesBrowsingCategory(
-              productCategory: p.category,
-              shopCategory: prodShops[p.id]?.category,
-              targetCategories: cosmeticCats,
-              shopCategories: prodShops[p.id]?.categories,
-            ));
+        final cosmeticCats =
+            _tabCategories['Cosmetics & Beauty'] ?? ['Cosmetics & Beauty'];
+        final hasCosmeticsInFeed =
+            prods.any((p) => AppCategories.matchesBrowsingCategory(
+                  productCategory: p.category,
+                  shopCategory: prodShops[p.id]?.category,
+                  targetCategories: cosmeticCats,
+                  shopCategories: prodShops[p.id]?.categories,
+                ));
 
         if (!hasCosmeticsInFeed && cosmeticsShops.isNotEmpty) {
           try {
@@ -2598,12 +2654,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             for (final p in (cosResp as List)) {
               if (p['shops'] == null) continue;
               final shop = ShopModel.fromMap(p['shops']);
-              if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+              if (!shop.isActive || !config.isActiveCategory(shop.category))
+                continue;
               final product = ProductModel.fromMap(p);
               if (!config.isActiveCategory(product.category)) continue;
 
               if (locationProvider.hasLocation) {
-                if (shop.location.latitude == 0 || shop.location.longitude == 0) continue;
+                if (shop.location.latitude == 0 || shop.location.longitude == 0)
+                  continue;
                 final d = locationProvider.distanceTo(shop.location);
                 if (!DeliveryCalculator.isWithinRange(d)) continue;
               }
@@ -2788,7 +2846,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (_selectedFilterCategories.isNotEmpty) {
         for (final cat in _selectedFilterCategories) {
           final subs = _tabCategories[cat] ?? [cat];
-          effectiveCategories.addAll(subs.where((c) => config.isActiveCategory(c)));
+          effectiveCategories
+              .addAll(subs.where((c) => config.isActiveCategory(c)));
         }
       } else {
         effectiveCategories = config.activeCategoryNames;
@@ -2902,7 +2961,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !config.isActiveCategory(shop.category)) continue;
+          if (!shop.isActive || !config.isActiveCategory(shop.category))
+            continue;
 
           final product = ProductModel.fromMap(p);
           if (!config.isActiveCategory(product.category)) continue;
@@ -3311,7 +3371,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       right: 48,
                                       child: IgnorePointer(
                                         child: AnimatedSearchTicker(
-                                          key: const ValueKey('animated_search_ticker'),
+                                          key: const ValueKey(
+                                              'animated_search_ticker'),
                                           textStyle: GoogleFonts.outfit(
                                             color: isDark
                                                 ? Colors.grey.shade400
@@ -3368,7 +3429,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             Builder(
               builder: (context) {
                 final config = context.watch<PlatformConfigProvider>();
-                if (!config.isMaintenanceMode) return const SliverToBoxAdapter(child: SizedBox.shrink());
+                if (!config.isMaintenanceMode)
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
                 return SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -3378,14 +3440,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: isDark
-                              ? [const Color(0xFF78350F), const Color(0xFF92400E)]
-                              : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+                              ? [
+                                  const Color(0xFF78350F),
+                                  const Color(0xFF92400E)
+                                ]
+                              : [
+                                  const Color(0xFFFEF3C7),
+                                  const Color(0xFFFDE68A)
+                                ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.5),
+                          color: const Color(0xFFF59E0B)
+                              .withValues(alpha: isDark ? 0.4 : 0.5),
                         ),
                       ),
                       child: Row(
@@ -3402,7 +3471,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   style: GoogleFonts.outfit(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                                    color: isDark
+                                        ? const Color(0xFFFDE68A)
+                                        : const Color(0xFF92400E),
                                   ),
                                 ),
                                 const SizedBox(height: 3),
@@ -3410,7 +3481,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   config.maintenanceMessage,
                                   style: GoogleFonts.outfit(
                                     fontSize: 12,
-                                    color: isDark ? const Color(0xFFFEF3C7) : const Color(0xFF78350F),
+                                    color: isDark
+                                        ? const Color(0xFFFEF3C7)
+                                        : const Color(0xFF78350F),
                                     height: 1.4,
                                   ),
                                 ),
@@ -3492,7 +3565,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           if (!_isSearching &&
                               !_searchError &&
                               _searchQuery.trim().isNotEmpty &&
-                              RegExp(r'\b(party|event|cater|catering|wedding|birthday|bulk|gathering|feast)\b', caseSensitive: false)
+                              RegExp(r'\b(party|event|cater|catering|wedding|birthday|bulk|gathering|feast)\b',
+                                      caseSensitive: false)
                                   .hasMatch(_searchQuery)) ...[
                             SliverToBoxAdapter(
                               child: Padding(
@@ -3777,14 +3851,16 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   );
                                 },
                               ),
-                              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 16)),
                             ],
 
                             // ── Under "See more": The Restaurant Itself! ──────────────
                             if (_sortedShopResults.isNotEmpty) ...[
                               SliverToBoxAdapter(
                                 child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 12, top: 4),
+                                  padding:
+                                      const EdgeInsets.only(bottom: 12, top: 4),
                                   child: Row(
                                     children: [
                                       Container(
@@ -3796,7 +3872,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                                   BorderRadius.circular(2))),
                                       const SizedBox(width: 8),
                                       Text(
-                                          AppCategories.groupFor(_sortedShopResults.first.category) ==
+                                          AppCategories.groupFor(
+                                                      _sortedShopResults
+                                                          .first.category) ==
                                                   CategoryGroup.food
                                               ? 'Restaurant'
                                               : 'Shop & Store',
@@ -3816,18 +3894,24 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   child: SizedBox(
                                     height: 280,
                                     child: RepaintBoundary(
-                                      key: ValueKey('search_top_shop_${_sortedShopResults.first.id}'),
-                                      child: AppCategories.groupFor(_sortedShopResults.first.category) ==
+                                      key: ValueKey(
+                                          'search_top_shop_${_sortedShopResults.first.id}'),
+                                      child: AppCategories.groupFor(
+                                                  _sortedShopResults
+                                                      .first.category) ==
                                               CategoryGroup.food
                                           ? RestaurantShopCard(
                                               shop: _sortedShopResults.first,
                                               onTap: () =>
                                                   showRestaurantDashboardSheet(
-                                                      context, _sortedShopResults.first.id))
+                                                      context,
+                                                      _sortedShopResults
+                                                          .first.id))
                                           : ShopCard(
                                               shop: _sortedShopResults.first,
                                               onTap: () => showShopDetailSheet(
-                                                  context, _sortedShopResults.first.id)),
+                                                  context,
+                                                  _sortedShopResults.first.id)),
                                     ),
                                   ),
                                 ),
@@ -3838,7 +3922,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             if (_sortedShopResults.length > 1) ...[
                               SliverToBoxAdapter(
                                 child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 12, top: 4),
+                                  padding:
+                                      const EdgeInsets.only(bottom: 12, top: 4),
                                   child: Row(
                                     children: [
                                       Container(
@@ -3865,7 +3950,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                                 .withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(10)),
-                                        child: Text('${_sortedShopResults.length - 1}',
+                                        child: Text(
+                                            '${_sortedShopResults.length - 1}',
                                             style: GoogleFonts.outfit(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
@@ -3899,8 +3985,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                                         context, shop.id))
                                             : ShopCard(
                                                 shop: shop,
-                                                onTap: () => showShopDetailSheet(
-                                                    context, shop.id)),
+                                                onTap: () =>
+                                                    showShopDetailSheet(
+                                                        context, shop.id)),
                                       ),
                                     ),
                                   );
@@ -3910,7 +3997,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   _searchShopsDisplayLimit)
                                 SliverToBoxAdapter(
                                   child: Padding(
-                                    padding: const EdgeInsets.only(top: 8, bottom: 8),
+                                    padding: const EdgeInsets.only(
+                                        top: 8, bottom: 8),
                                     child: Center(
                                       child: TextButton(
                                         onPressed: () => setState(() =>
@@ -3941,15 +4029,11 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ],
                           ],
 
-                          // Symmetrical Bottom Nav Clearance for Search Mode:
-                          // 68dp floating bottom nav bar + device safe area inset + 20dp optical breathing room
+                          // Precise Industrial-Standard Bottom Nav Clearance:
+                          // Ensures search results stop with a clean 12dp margin above the floating bottom navigation bar
                           SliverToBoxAdapter(
                             child: SizedBox(
-                              height: 68.0 +
-                                  math.max(
-                                      MediaQuery.paddingOf(context).bottom,
-                                      MediaQuery.viewPaddingOf(context).bottom) +
-                                  20.0,
+                              height: _getFloatingBottomNavClearance(context),
                             ),
                           ),
 
@@ -4076,7 +4160,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Fresh meals, snacks & cuisines delivered hot',
                                   emoji: '🍔',
-                                  count: _departmentProductCounts['Food'] ?? _sortedFoodProducts.length,
+                                  count: _departmentProductCounts['Food'] ??
+                                      _sortedFoodProducts.length,
                                   accentGradient: const [
                                     Color(0xFFFF6B6B),
                                     Color(0xFFEE5A24),
@@ -4084,8 +4169,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   onSeeAllTap: () => _openCategoryListing(
                                     title: 'Food & Restaurants',
                                     products: _sortedFoodProducts,
-                                    categories:
-                                        _tabCategories['Food'] ?? [],
+                                    categories: _tabCategories['Food'] ?? [],
                                   ),
                                   isDark: isDark,
                                 ),
@@ -4099,8 +4183,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   onViewAllTap: () => _openCategoryListing(
                                     title: 'Food & Restaurants',
                                     products: _sortedFoodProducts,
-                                    categories:
-                                        _tabCategories['Food'] ?? [],
+                                    categories: _tabCategories['Food'] ?? [],
                                   ),
                                   isDark: isDark,
                                 ),
@@ -4117,7 +4200,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Prescription drugs, vitamins & wellness',
                                   emoji: '💊',
-                                  count: _departmentProductCounts['Pharmacy'] ?? _sortedPharmacyProducts.length,
+                                  count: _departmentProductCounts['Pharmacy'] ??
+                                      _sortedPharmacyProducts.length,
                                   accentGradient: const [
                                     Color(0xFF0284C7),
                                     Color(0xFF06B6D4),
@@ -4158,7 +4242,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Skincare, makeup & fragrances near you',
                                   emoji: '💄',
-                                  count: _departmentProductCounts['Cosmetics'] ?? _sortedCosmeticsProducts.length,
+                                  count:
+                                      _departmentProductCounts['Cosmetics'] ??
+                                          _sortedCosmeticsProducts.length,
                                   accentGradient: const [
                                     Color(0xFFE91E8C),
                                     Color(0xFFFF6FB5),
@@ -4199,7 +4285,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Books, pens, art & school essentials',
                                   emoji: '📚',
-                                  count: _departmentProductCounts['Stationery'] ?? _sortedStationeryProducts.length,
+                                  count:
+                                      _departmentProductCounts['Stationery'] ??
+                                          _sortedStationeryProducts.length,
                                   accentGradient: const [
                                     Color(0xFF5B86E5),
                                     Color(0xFF36D1DC),
@@ -4240,7 +4328,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Daily staples, fresh veggies & household needs',
                                   emoji: '🏬',
-                                  count: _departmentProductCounts['Grocery'] ?? _sortedSupermarketProducts.length,
+                                  count: _departmentProductCounts['Grocery'] ??
+                                      _sortedSupermarketProducts.length,
                                   accentGradient: const [
                                     Color(0xFF00B074),
                                     Color(0xFF10B981),
@@ -4248,8 +4337,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   onSeeAllTap: () => _openCategoryListing(
                                     title: 'Supermarket & Grocery',
                                     products: _sortedSupermarketProducts,
-                                    categories:
-                                        _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? [],
+                                    categories: _tabCategories['Supermarket'] ??
+                                        _tabCategories['Grocery'] ??
+                                        [],
                                   ),
                                   isDark: isDark,
                                 ),
@@ -4263,8 +4353,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   onViewAllTap: () => _openCategoryListing(
                                     title: 'Supermarket & Grocery',
                                     products: _sortedSupermarketProducts,
-                                    categories:
-                                        _tabCategories['Supermarket'] ?? _tabCategories['Grocery'] ?? [],
+                                    categories: _tabCategories['Supermarket'] ??
+                                        _tabCategories['Grocery'] ??
+                                        [],
                                   ),
                                   isDark: isDark,
                                 ),
@@ -4314,7 +4405,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                               (crossAxisCount - 1))) /
                                       crossAxisCount;
                                   final itemHeight = itemWidth + 134;
-                                  final childAspectRatio = itemWidth / itemHeight;
+                                  final childAspectRatio =
+                                      itemWidth / itemHeight;
                                   final targetGridCount = crossAxisCount == 2
                                       ? 6
                                       : (crossAxisCount * 2);
@@ -4387,7 +4479,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Trending styles, apparel & accessories',
                                   emoji: '👕',
-                                  count: _departmentProductCounts['Clothing'] ?? _sortedClothingProducts.length,
+                                  count: _departmentProductCounts['Clothing'] ??
+                                      _sortedClothingProducts.length,
                                   accentGradient: const [
                                     Color(0xFF8B5CF6),
                                     Color(0xFFEC4899),
@@ -4500,254 +4593,180 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           _sortedNormalShops),
                                       'categoryFilter':
                                           storeMeta.categoryFilter,
-                                      'sectionTitle':
-                                          storeMeta.sectionTitle,
+                                      'sectionTitle': storeMeta.sectionTitle,
                                     },
                                   ),
                                   isDark: isDark,
                                 ),
                               ),
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 8)),
                             ],
-                          ] else if (!_isLoading &&
-                              _selectedTabIndex < 0 &&
-                              _selectedFilterCategories.isEmpty) ...[
-                            SliverToBoxAdapter(
-                              child: locationProvider.hasLocation
-                                  ? _buildNoShopsNearby()
-                                  : _buildLocationRequired(),
-                            ),
-                          ],
-
-                          if (_products.isEmpty && _shops.isNotEmpty && !_isLoading) ...[
-                            // ── "Popular in your area" empty state ──────────────
-                            // Shows when shops exist but no products returned yet.
-                            // This prevents the section from silently disappearing.
-                            const SliverToBoxAdapter(
-                                child: SizedBox(height: 8)),
-                            SliverToBoxAdapter(
-                              child: _buildSectionTitle(productMeta.sectionTitle),
-                            ),
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 28, horizontal: 20),
-                                child: Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        width: 64,
-                                        height: 64,
-                                        decoration: BoxDecoration(
-                                          color: isDark
-                                              ? AppColors.primary
-                                                  .withValues(alpha: 0.12)
-                                              : AppColors.primary
-                                                  .withValues(alpha: 0.07),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
+                          ] else if (!_isLoading) ...[
+                            if (_comingSoonMessage != null) ...[
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 60),
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          width: 80,
+                                          height: 80,
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? AppColors.primary
+                                                    .withValues(alpha: 0.15)
+                                                : AppColors.primary
+                                                    .withValues(alpha: 0.08),
+                                            borderRadius:
+                                                BorderRadius.circular(24),
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.rocket_launch_rounded,
+                                              size: 36,
+                                              color: isDark
+                                                  ? AppColors.primaryLight
+                                                  : AppColors.primary,
+                                            ),
+                                          ),
                                         ),
-                                        child: Icon(
-                                          Icons.storefront_outlined,
-                                          size: 30,
-                                          color: isDark
-                                              ? AppColors.primaryLight
-                                              : AppColors.primary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'No popular items right now',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark
-                                              ? Colors.white70
-                                              : AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Check back soon — shops near you will list their popular items here.',
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 13,
-                                          color: isDark
-                                              ? Colors.white38
-                                              : AppColors.textSecondary,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 16),
+                                        Text(_comingSoonMessage!,
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.outfit(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w800,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : AppColors.textPrimary)),
+                                        if (_comingSoonSubMessage != null) ...[
+                                          const SizedBox(height: 8),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 32),
+                                            child: Text(
+                                              _comingSoonSubMessage!,
+                                              textAlign: TextAlign.center,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 14,
+                                                color: isDark
+                                                    ? Colors.white54
+                                                    : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ),
+                                        ]
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ] else if (_comingSoonMessage != null &&
-                              !_isLoading) ...[
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 60),
-                                child: Center(
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        width: 80,
-                                        height: 80,
-                                        decoration: BoxDecoration(
-                                          color: isDark
-                                              ? AppColors.primary
-                                                  .withValues(alpha: 0.15)
-                                              : AppColors.primary
-                                                  .withValues(alpha: 0.08),
-                                          borderRadius:
-                                              BorderRadius.circular(24),
-                                        ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.rocket_launch_rounded,
-                                            size: 36,
+                            ] else if (_selectedTabIndex >= 0 ||
+                                _selectedFilterCategories.isNotEmpty) ...[
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 60),
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          width: 80,
+                                          height: 80,
+                                          decoration: BoxDecoration(
                                             color: isDark
-                                                ? AppColors.primaryLight
-                                                : AppColors.primary,
+                                                ? AppColors.primary
+                                                    .withValues(alpha: 0.15)
+                                                : AppColors.primary
+                                                    .withValues(alpha: 0.08),
+                                            borderRadius:
+                                                BorderRadius.circular(24),
+                                          ),
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.rocket_launch_rounded,
+                                              size: 36,
+                                              color: isDark
+                                                  ? AppColors.primaryLight
+                                                  : AppColors.primary,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(_comingSoonMessage!,
-                                          textAlign: TextAlign.center,
-                                          style: GoogleFonts.outfit(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w800,
-                                              color: isDark
-                                                  ? Colors.white
-                                                  : AppColors.textPrimary)),
-                                      if (_comingSoonSubMessage != null) ...[
+                                        const SizedBox(height: 16),
+                                        Text(
+                                            _comingSoonMessage ??
+                                                'Delivery Coming Soon!',
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.outfit(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w800,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : AppColors.textPrimary)),
                                         const SizedBox(height: 8),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 32),
                                           child: Text(
-                                            _comingSoonSubMessage!,
-                                            textAlign: TextAlign.center,
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 14,
-                                              color: isDark
-                                                  ? Colors.white54
-                                                  : AppColors.textSecondary,
-                                            ),
+                                              _comingSoonSubMessage ??
+                                                  'We\'re partnering with top local stores to bring this category to your location soon!',
+                                              textAlign: TextAlign.center,
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 14,
+                                                  color: isDark
+                                                      ? Colors.white54
+                                                      : AppColors.textSecondary,
+                                                  height: 1.4)),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        ElevatedButton.icon(
+                                          onPressed: () {
+                                            setState(() {
+                                              _selectedTabIndex = -1;
+                                              _selectedFilterCategories.clear();
+                                              _selectedFeedDemographic = 'All';
+                                              _comingSoonMessage = null;
+                                              _comingSoonSubMessage = null;
+                                            });
+                                            _loadAllData();
+                                          },
+                                          icon: const Icon(
+                                              Icons.storefront_rounded,
+                                              size: 18),
+                                          label: Text('Explore All Stores',
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w700)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.primary,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 20, vertical: 12),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16)),
                                           ),
                                         ),
-                                      ]
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ] else if (_shops.isEmpty &&
-                              (_selectedTabIndex >= 0 ||
-                                  _selectedFilterCategories.isNotEmpty) &&
-                              !_isLoading) ...[
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 60),
-                                child: Center(
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        width: 80,
-                                        height: 80,
-                                        decoration: BoxDecoration(
-                                          color: isDark
-                                              ? AppColors.primary
-                                                  .withValues(alpha: 0.15)
-                                              : AppColors.primary
-                                                  .withValues(alpha: 0.08),
-                                          borderRadius:
-                                              BorderRadius.circular(24),
-                                        ),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.rocket_launch_rounded,
-                                            size: 36,
-                                            color: isDark
-                                              ? AppColors.primaryLight
-                                              : AppColors.primary,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                          _comingSoonMessage ??
-                                              'Delivery Coming Soon!',
-                                          textAlign: TextAlign.center,
-                                          style: GoogleFonts.outfit(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w800,
-                                              color: isDark
-                                                  ? Colors.white
-                                                  : AppColors.textPrimary)),
-                                      const SizedBox(height: 8),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 32),
-                                        child: Text(
-                                            _comingSoonSubMessage ??
-                                                'We\'re partnering with top local stores to bring this category to your location soon!',
-                                            textAlign: TextAlign.center,
-                                            style: GoogleFonts.outfit(
-                                                fontSize: 14,
-                                                color: isDark
-                                                    ? Colors.white54
-                                                    : AppColors.textSecondary,
-                                                height: 1.4)),
-                                      ),
-                                      const SizedBox(height: 20),
-                                      ElevatedButton.icon(
-                                        onPressed: () {
-                                          setState(() {
-                                            _selectedTabIndex = -1;
-                                            _selectedFilterCategories.clear();
-                                            _selectedFeedDemographic = 'All';
-                                            _comingSoonMessage = null;
-                                            _comingSoonSubMessage = null;
-                                          });
-                                          _loadAllData();
-                                        },
-                                        icon: const Icon(Icons.storefront_rounded, size: 18),
-                                        label: Text('Explore All Stores',
-                                            style: GoogleFonts.outfit(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700)),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20, vertical: 12),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16)),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                            ] else if (_selectedTabIndex < 0 &&
+                                _selectedFilterCategories.isEmpty) ...[
+                              SliverToBoxAdapter(
+                                child: locationProvider.hasLocation
+                                    ? _buildNoShopsNearby()
+                                    : _buildLocationRequired(),
                               ),
-                            ),
+                            ],
                           ],
+                          // Precise Industrial-Standard Bottom Nav Clearance:
+                          // Ensures content stops exactly with a 12dp optical margin above the floating bottom navigation bar
                           SliverToBoxAdapter(
                             child: SizedBox(
-                              // Symmetrical Bottom Nav Clearance Fortress:
-                              // 68dp floating bottom nav bar + device safe area inset + 20dp optical breathing room
-                              height: 68.0 +
-                                  math.max(
-                                      MediaQuery.paddingOf(context).bottom,
-                                      MediaQuery.viewPaddingOf(context).bottom) +
-                                  20.0,
+                              height: _getFloatingBottomNavClearance(context),
                             ),
                           ),
                         ],
@@ -4802,8 +4821,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_hasFoodItemsInSearch)
-          _buildDietaryFilterRow(isDark),
+        if (_hasFoodItemsInSearch) _buildDietaryFilterRow(isDark),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -5188,18 +5206,21 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1E3FD8).withValues(alpha: isDark ? 0.28 : 0.12),
+                color: const Color(0xFF1E3FD8)
+                    .withValues(alpha: isDark ? 0.28 : 0.12),
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
               BoxShadow(
-                color: const Color(0xFFFF6B35).withValues(alpha: isDark ? 0.18 : 0.08),
+                color: const Color(0xFFFF6B35)
+                    .withValues(alpha: isDark ? 0.18 : 0.08),
                 blurRadius: 10,
                 offset: const Offset(2, 6),
               ),
             ],
           ),
-          padding: const EdgeInsets.all(1.5), // Crisp 1.5px multi-colour gradient border
+          padding: const EdgeInsets.all(
+              1.5), // Crisp 1.5px multi-colour gradient border
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18.5),
@@ -5214,9 +5235,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       ]
                     : [
                         const Color(0xFFFFFFFF), // Crisp white card surface
-                        const Color(0xFFF5F6FF), // Enything AppColors.background (slight cobalt tint)
-                        const Color(0xFFEEF0FF), // Enything surfaceElevatedLight
-                        const Color(0xFFFFF9F2), // Subtle warm celebratory champagne glow
+                        const Color(
+                            0xFFF5F6FF), // Enything AppColors.background (slight cobalt tint)
+                        const Color(
+                            0xFFEEF0FF), // Enything surfaceElevatedLight
+                        const Color(
+                            0xFFFFF9F2), // Subtle warm celebratory champagne glow
                       ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -5236,7 +5260,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       // Left: Category Pill Badge - Enything Cobalt to Electric Violet
                       Flexible(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.5, vertical: 3.5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8.5, vertical: 3.5),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF1E3FD8), Color(0xFF6366F1)],
@@ -5244,7 +5269,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF1E3FD8).withValues(alpha: 0.30),
+                                color: const Color(0xFF1E3FD8)
+                                    .withValues(alpha: 0.30),
                                 blurRadius: 5,
                                 offset: const Offset(0, 2),
                               ),
@@ -5276,7 +5302,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
                       // Right: High-Energy Savings Pill - Enything Coral to Gold
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.5, vertical: 3.5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.5, vertical: 3.5),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [Color(0xFFFF6B35), Color(0xFFFFB800)],
@@ -5284,7 +5311,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFFF6B35).withValues(alpha: 0.25),
+                              color: const Color(0xFFFF6B35)
+                                  .withValues(alpha: 0.25),
                               blurRadius: 5,
                               offset: const Offset(0, 2),
                             ),
@@ -5336,7 +5364,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF1E3FD8).withValues(alpha: 0.35),
+                              color: const Color(0xFF1E3FD8)
+                                  .withValues(alpha: 0.35),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -5369,7 +5398,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     ? const [
                                         Color(0xFF93C5FD), // Soft Electric Blue
                                         Color(0xFFC4B5FD), // Festive Lavender
-                                        Color(0xFFFFCF40), // Enything Accent Gold
+                                        Color(
+                                            0xFFFFCF40), // Enything Accent Gold
                                       ]
                                     : const [
                                         Color(0xFF0F1E80), // Deep Brand Cobalt
@@ -5400,7 +5430,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w500,
-                                color: isDark ? Colors.white70 : const Color(0xFF475569),
+                                color: isDark
+                                    ? Colors.white70
+                                    : const Color(0xFF475569),
                                 height: 1.2,
                               ),
                             ),
@@ -5411,7 +5443,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 Icon(
                                   Icons.verified_rounded,
                                   size: 11.0,
-                                  color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A),
+                                  color: isDark
+                                      ? const Color(0xFF4ADE80)
+                                      : const Color(0xFF16A34A),
                                 ),
                                 const SizedBox(width: 3.0),
                                 Flexible(
@@ -5422,7 +5456,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                     style: TextStyle(
                                       fontSize: 9.5,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                                      color: isDark
+                                          ? Colors.white60
+                                          : const Color(0xFF64748B),
                                     ),
                                   ),
                                 ),
@@ -5435,7 +5471,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
                       // Sleek Brand Gradient Action Button (Cobalt to Coral)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9.5, vertical: 6.5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9.5, vertical: 6.5),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [
@@ -5447,7 +5484,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF1E3FD8).withValues(alpha: 0.30),
+                              color: const Color(0xFF1E3FD8)
+                                  .withValues(alpha: 0.30),
                               blurRadius: 7,
                               offset: const Offset(0, 2.5),
                             ),
@@ -5493,10 +5531,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     if (activeOrder != null) {
       final orderId = activeOrder['id']?.toString() ?? '';
       final status = activeOrder['status']?.toString() ?? 'bulk_pending';
-      final totalAmount = (activeOrder['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final totalAmount =
+          (activeOrder['total_amount'] as num?)?.toDouble() ?? 0.0;
       final deliveryOtp = activeOrder['delivery_otp']?.toString() ?? '';
       final eventName = activeOrder['event_name']?.toString() ??
-          quoteProv.customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull?.eventName ??
+          quoteProv.customerQuotes
+              .where((q) => q.resultingOrderId == orderId)
+              .firstOrNull
+              ?.eventName ??
           'Event Catering';
 
       final eventNameLower = eventName.toLowerCase();
@@ -5537,7 +5579,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           subtitle = isSupplies
               ? '$eventName · All items packed, awaiting dispatch.'
               : '$eventName · All dishes freshly packed in containers, awaiting dispatch.';
-          statusTag = isSupplies ? 'ALL SUPPLIES PACKED' : 'ALL FOOD PACKED & READY';
+          statusTag =
+              isSupplies ? 'ALL SUPPLIES PACKED' : 'ALL FOOD PACKED & READY';
           buttonText = 'View Packing Status →';
           break;
         case 'bulk_dispatched':
@@ -5546,7 +5589,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           title = isSupplies
               ? 'Event Supplies Out for Delivery${deliveryOtp.isNotEmpty ? ' · OTP: $deliveryOtp' : ''}'
               : 'Feast Out for Delivery${deliveryOtp.isNotEmpty ? ' · OTP: $deliveryOtp' : ''}';
-          subtitle = '$eventName · In-house delivery team is en route to your venue! Share OTP $deliveryOtp upon arrival.';
+          subtitle =
+              '$eventName · In-house delivery team is en route to your venue! Share OTP $deliveryOtp upon arrival.';
           statusTag = 'OUT FOR DELIVERY';
           buttonText = 'Track Fleet Live →';
           break;
@@ -5634,7 +5678,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
-                                  color: isDark ? Colors.white : AppColors.textPrimary,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -5644,7 +5690,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.outfit(
                                   fontSize: 12.5,
-                                  color: isDark ? Colors.white70 : Colors.black87,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black87,
                                   height: 1.3,
                                 ),
                               ),
@@ -5660,7 +5707,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
                                 color: primaryColor.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(12),
@@ -5689,14 +5737,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                 ],
                               ),
                             ),
-                            if (status == 'bulk_dispatched' && deliveryOtp.isNotEmpty) ...[
+                            if (status == 'bulk_dispatched' &&
+                                deliveryOtp.isNotEmpty) ...[
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: primaryColor.withValues(alpha: 0.25),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: primaryColor, width: 1),
+                                  border:
+                                      Border.all(color: primaryColor, width: 1),
                                 ),
                                 child: Text(
                                   'OTP: $deliveryOtp',
@@ -5734,9 +5785,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final deliveredCelebration = quoteProv.deliveredCateringOrderToCelebrate;
     if (deliveredCelebration != null) {
       final orderId = deliveredCelebration['id']?.toString() ?? '';
-      final deliveryOtp = deliveredCelebration['delivery_otp']?.toString() ?? '';
+      final deliveryOtp =
+          deliveredCelebration['delivery_otp']?.toString() ?? '';
       final eventName = deliveredCelebration['event_name']?.toString() ??
-          quoteProv.customerQuotes.where((q) => q.resultingOrderId == orderId).firstOrNull?.eventName ??
+          quoteProv.customerQuotes
+              .where((q) => q.resultingOrderId == orderId)
+              .firstOrNull
+              ?.eventName ??
           'Event Catering';
 
       const primaryColor = Color(0xFF10B981); // Emerald Green Celebration
@@ -5806,7 +5861,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             color: primaryColor.withValues(alpha: 0.25),
                             shape: BoxShape.circle,
                           ),
-                          child: const Text('🎉', style: TextStyle(fontSize: 24)),
+                          child:
+                              const Text('🎉', style: TextStyle(fontSize: 24)),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -5815,28 +5871,43 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             children: [
                               Text(
                                 (eventName.toLowerCase().contains('rental') ||
-                                        eventName.toLowerCase().contains('equipment') ||
-                                        eventName.toLowerCase().contains('decor') ||
-                                        eventName.toLowerCase().contains('supplies'))
+                                        eventName
+                                            .toLowerCase()
+                                            .contains('equipment') ||
+                                        eventName
+                                            .toLowerCase()
+                                            .contains('decor') ||
+                                        eventName
+                                            .toLowerCase()
+                                            .contains('supplies'))
                                     ? 'Event Supplies Delivered & Verified! 🎉'
                                     : 'Feast Delivered & Handover Verified! 🎉',
                                 style: GoogleFonts.outfit(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
-                                  color: isDark ? Colors.white : AppColors.textPrimary,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
                                 ),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 (eventName.toLowerCase().contains('rental') ||
-                                        eventName.toLowerCase().contains('equipment') ||
-                                        eventName.toLowerCase().contains('decor') ||
-                                        eventName.toLowerCase().contains('supplies'))
+                                        eventName
+                                            .toLowerCase()
+                                            .contains('equipment') ||
+                                        eventName
+                                            .toLowerCase()
+                                            .contains('decor') ||
+                                        eventName
+                                            .toLowerCase()
+                                            .contains('supplies'))
                                     ? '$eventName · Delivered with OTP${deliveryOtp.isNotEmpty ? ' ($deliveryOtp)' : ''}. Have a wonderful celebration!'
                                     : '$eventName · Delivered with OTP${deliveryOtp.isNotEmpty ? ' ($deliveryOtp)' : ''}. Have a wonderful celebration! Enjoy your feast.',
                                 style: GoogleFonts.outfit(
                                   fontSize: 12.5,
-                                  color: isDark ? Colors.white70 : Colors.black87,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black87,
                                   height: 1.3,
                                 ),
                               ),
@@ -5845,7 +5916,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         ),
                         // 1-Tap Dismiss "X" Button
                         InkWell(
-                          onTap: () => quoteProv.dismissDeliveredCateringCelebration(orderId),
+                          onTap: () => quoteProv
+                              .dismissDeliveredCateringCelebration(orderId),
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
                             padding: const EdgeInsets.all(6),
@@ -5867,7 +5939,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: primaryColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
@@ -5876,7 +5949,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.check_circle_rounded, size: 14, color: primaryColor),
+                              const Icon(Icons.check_circle_rounded,
+                                  size: 14, color: primaryColor),
                               const SizedBox(width: 6),
                               Text(
                                 'DELIVERED · OTP VERIFIED ✅',
@@ -5895,13 +5969,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             backgroundColor: primaryColor,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 6),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
                             visualDensity: VisualDensity.compact,
                           ),
-                          onPressed: () => quoteProv.dismissDeliveredCateringCelebration(orderId),
+                          onPressed: () => quoteProv
+                              .dismissDeliveredCateringCelebration(orderId),
                           child: Text(
                             'Got it! 🎉',
                             style: GoogleFonts.outfit(
@@ -5958,9 +6034,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ? '${quote.eventName} (₹${quote.quotedAmount?.toStringAsFixed(0)}) · Manager will call to complete offline payment.'
             : '${quote.eventName} (${quote.estimatedGuestCount} guests) · Reviewing requirements, custom quote arriving shortly.';
 
-    final String buttonText = isQuoted
-        ? 'Review & Accept →'
-        : 'View Details →';
+    final String buttonText = isQuoted ? 'Review & Accept →' : 'View Details →';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -6035,7 +6109,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               style: GoogleFonts.outfit(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                color: isDark ? Colors.white : AppColors.textPrimary,
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -6059,7 +6135,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: primaryColor.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(12),
@@ -6067,7 +6144,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         child: Text(
                           isQuoted
                               ? 'ACTION REQUIRED'
-                              : quote.quoteStatus.replaceAll('_', ' ').toUpperCase(),
+                              : quote.quoteStatus
+                                  .replaceAll('_', ' ')
+                                  .toUpperCase(),
                           style: GoogleFonts.outfit(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w800,
@@ -6428,7 +6507,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               Text(s['sub'] as String,
                                   style: GoogleFonts.outfit(
                                       fontSize: 10,
-                                      color: Colors.white.withValues(alpha: 0.72),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.72),
                                       height: 1.3)),
                             ],
                           ),
@@ -6523,16 +6603,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     : null,
                 color: isSelected
                     ? null
-                    : (isDark
-                        ? const Color(0xFF1E1E2E)
-                        : Colors.grey.shade100),
+                    : (isDark ? const Color(0xFF1E1E2E) : Colors.grey.shade100),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isSelected
                       ? Colors.transparent
-                      : (isDark
-                          ? Colors.white10
-                          : Colors.grey.shade300),
+                      : (isDark ? Colors.white10 : Colors.grey.shade300),
                   width: 1,
                 ),
                 boxShadow: isSelected
@@ -6554,7 +6630,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     d['label']!,
                     style: GoogleFonts.outfit(
                       fontSize: 12.5,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                      fontWeight:
+                          isSelected ? FontWeight.w800 : FontWeight.w600,
                       color: isSelected
                           ? Colors.white
                           : (isDark
@@ -6585,7 +6662,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             ? 'Women & Girls'
             : (_selectedFeedDemographic == 'Kids'
                 ? 'Kids'
-                : (_selectedFeedDemographic == 'Unisex' ? 'Unisex' : 'Fashion')));
+                : (_selectedFeedDemographic == 'Unisex'
+                    ? 'Unisex'
+                    : 'Fashion')));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       child: Center(
@@ -6634,7 +6713,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -6776,7 +6856,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             onTap: isLoading ? null : onSeeAllTap,
             behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9.5, vertical: 4.5),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 9.5, vertical: 4.5),
               decoration: BoxDecoration(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.07)
@@ -6919,6 +7000,32 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     );
   }
 
+  /// Industrial Standard Floating Bottom Nav Clearance
+  /// Calculates the exact clearance required for the floating bottom navigation bar
+  /// so that scrolled content never overlaps the bar, and never creates an excessive blank void.
+  double _getFloatingBottomNavClearance(BuildContext context) {
+    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final padding = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = math.max(viewPadding, padding);
+
+    final double bottomMargin;
+    if (bottomInset <= 0) {
+      bottomMargin = 10.0;
+    } else if (bottomInset >= 36.0) {
+      bottomMargin = bottomInset + 4.0;
+    } else if (Theme.of(context).platform == TargetPlatform.iOS) {
+      bottomMargin = bottomInset;
+    } else {
+      bottomMargin = bottomInset + 4.0;
+    }
+
+    // Floating bar is 68.0 dp tall.
+    // Target optical cushion between bottom of visible "See all stores ->" card and top of bar is ~32.0 dp (~65px raster cushion).
+    // _buildModernSeeAllButton has 8.0 dp internal bottom padding.
+    // Required spacer height = 68.0 + bottomMargin + (32.0 - 8.0) = 68.0 + bottomMargin + 24.0 (bottomMargin + 92.0 dp).
+    return 68.0 + bottomMargin + 24.0;
+  }
+
   void _openCategoryListing({
     required String title,
     required List<ProductModel> products,
@@ -6928,12 +7035,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     final lowerCats = categories.map((c) => c.trim().toLowerCase()).toSet();
     final matchingShops = _shops.where((s) {
       if (lowerCats.contains(s.category.trim().toLowerCase())) return true;
-      if (s.categories
-          .any((c) => lowerCats.contains(c.trim().toLowerCase()))) {
+      if (s.categories.any((c) => lowerCats.contains(c.trim().toLowerCase()))) {
         return true;
       }
       // 100x Multi-department omnibus store check: Supermarkets & Hypermarkets carry cosmetics & grocery
-      if (lowerCats.any((t) => t.contains('cosmetic') || t.contains('beauty') || t.contains('grocery'))) {
+      if (lowerCats.any((t) =>
+          t.contains('cosmetic') ||
+          t.contains('beauty') ||
+          t.contains('grocery'))) {
         final sCat = s.category.trim().toLowerCase();
         if (sCat.contains('supermarket') ||
             sCat.contains('hypermarket') ||
@@ -7046,8 +7155,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: accentGradient.first
-                                  .withValues(alpha: 0.25),
+                              color:
+                                  accentGradient.first.withValues(alpha: 0.25),
                             ),
                           ),
                           child: Text(
@@ -7066,9 +7175,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                       subtitle,
                       style: GoogleFonts.outfit(
                         fontSize: 11.5,
-                        color: isDark
-                            ? Colors.white54
-                            : AppColors.textSecondary,
+                        color:
+                            isDark ? Colors.white54 : AppColors.textSecondary,
                         fontWeight: FontWeight.w500,
                         height: 1.15,
                       ),
@@ -7086,8 +7194,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           onTap: onSeeAllTap,
           behavior: HitTestBehavior.opaque,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 9.5, vertical: 4.5),
+            padding: const EdgeInsets.symmetric(horizontal: 9.5, vertical: 4.5),
             decoration: BoxDecoration(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.08)
@@ -7189,8 +7296,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(
-                                alpha: isDark ? 0.25 : 0.04),
+                            color: Colors.black
+                                .withValues(alpha: isDark ? 0.25 : 0.04),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -7214,8 +7321,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary
-                                      .withValues(alpha: 0.35),
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.35),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),
@@ -7233,9 +7340,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             style: GoogleFonts.outfit(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
-                              color: isDark
-                                  ? Colors.white
-                                  : AppColors.textPrimary,
+                              color:
+                                  isDark ? Colors.white : AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -7357,8 +7463,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               ),
               const SizedBox(height: 28),
               ElevatedButton.icon(
-                onPressed: () =>
-                    context.read<LocationProvider>().requestLocation(isUserAction: true),
+                onPressed: () => context
+                    .read<LocationProvider>()
+                    .requestLocation(isUserAction: true),
                 icon: const Icon(Icons.my_location),
                 label: const Text('Enable Location'),
               ),
@@ -8137,8 +8244,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                     ),
                   ),
                   child: ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(isSelected ? 19.5 : 21),
+                    borderRadius: BorderRadius.circular(isSelected ? 19.5 : 21),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -8238,7 +8344,8 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                       height: 1.12,
                                       shadows: [
                                         Shadow(
-                                          color: Colors.black.withValues(alpha: 0.6),
+                                          color: Colors.black
+                                              .withValues(alpha: 0.6),
                                           blurRadius: 4,
                                           offset: const Offset(0, 1),
                                         ),

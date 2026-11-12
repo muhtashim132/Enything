@@ -181,16 +181,21 @@ class ProductModel {
             raw == 'pcs') {
           return 'pieces';
         }
-        if (raw == 'g' || raw == 'gm' || raw == 'gms' || raw == 'gram')
+        if (raw == 'g' || raw == 'gm' || raw == 'gms' || raw == 'gram') {
           return 'grams';
-        if (raw == 'l' || raw == 'ltr' || raw == 'litre' || raw == 'litres')
+        }
+        if (raw == 'l' || raw == 'ltr' || raw == 'litre' || raw == 'litres') {
           return 'liter';
-        if (raw == 'ml' || raw == 'milliliter' || raw == 'milliliters')
+        }
+        if (raw == 'ml' || raw == 'milliliter' || raw == 'milliliters') {
           return 'ml';
+        }
         if (raw == 'kg' ||
             raw == 'kgs' ||
             raw == 'kilogram' ||
-            raw == 'kilograms') return 'kg';
+            raw == 'kilograms') {
+          return 'kg';
+        }
         return raw;
       }(),
       description: map['description'],

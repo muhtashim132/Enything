@@ -12,6 +12,7 @@ import '../../widgets/product_card.dart';
 import '../../widgets/common/enything_map.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/customer/floating_cart_bar.dart';
+import '../../utils/app_toast.dart';
 
 class RestaurantPage extends StatefulWidget {
   final String shopId;
@@ -99,9 +100,17 @@ class _RestaurantPageState extends State<RestaurantPage> {
                   actions: [
                     GestureDetector(
                       onTap: () {
-                        if (auth.currentUserId != null) {
+                        if (auth.currentUserId != null && _shop != null) {
                           favs.toggleShopFavorite(
-                              auth.currentUserId!, _shop!.id);
+                              auth.currentUserId!, _shop!.id,
+                              shop: _shop);
+                        } else if (auth.currentUserId == null) {
+                          AppToast.showInfo(
+                            context,
+                            title: 'Sign In Required 🔐',
+                            message:
+                                'Please sign in to save shops to your favorites.',
+                          );
                         }
                       },
                       child: Container(

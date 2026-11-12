@@ -19,7 +19,14 @@ import '../../models/quote_request_model.dart';
 import '../settings/faq_support_page.dart';
 
 class OrderHistoryPage extends StatefulWidget {
-  const OrderHistoryPage({super.key});
+  final bool isEmbedded;
+  final VoidCallback? onExplore;
+
+  const OrderHistoryPage({
+    super.key,
+    this.isEmbedded = false,
+    this.onExplore,
+  });
 
   @override
   State<OrderHistoryPage> createState() => _OrderHistoryPageState();
@@ -555,24 +562,26 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
             backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
             elevation: 0,
             surfaceTintColor: Colors.transparent,
-            leading: Navigator.canPop(context)
-                ? GestureDetector(
-                    onTap: _handleBack,
-                    child: Container(
-                      margin: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.07)
-                            : const Color(0xFFF0F0F8),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.arrow_back_ios_new_rounded,
-                          size: 16,
-                          color:
-                              isDark ? Colors.white70 : AppColors.textPrimary),
-                    ),
-                  )
-                : null,
+            leading: widget.isEmbedded
+                ? null
+                : (Navigator.canPop(context)
+                    ? GestureDetector(
+                        onTap: _handleBack,
+                        child: Container(
+                          margin: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.07)
+                                : const Color(0xFFF0F0F8),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.arrow_back_ios_new_rounded,
+                              size: 16,
+                              color:
+                                  isDark ? Colors.white70 : AppColors.textPrimary),
+                        ),
+                      )
+                    : null),
             title: Text(
               'My Orders',
               style: GoogleFonts.outfit(
@@ -1252,8 +1261,15 @@ class _OrderHistoryPageState extends State<OrderHistoryPage>
           ),
           const SizedBox(height: 28),
           GestureDetector(
-            onTap: () =>
-                Navigator.pushReplacementNamed(context, AppRoutes.customerHome),
+            onTap: () {
+              if (widget.onExplore != null) {
+                widget.onExplore!();
+              } else if (!widget.isEmbedded && Navigator.canPop(context)) {
+                Navigator.pop(context);
+              } else {
+                Navigator.pushReplacementNamed(context, AppRoutes.customerHome);
+              }
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               decoration: BoxDecoration(

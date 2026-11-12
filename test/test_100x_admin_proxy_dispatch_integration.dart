@@ -111,7 +111,7 @@ void main() {
         await Process.run('supabase', [
           'db',
           'query',
-          "UPDATE public.platform_config SET value = 'true'::jsonb WHERE key = 'maintenance_mode';",
+          "UPDATE public.platform_config SET value = 'false'::jsonb WHERE key = 'maintenance_mode';",
           '--linked'
         ]);
       } catch (_) {}

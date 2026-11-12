@@ -16,8 +16,23 @@ import '../../config/tax_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/app_toast.dart';
 
-class CartPage extends StatelessWidget {
+class CartPage extends StatefulWidget {
   const CartPage({super.key});
+
+  @override
+  State<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends State<CartPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<CartProvider>().syncLiveShopStatuses();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +40,36 @@ class CartPage extends StatelessWidget {
     final config = context.watch<PlatformConfigProvider>();
     final location = context.watch<LocationProvider>();
     final isDark = context.watch<ThemeProvider>().isDarkMode;
+
+    double distanceKm = 3.0;
+    if (location.currentLocation != null && cart.shops.isNotEmpty) {
+      distanceKm = location.distanceTo(cart.shops.first.location);
+    }
+    final baseCharge = cart.calculateDeliveryCharges(distanceKm);
+    final surcharge = cart.multiShopSurcharge;
+    final heavyFee = cart.heavyOrderFee;
+    final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
+    final totalDelivery = cart.totalDeliveryCharges(distanceKm);
+    final riderBase = effectiveBase + surcharge + heavyFee;
+    final riderPayoutRatio = (config.riderCommissionPercent) / 100.0;
+    final riderEarnings = riderBase * riderPayoutRatio;
+
+    final gstBreakdown = OrderTaxBreakdown.calculate(
+      items: cart.taxBreakdownItems,
+      deliveryCharge: totalDelivery,
+      riderEarnings: riderEarnings,
+      platformFee: cart.platformFee,
+      paymentMethod: 'upi',
+    );
+    final total = gstBreakdown.grandTotal;
+    final isOverweight =
+        cart.effectiveAggregateWeight > PaymentConfig.maxWeightKg;
+    final hasClosedShops = cart.hasClosedShops;
+    final canCheckout = cart.meetsMinimumOrder &&
+        baseCharge >= 0 &&
+        !config.isMaintenanceMode &&
+        !isOverweight &&
+        !hasClosedShops;
 
     return Scaffold(
       backgroundColor:
@@ -85,27 +130,58 @@ class CartPage extends StatelessWidget {
       body: MaxWidthContainer(
         child: cart.isEmpty
             ? _buildEmptyCart(context, isDark)
-            : Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      itemCount: cart.items.length,
-                      itemBuilder: (context, index) {
-                        final item = cart.items[index];
-                        return _buildCartItem(context, item, cart, isDark);
-                      },
+            : RefreshIndicator(
+                onRefresh: () => cart.syncLiveShopStatuses(),
+                color: AppColors.primary,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  children: [
+                    if (cart.hasClosedShops) ...[
+                      _buildClosedShopsAlertCard(context, cart, isDark),
+                      const SizedBox(height: 12),
+                    ],
+                    ...cart.items.map(
+                        (item) => _buildCartItem(context, item, cart, isDark)),
+                    const SizedBox(height: 4),
+                    _buildWeightCapacityGauge(context, cart, isDark),
+                    const SizedBox(height: 12),
+                    _buildBillDetailsCard(
+                      context,
+                      cart: cart,
+                      baseCharge: baseCharge,
+                      effectiveBase: effectiveBase,
+                      surcharge: surcharge,
+                      heavyFee: heavyFee,
+                      gstBreakdown: gstBreakdown,
+                      total: total,
+                      isDark: isDark,
                     ),
-                  ),
-                  _buildSummary(context, cart, config, location, isDark),
-                ],
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
       ),
+      bottomNavigationBar: cart.isEmpty
+          ? null
+          : _buildStickyCheckoutBar(
+              context,
+              cart: cart,
+              config: config,
+              total: total,
+              canCheckout: canCheckout,
+              isOverweight: isOverweight,
+              baseCharge: baseCharge,
+              isMaintenanceMode: config.isMaintenanceMode,
+              isDark: isDark,
+            ),
     );
   }
 
   Widget _buildCartItem(
       BuildContext context, item, CartProvider cart, bool isDark) {
+    final isShopClosed = !item.shop.isOpenRightNow;
+
     return GestureDetector(
       onTap: () => Navigator.pushNamed(
         context,
@@ -119,91 +195,155 @@ class CartPage extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkSurface : Colors.white,
           borderRadius: PremiumRadius.mediumBorder,
-          border: isDark
-              ? Border.all(color: Colors.white.withValues(alpha: 0.07))
-              : null,
+          border: isShopClosed
+              ? Border.all(
+                  color: isDark
+                      ? const Color(0xFFF59E0B).withValues(alpha: 0.6)
+                      : const Color(0xFFF59E0B).withValues(alpha: 0.5),
+                  width: 1.2,
+                )
+              : isDark
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.07))
+                  : null,
           boxShadow: PremiumShadows.cardLight,
         ),
-        child: Row(
-          children: [
-            // Product image
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: AppColors.primary.withValues(alpha: 0.06),
+        child: Opacity(
+          opacity: isShopClosed ? 0.78 : 1.0,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Product image
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: (item.selectedVariant?.imageUrl?.isNotEmpty == true ||
+                        item.product.displayImage.isNotEmpty)
+                    ? CachedNetworkImage(
+                        imageUrl:
+                            item.selectedVariant?.imageUrl?.isNotEmpty == true
+                                ? item.selectedVariant!.imageUrl!
+                                : item.product.displayImage,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        memCacheWidth: 150,
+                        memCacheHeight: 150,
+                        errorWidget: (c, e, s) => const _CartImageFallback(),
+                      )
+                    : const _CartImageFallback(),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: (item.selectedVariant?.imageUrl?.isNotEmpty == true ||
-                      item.product.displayImage.isNotEmpty)
-                  ? CachedNetworkImage(
-                      imageUrl:
-                          item.selectedVariant?.imageUrl?.isNotEmpty == true
-                              ? item.selectedVariant!.imageUrl!
-                              : item.product.displayImage,
-                      fit: BoxFit.cover,
-                      width: 60,
-                      height: 60,
-                      memCacheWidth: 150,
-                      memCacheHeight: 150,
-                      errorWidget: (c, e, s) => const _CartImageFallback(),
-                    )
-                  : const _CartImageFallback(),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-            // Product info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.product.name,
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
+              // Product info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.product.name,
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (item.selectedVariant != null) ...[
+                    if (item.selectedVariant != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Variant: ${item.selectedVariant!.name}',
+                        style: GoogleFonts.outfit(
+                          color: AppColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 2),
                     Text(
-                      'Variant: ${item.selectedVariant!.name}',
+                      item.shop.name,
                       style: GoogleFonts.outfit(
-                        color: AppColors.primary,
+                        color: isDark ? Colors.white38 : AppColors.textSecondary,
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    if (isShopClosed) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF451A03)
+                              : const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isDark
+                                ? const Color(0xFFB45309)
+                                : const Color(0xFFF59E0B),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.nightlight_round,
+                              size: 11,
+                              color: isDark
+                                  ? const Color(0xFFFDE68A)
+                                  : const Color(0xFFB45309),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                item.shop.openTime != null &&
+                                        item.shop.openTime!.isNotEmpty
+                                    ? 'Closed · Opens at ${item.shop.openTime}'
+                                    : 'Store Currently Closed',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark
+                                      ? const Color(0xFFFDE68A)
+                                      : const Color(0xFFB45309),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          '₹${item.totalPrice.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                            fontSize: 16,
+                          ),
+                        ),
+                        _buildQtyControl(context, cart, item, isDark),
+                      ],
+                    ),
                   ],
-                  const SizedBox(height: 2),
-                  Text(
-                    item.shop.name,
-                    style: GoogleFonts.outfit(
-                      color: isDark ? Colors.white38 : AppColors.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '₹${item.totalPrice.toStringAsFixed(0)}',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-
-            // Qty controls
-            _buildQtyControl(context, cart, item, isDark),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -222,7 +362,7 @@ class CartPage extends StatelessWidget {
               ? Colors.white.withValues(alpha: 0.1)
               : AppColors.primary.withValues(alpha: 0.2),
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -237,12 +377,12 @@ class CartPage extends StatelessWidget {
                 ScaleTransition(scale: anim, child: child),
             child: Padding(
               key: ValueKey(item.quantity),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text(
                 '${item.quantity}',
                 style: GoogleFonts.outfit(
                   fontWeight: FontWeight.w800,
-                  fontSize: 16,
+                  fontSize: 14.5,
                   color: isDark ? Colors.white : AppColors.textPrimary,
                 ),
               ),
@@ -278,12 +418,12 @@ class CartPage extends StatelessWidget {
       {bool enabled = true}) {
     return InkWell(
       onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(6),
         child: Icon(
           icon,
-          size: 18,
+          size: 16,
           color: !enabled
               ? (isDark ? Colors.white24 : Colors.grey.shade400)
               : (isDark ? AppColors.primaryLight : AppColors.primary),
@@ -369,292 +509,542 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSummary(BuildContext context, CartProvider cart,
-      PlatformConfigProvider config, LocationProvider location, bool isDark) {
-    double distanceKm = 3.0;
-    if (location.currentLocation != null && cart.shops.isNotEmpty) {
-      distanceKm = location.distanceTo(cart.shops.first.location);
-    }
-    final baseCharge = cart.calculateDeliveryCharges(distanceKm);
-    final surcharge = cart.multiShopSurcharge;
-    final heavyFee = cart.heavyOrderFee;
-    final effectiveBase = baseCharge >= 0 ? baseCharge : 0.0;
-    final totalDelivery = cart.totalDeliveryCharges(distanceKm);
-    final riderBase = effectiveBase + surcharge + heavyFee;
-    // ADDITIVE FIX: Use DB-driven rider payout ratio instead of hardcoded 0.80.
-    // To revert: replace with `riderBase * TaxConfig.riderPayoutRatio`
-    final riderPayoutRatio =
-        (config.riderCommissionPercent) / 100.0;
-    final riderEarnings = riderBase * riderPayoutRatio;
-
-    final gstBreakdown = OrderTaxBreakdown.calculate(
-      items: cart.taxBreakdownItems,
-      deliveryCharge: totalDelivery,
-      riderEarnings: riderEarnings,
-      platformFee: cart.platformFee,
-      paymentMethod: 'upi',
-    );
-    final total = gstBreakdown.grandTotal;
-    final isOverweight = cart.effectiveAggregateWeight > PaymentConfig.maxWeightKg;
-    final canCheckout = cart.meetsMinimumOrder &&
-        baseCharge >= 0 &&
-        !config.isMaintenanceMode &&
-        !isOverweight;
-
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-        decoration: BoxDecoration(
+  Widget _buildBillDetailsCard(
+    BuildContext context, {
+    required CartProvider cart,
+    required double baseCharge,
+    required double effectiveBase,
+    required double surcharge,
+    required double heavyFee,
+    required OrderTaxBreakdown gstBreakdown,
+    required double total,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: PremiumRadius.mediumBorder,
+        border: Border.all(
           color: isDark
-              ? const Color(0xFF1A1A2E).withValues(alpha: 0.97)
-              : Colors.white.withValues(alpha: 0.97),
-          border: Border(
-            top: BorderSide(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.07)
-                  : Colors.grey.shade100,
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.grey.shade200,
+        ),
+        boxShadow: PremiumShadows.cardLight,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bill Details',
+            style: GoogleFonts.outfit(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.textPrimary,
             ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.4)
-                  : Colors.black.withValues(alpha: 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, -6),
+          const SizedBox(height: 14),
+
+          // Price breakdown
+          _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}',
+              isDark: isDark),
+          const SizedBox(height: 8),
+          _summaryRow(
+            'Delivery Charges',
+            baseCharge < 0
+                ? 'Out of range'
+                : '₹${effectiveBase.toStringAsFixed(0)}',
+            valueColor: baseCharge < 0 ? AppColors.textSecondary : null,
+            isDark: isDark,
+          ),
+
+          if (cart.smallCartFee > 0) ...[
+            const SizedBox(height: 8),
+            _summaryRow(
+              'Small Cart Fee',
+              '+₹${cart.smallCartFee.toStringAsFixed(0)}',
+              hint:
+                  'For orders under ₹${(PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold).toInt()}',
+              valueColor: Colors.orange.shade700,
+              isDark: isDark,
             ),
           ],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          if (heavyFee > 0) ...[
+            const SizedBox(height: 8),
+            _summaryRow(
+              'Heavy Order Fee',
+              '+₹${heavyFee.toStringAsFixed(0)}',
+              hint:
+                  'For orders over ${(PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold).toInt()} kg',
+              valueColor: Colors.orange.shade700,
+              isDark: isDark,
+            ),
+          ],
+          if (surcharge > 0) ...[
+            const SizedBox(height: 8),
+            _summaryRow(
+              'Multi-shop fee (${cart.shops.length} shops)',
+              '+₹${surcharge.toStringAsFixed(0)}',
+              valueColor: Colors.orange.shade700,
+              hint:
+                  '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20).toInt()}/km between shops',
+              isDark: isDark,
+            ),
+          ],
+          const SizedBox(height: 8),
+          _summaryRow(
+            'Handling Fee',
+            '+₹${cart.platformFee.toStringAsFixed(2)}',
+            hint: 'Covers payment gateway & app operations (incl. GST)',
+            isDark: isDark,
+          ),
+          if ((gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst) > 0) ...[
+            const SizedBox(height: 8),
+            _summaryRow(
+              'Taxes & GST',
+              '+₹${(gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst).toStringAsFixed(2)}',
+              hint: 'Govt. taxes on items & delivery services',
+              isDark: isDark,
+            ),
+          ],
+
+          Divider(
+            height: 24,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.grey.shade200,
+          ),
+
+          _summaryRow(
+            'Total',
+            '₹${total.toStringAsFixed(0)}',
+            isBold: true,
+            valueColor: AppColors.primary,
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaintenanceBanner(PlatformConfigProvider config, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF78350F), const Color(0xFF92400E)]
+              : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // ── 100x Delivery Weight & Vehicle Capacity Gauge ───────────
-            _buildWeightCapacityGauge(context, cart, isDark),
-            const SizedBox(height: 14),
-
-            // Price breakdown
-            _summaryRow('Subtotal', '₹${cart.subtotal.toStringAsFixed(0)}',
-                isDark: isDark),
-            const SizedBox(height: 6),
-            _summaryRow(
-              'Delivery Charges',
-              baseCharge < 0
-                  ? 'Out of range'
-                  : '₹${effectiveBase.toStringAsFixed(0)}',
-              valueColor: baseCharge < 0 ? AppColors.textSecondary : null,
-              isDark: isDark,
-            ),
-
-            if (cart.smallCartFee > 0) ...[
-              const SizedBox(height: 6),
-              _summaryRow(
-                'Small Cart Fee',
-                '+₹${cart.smallCartFee.toStringAsFixed(0)}',
-                hint:
-                    'For orders under ₹${(PlatformConfigProvider.instance?.smallCartThreshold ?? PaymentConfig.smallCartThreshold).toInt()}',
-                valueColor: Colors.orange.shade700,
-                isDark: isDark,
-              ),
-            ],
-            if (heavyFee > 0) ...[
-              const SizedBox(height: 6),
-              _summaryRow(
-                'Heavy Order Fee',
-                '+₹${heavyFee.toStringAsFixed(0)}',
-                hint:
-                    'For orders over ${(PlatformConfigProvider.instance?.heavyOrderThresholdKg ?? PaymentConfig.heavyOrderThreshold).toInt()} kg',
-                valueColor: Colors.orange.shade700,
-                isDark: isDark,
-              ),
-            ],
-            if (surcharge > 0) ...[
-              const SizedBox(height: 6),
-              _summaryRow(
-                'Multi-shop fee (${cart.shops.length} shops)',
-                '+₹${surcharge.toStringAsFixed(0)}',
-                valueColor: Colors.orange.shade700,
-                hint:
-                    '₹${(PlatformConfigProvider.instance?.deliveryRatePerKm ?? 20).toInt()}/km between shops',
-                isDark: isDark,
-              ),
-            ],
-            const SizedBox(height: 6),
-            _summaryRow(
-              'Handling Fee',
-              '+₹${cart.platformFee.toStringAsFixed(2)}',
-              hint: 'Covers payment gateway & app operations (incl. GST)',
-              isDark: isDark,
-            ),
-            if ((gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst) > 0) ...[
-              const SizedBox(height: 6),
-              _summaryRow(
-                'Taxes & GST',
-                '+₹${(gstBreakdown.itemGstTotal + gstBreakdown.deliveryGst).toStringAsFixed(2)}',
-                hint: 'Govt. taxes on items & delivery services',
-                valueColor: const Color(0xFF1565C0), // Consistent with checkout
-                isDark: isDark,
-              ),
-            ],
-
-            Divider(
-              height: 20,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.grey.shade200,
-            ),
-
-            _summaryRow(
-              'Total',
-              '₹${total.toStringAsFixed(0)}',
-              isBold: true,
-              valueColor: AppColors.primary,
-              isDark: isDark,
-            ),
-            const SizedBox(height: 16),
-
-            // ── Maintenance Mode Banner (Additive) ───────────────────
-            if (config.isMaintenanceMode) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF78350F), const Color(0xFF92400E)]
-                        : [const Color(0xFFFEF3C7), const Color(0xFFFDE68A)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.5),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('⚠️', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ordering Temporarily Paused',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? const Color(0xFFFDE68A)
+                        : const Color(0xFF92400E),
                   ),
                 ),
-                child: Row(
+                const SizedBox(height: 2),
+                Text(
+                  config.maintenanceMessage,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11.5,
+                    color: isDark
+                        ? const Color(0xFFFEF3C7)
+                        : const Color(0xFF78350F),
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClosedShopsAlertCard(
+      BuildContext context, CartProvider cart, bool isDark) {
+    final areAllClosed = cart.areAllShopsClosed;
+    final closedShops = cart.closedShops;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF271B0B) : const Color(0xFFFFFBEB),
+        borderRadius: PremiumRadius.mediumBorder,
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.6),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.nightlight_round,
+                    color: Color(0xFFF59E0B),
+                    size: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('⚠️', style: TextStyle(fontSize: 18)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Ordering Temporarily Paused',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            config.maintenanceMessage,
-                            style: GoogleFonts.outfit(
-                              fontSize: 11.5,
-                              color: isDark ? const Color(0xFFFEF3C7) : const Color(0xFF78350F),
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
+                    Text(
+                      areAllClosed
+                          ? 'Stores Closed for the Night'
+                          : 'Store(s) Closed in Multi-Shop Cart',
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? const Color(0xFFFDE68A)
+                            : const Color(0xFF92400E),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      areAllClosed
+                          ? 'All stores in your cart are currently closed. Your items will remain safely saved in your cart.'
+                          : 'Some stores in your cart are closed. Remove items from closed stores to proceed with open stores.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: isDark
+                            ? const Color(0xFFFEF3C7)
+                            : const Color(0xFF78350F),
+                        height: 1.3,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
             ],
-
-            // Checkout button
-            GestureDetector(
-              onTap: canCheckout
-                  ? () {
-                      final auth = context.read<AuthProvider>();
-                      final uniqueShops =
-                          cart.items.map((i) => i.shop.id).toSet();
-                      if (uniqueShops.length > 3) {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: const Color(0xFF1E1E2C),
-                            title: const Text('Maximum Shops Exceeded',
-                                style: TextStyle(color: Colors.white)),
-                            content: const SingleChildScrollView(
-                              child: Text(
-                                  'To ensure fast and reliable delivery, you can order from a maximum of 3 shops at a time. Please remove items from other shops to proceed.',
-                                  style: TextStyle(color: Colors.white70)),
+          ),
+          if (!areAllClosed) ...[
+            const SizedBox(height: 12),
+            const Divider(color: Color(0x33F59E0B), height: 1),
+            const SizedBox(height: 10),
+            ...closedShops.map((shop) {
+              final count =
+                  cart.items.where((i) => i.shop.id == shop.id).length;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            shop.name,
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  isDark ? Colors.white : AppColors.textPrimary,
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('OK',
-                                    style: TextStyle(color: Color(0xFFF4C542))),
-                              )
-                            ],
                           ),
-                        );
-                        return;
-                      }
-
-                      if (auth.currentUserId == null) {
-                        Navigator.pushNamed(context, AppRoutes.login);
+                          Text(
+                            '$count item${count == 1 ? '' : 's'} · ${shop.openTime != null && shop.openTime!.isNotEmpty ? 'Opens at ${shop.openTime}' : 'Currently closed'}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.white60
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        cart.removeItemsFromShop(shop.id);
                         AppToast.showInfo(
                           context,
-                          title: 'Sign In Required 🔐',
+                          title: 'Items Removed 🗑️',
                           message:
-                              'Please sign in or create an account to proceed with your order.',
+                              'Removed $count item${count == 1 ? '' : 's'} from ${shop.name}.',
                         );
-                      } else {
-                        Navigator.pushNamed(context, AppRoutes.checkout);
-                      }
-                    }
-                  : null,
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.danger.withValues(alpha: 0.3),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 14,
+                              color: AppColors.danger,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Remove',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.danger,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickyCheckoutBar(
+    BuildContext context, {
+    required CartProvider cart,
+    required PlatformConfigProvider config,
+    required double total,
+    required bool canCheckout,
+    required bool isOverweight,
+    required double baseCharge,
+    required bool isMaintenanceMode,
+    required bool isDark,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141422) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.grey.shade200,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: GestureDetector(
+            onTap: () {
+              if (isMaintenanceMode) {
+                HapticFeedback.heavyImpact();
+                AppToast.showWarning(
+                  context,
+                  title: 'Platform Maintenance 🛠️',
+                  message: config.maintenanceMessage.isNotEmpty
+                      ? config.maintenanceMessage
+                      : 'Ordering is temporarily paused for system maintenance. Your items remain saved in your cart.',
+                );
+                return;
+              }
+
+              if (cart.areAllShopsClosed) {
+                HapticFeedback.heavyImpact();
+                AppToast.showWarning(
+                  context,
+                  title: 'Stores Closed 🌙',
+                  message:
+                      'All stores in your cart are closed for the night. Your items remain saved.',
+                );
+                return;
+              }
+
+              if (cart.hasClosedShops) {
+                HapticFeedback.heavyImpact();
+                final closedNames =
+                    cart.closedShops.map((s) => s.name).join(', ');
+                AppToast.showWarning(
+                  context,
+                  title: 'Store Closed ⚠️',
+                  message:
+                      '$closedNames is closed. Remove its items above to proceed with open stores.',
+                );
+                return;
+              }
+
+              if (isOverweight) {
+                HapticFeedback.heavyImpact();
+                AppToast.showWarning(
+                  context,
+                  title: 'Weight Limit Exceeded ⚖️',
+                  message:
+                      'Your cart exceeds ${PaymentConfig.maxWeightKg.toInt()} kg. Please reduce item quantities.',
+                );
+                return;
+              }
+
+              if (baseCharge < 0) {
+                HapticFeedback.heavyImpact();
+                AppToast.showWarning(
+                  context,
+                  title: 'Out of Range 📍',
+                  message:
+                      'One or more shops in your cart are outside the delivery area.',
+                );
+                return;
+              }
+
+              if (!cart.meetsMinimumOrder) {
+                HapticFeedback.heavyImpact();
+                AppToast.showWarning(
+                  context,
+                  title: 'Minimum Order Not Met 🛍️',
+                  message:
+                      'Please add items worth at least ₹${PaymentConfig.minimumOrderValue.toInt()} to checkout.',
+                );
+                return;
+              }
+
+              final auth = context.read<AuthProvider>();
+              final uniqueShops = cart.items.map((i) => i.shop.id).toSet();
+              if (uniqueShops.length > 3) {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF1E1E2C),
+                    title: const Text('Maximum Shops Exceeded',
+                        style: TextStyle(color: Colors.white)),
+                    content: const SingleChildScrollView(
+                      child: Text(
+                          'To ensure fast and reliable delivery, you can order from a maximum of 3 shops at a time. Please remove items from other shops to proceed.',
+                          style: TextStyle(color: Colors.white70)),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK',
+                            style: TextStyle(color: Color(0xFFF4C542))),
+                      )
+                    ],
+                  ),
+                );
+                return;
+              }
+
+              if (auth.currentUserId == null) {
+                Navigator.pushNamed(context, AppRoutes.login);
+                AppToast.showInfo(
+                  context,
+                  title: 'Sign In Required 🔐',
+                  message:
+                      'Please sign in or create an account to proceed with your order.',
+                );
+              } else {
+                Navigator.pushNamed(context, AppRoutes.checkout);
+              }
+            },
+            child: SizedBox(
+              height: 52,
+              width: double.infinity,
               child: AnimatedContainer(
                 duration: PremiumAnimations.normal,
+                height: 52,
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
                   gradient: canCheckout ? AppColors.ctaGradient : null,
-                  color: canCheckout ? null : Colors.grey.shade300,
+                  color: canCheckout
+                      ? null
+                      : (isDark ? Colors.white12 : Colors.grey.shade300),
                   borderRadius: PremiumRadius.mediumBorder,
                   boxShadow:
                       canCheckout ? PremiumShadows.floatingButtonLight : [],
                 ),
                 child: Center(
                   child: Text(
-                    config.isMaintenanceMode
-                        ? 'Shopping Temporarily Paused'
-                        : isOverweight
-                            ? 'Weight Limit Exceeded (${cart.effectiveAggregateWeight.toStringAsFixed(1)} kg / ${PaymentConfig.maxWeightKg.toInt()} kg)'
-                            : baseCharge < 0
-                                ? 'Out of range'
-                                : cart.meetsMinimumOrder
-                                    ? 'Proceed to Checkout • ₹${total.toStringAsFixed(0)}'
-                                    : 'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
+                    isMaintenanceMode
+                        ? 'Platform Maintenance • Ordering Paused'
+                        : cart.areAllShopsClosed
+                            ? 'Stores Currently Closed'
+                            : cart.hasClosedShops
+                                ? 'Remove Closed Store Items to Proceed'
+                                : isOverweight
+                                    ? 'Weight Limit Exceeded (${cart.effectiveAggregateWeight.toStringAsFixed(1)} kg / ${PaymentConfig.maxWeightKg.toInt()} kg)'
+                                    : baseCharge < 0
+                                        ? 'Out of delivery range'
+                                        : cart.meetsMinimumOrder
+                                            ? 'Proceed to Checkout • ₹${total.toStringAsFixed(0)}'
+                                            : 'Minimum order ₹${PaymentConfig.minimumOrderValue.toInt()}',
                     style: GoogleFonts.outfit(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: canCheckout ? Colors.white : Colors.grey.shade600,
+                      color: canCheckout
+                          ? Colors.white
+                          : (isDark ? Colors.white38 : Colors.grey.shade600),
                       height: 1.2,
                     ),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -736,7 +1126,7 @@ class CartPage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: gaugeColor.withValues(alpha: isDark ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: PremiumRadius.mediumBorder,
         border: Border.all(
           color: gaugeColor.withValues(alpha: isDark ? 0.3 : 0.25),
         ),
