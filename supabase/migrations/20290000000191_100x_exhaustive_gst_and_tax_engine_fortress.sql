@@ -1000,6 +1000,7 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.place_orders_transaction(jsonb, jsonb, uuid, uuid, text, uuid) TO authenticated, service_role;
 
 -- ── 4. Seller Decline RPC Fortification (decline_order_items_seller) ──────────
+DROP FUNCTION IF EXISTS public.decline_order_items_seller(UUID, UUID[], TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.decline_order_items_seller(
   p_order_id UUID,
   p_declined_item_ids UUID[],
@@ -1469,6 +1470,7 @@ END;
 $$;
 
 -- ── 6. Delivery Rebalance Typo Fix (rebalance_active_delivery_fees) ───────────
+DROP FUNCTION IF EXISTS public.rebalance_active_delivery_fees(uuid);
 CREATE OR REPLACE FUNCTION public.rebalance_active_delivery_fees(p_cart_group_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
