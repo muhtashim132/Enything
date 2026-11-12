@@ -89,7 +89,14 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
 
   /// 100x VEHICLE WEIGHT CAPACITY ENGINE:
   /// Maximum vehicle payload capacity for two-wheeler delivery fleets.
-  double get _maxVehiclePayloadKg => 20.0;
+  double get _maxVehiclePayloadKg {
+    try {
+      final config = context.read<PlatformConfigProvider>();
+      return config.maxRiderPayloadKg > 0.0 ? config.maxRiderPayloadKg : 20.0;
+    } catch (_) {
+      return 20.0;
+    }
+  }
 
   /// Current cumulative active weight of all undelivered orders held by this rider.
   double get _riderCommittedWeightKg {

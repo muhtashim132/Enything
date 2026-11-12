@@ -94,11 +94,12 @@ BEGIN
   END IF;
 
   -- 4. Weight Capacity Ceiling Check (max 20.0 kg payload on two-wheeler)
-  -- Lookup platform configuration or default to 20.0 kg
-  SELECT COALESCE((value->>'max_rider_payload_kg')::numeric, 20.0)
-  INTO v_max_vehicle_payload
-  FROM public.platform_config
-  WHERE key = 'delivery_settings';
+  -- Lookup platform configuration (scalar 'max_rider_payload_kg' or nested 'delivery_settings') or default to 20.0 kg
+  SELECT COALESCE(
+    (SELECT (value#>>'{}')::numeric FROM public.platform_config WHERE key = 'max_rider_payload_kg'),
+    (SELECT (value->>'max_rider_payload_kg')::numeric FROM public.platform_config WHERE key = 'delivery_settings'),
+    20.0
+  ) INTO v_max_vehicle_payload;
   IF v_max_vehicle_payload IS NULL OR v_max_vehicle_payload <= 0 THEN
     v_max_vehicle_payload := 20.0;
   END IF;

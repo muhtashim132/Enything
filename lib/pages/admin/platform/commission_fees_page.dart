@@ -251,6 +251,14 @@ class _CommissionFeesPageState extends State<CommissionFeesPage> {
                         '₹',
                         config,
                         rbac),
+                    _buildItem(
+                        'max_rider_payload_kg',
+                        'Max Rider Vehicle Payload',
+                        'Maximum weight a two-wheeler rider can carry',
+                        config.maxRiderPayloadKg,
+                        'kg',
+                        config,
+                        rbac),
                   ],
                 ),
                 _buildSection(

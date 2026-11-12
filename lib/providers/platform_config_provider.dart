@@ -34,6 +34,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   double _riderCommissionPercent = 80.0;
   double _riderNotificationRadiusKm = 15.0;
   double _heavyOrderThresholdKg = 10.0;
+  double _maxRiderPayloadKg = 20.0;
   double _maxDeliveryRadiusKm = 15.0;
   double _deliveryRatePerKm = 20.0;
   double _referralBonusAmount = 25.0;
@@ -227,6 +228,7 @@ class PlatformConfigProvider extends ChangeNotifier {
   double get riderCommissionPercent => _riderCommissionPercent;
   double get riderNotificationRadiusKm => _riderNotificationRadiusKm;
   double get heavyOrderThresholdKg => _heavyOrderThresholdKg;
+  double get maxRiderPayloadKg => _maxRiderPayloadKg;
   double get maxDeliveryRadiusKm => _maxDeliveryRadiusKm;
   double get deliveryRatePerKm => _deliveryRatePerKm;
   double get referralBonusAmount => _referralBonusAmount;
@@ -344,6 +346,9 @@ class PlatformConfigProvider extends ChangeNotifier {
               break;
             case 'heavy_order_threshold_kg':
               _heavyOrderThresholdKg = val;
+              break;
+            case 'max_rider_payload_kg':
+              _maxRiderPayloadKg = val;
               break;
             case 'max_delivery_radius_km':
               _maxDeliveryRadiusKm = val;
@@ -1021,6 +1026,8 @@ class PlatformConfigProvider extends ChangeNotifier {
         return _riderNotificationRadiusKm;
       case 'heavy_order_threshold_kg':
         return _heavyOrderThresholdKg;
+      case 'max_rider_payload_kg':
+        return _maxRiderPayloadKg;
       case 'max_delivery_radius_km':
         return _maxDeliveryRadiusKm;
       case 'delivery_rate_per_km':
@@ -1126,6 +1133,9 @@ class PlatformConfigProvider extends ChangeNotifier {
       case 'heavy_order_threshold_kg':
         _heavyOrderThresholdKg = val;
         break;
+      case 'max_rider_payload_kg':
+        _maxRiderPayloadKg = val;
+        break;
       case 'max_delivery_radius_km':
         _maxDeliveryRadiusKm = val;
         break;
@@ -1198,6 +1208,9 @@ class PlatformConfigProvider extends ChangeNotifier {
         break;
       case 'heavy_order_threshold_kg':
         _heavyOrderThresholdKg = 10.0;
+        break;
+      case 'max_rider_payload_kg':
+        _maxRiderPayloadKg = 20.0;
         break;
       case 'max_delivery_radius_km':
         _maxDeliveryRadiusKm = 15.0;
