@@ -557,6 +557,20 @@ class OrderModel {
     return false;
   }
 
+  /// Total physical weight of active items in kilograms.
+  double get totalWeightKg {
+    double total = 0.0;
+    for (final item in items) {
+      if (item.isActive) {
+        total += (item.weightKg > 0.0 ? item.weightKg : 0.25) * item.quantity;
+      }
+    }
+    return total > 0.0 ? total : 0.5;
+  }
+
+  /// Whether this individual sub-order qualifies as a heavy order (> 10.0 kg).
+  bool get isHeavyOrder => totalWeightKg > 10.0;
+
   String get statusDisplay {
     switch (status) {
       case 'pending_verification':

@@ -1302,10 +1302,12 @@ class _CustomerOrderMapPageState extends State<CustomerOrderMapPage>
                                 ),
                               if ((order.shopPhone != null &&
                                       order.shopPhone!.isNotEmpty) &&
-                                  (order.riderPhone != null &&
+                                  (order.deliveryPartnerId != null &&
+                                      order.riderPhone != null &&
                                       order.riderPhone!.isNotEmpty))
                                 const SizedBox(width: 10),
-                              if (order.riderPhone != null &&
+                              if (order.deliveryPartnerId != null &&
+                                  order.riderPhone != null &&
                                   order.riderPhone!.isNotEmpty)
                                 Expanded(
                                   child: OutlinedButton.icon(

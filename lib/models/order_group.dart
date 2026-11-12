@@ -91,6 +91,31 @@ class OrderGroup {
     return list.map((o) => o.shopId).where((id) => id != null && id.isNotEmpty).toSet().length > 1;
   }
 
+  /// Total physical weight of active sub-orders in kilograms.
+  /// Delivered sub-orders are excluded because their weight is physically offloaded.
+  double get activeWeightKg {
+    double total = 0.0;
+    for (final o in activeOrders) {
+      if (o.status != 'delivered') {
+        total += o.totalWeightKg;
+      }
+    }
+    return total > 0.0 ? total : (activeOrders.isNotEmpty ? 0.5 : 0.0);
+  }
+
+  /// Total physical weight of all sub-orders in the group when incoming.
+  double get totalWeightKg {
+    double total = 0.0;
+    final list = activeOrders.isNotEmpty ? activeOrders : orders;
+    for (final o in list) {
+      total += o.totalWeightKg;
+    }
+    return total > 0.0 ? total : 0.5;
+  }
+
+  /// Whether this group constitutes a heavy delivery (> 10.0 kg).
+  bool get isHeavyOrder => totalWeightKg > 10.0;
+
   // Lowest status representation (e.g. if one is pending, the group is pending)
   // For rider progress: Arrived -> Picked Up -> Out for Delivery -> Delivered
   bool get allArrived {

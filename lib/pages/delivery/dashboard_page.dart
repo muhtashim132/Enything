@@ -85,6 +85,26 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   final Set<String> _collapsedAvailableGroups = {};
   final Set<String> _collapsedActiveGroups = {};
   final Set<String> _ignoredAvailableGroups = {};
+  final Set<String> _updatingOrderIds = {};
+
+  /// 100x VEHICLE WEIGHT CAPACITY ENGINE:
+  /// Maximum vehicle payload capacity for two-wheeler delivery fleets.
+  double get _maxVehiclePayloadKg => 20.0;
+
+  /// Current cumulative active weight of all undelivered orders held by this rider.
+  double get _riderCommittedWeightKg {
+    double total = 0.0;
+    for (final group in _myGroups) {
+      total += group.activeWeightKg;
+    }
+    return total;
+  }
+
+  /// Instantaneous remaining vehicle weight capacity.
+  double get _riderRemainingCapacityKg {
+    final rem = _maxVehiclePayloadKg - _riderCommittedWeightKg;
+    return rem > 0.0 ? rem : 0.0;
+  }
   DateTime? _lastBackPressTime;
   final ScrollController _scrollController = ScrollController();
   Set<String> _knownAvailableGroupIds = {};
@@ -1020,16 +1040,25 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       if (!mounted) return false;
 
       // Fetch latest state to ensure order is still available (fast-fail)
-      // 100x FIX (Edge Case 5): Also select payment_status to detect
-      // reassigned orders where customer already paid.
+      // 100x FIX (Edge Case 5): Also select payment_status and delivery_partner_id
+      // to detect reassigned orders and avoid race collisions with other riders.
       final latest = await _supabase
           .from('orders')
-          .select('status, payment_status')
+          .select('status, payment_status, delivery_partner_id')
           .eq('id', order.id)
           .maybeSingle();
       if (!mounted) return false;
       final currentStatus = latest?['status'] as String?;
       final currentPaymentStatus = latest?['payment_status'] as String?;
+      final currentPartnerId = latest?['delivery_partner_id'] as String?;
+      final currentUserId = _supabase.auth.currentUser?.id;
+
+      if (currentPartnerId != null && currentPartnerId != currentUserId) {
+        if (mounted) {
+          _showSnack('⚠️ Another rider just accepted this order.', isError: true);
+        }
+        return false;
+      }
 
       final isReassignedPaid = currentPaymentStatus == 'captured' &&
           (currentStatus == 'confirmed' ||
@@ -1240,6 +1269,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       {bool skipReload = false,
       bool skipRating = false,
       bool notifyCustomer = true}) async {
+    if (_updatingOrderIds.contains(order.id)) return false;
+    _updatingOrderIds.add(order.id);
+    if (mounted) setState(() {});
     try {
       if (status == 'arrived') {
         if (order.shopLat == null ||
@@ -1518,6 +1550,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
       _showSnack('Update error: $e', isError: true);
       debugPrint('Status update error: $e');
       return false;
+    } finally {
+      _updatingOrderIds.remove(order.id);
+      if (mounted) setState(() {});
     }
   }
 
@@ -2339,6 +2374,7 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                                     ),
                                   )
                                 : null),
+                        _buildVehiclePayloadGauge(isDark),
                         if (_myGroups.length > 1) ...[
                           const SizedBox(height: 10),
                           Builder(builder: (context) {
@@ -2543,6 +2579,92 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
   }
 
   // ── Card Builders ─────────────────────────────────────────────────────────
+
+  /// 100x VEHICLE PAYLOAD GAUGE:
+  /// Visual live capacity indicator showing the rider their vehicle cargo loading state
+  /// against the statutory two-wheeler 20.0 kg ceiling (CMVR Rule 123).
+  Widget _buildVehiclePayloadGauge(bool isDark) {
+    final current = _riderCommittedWeightKg;
+    final max = _maxVehiclePayloadKg;
+    final ratio = (current / max).clamp(0.0, 1.0);
+    final remaining = _riderRemainingCapacityKg;
+
+    Color statusColor = const Color(0xFF10B981); // Emerald green
+    if (ratio >= 0.85) {
+      statusColor = const Color(0xFFEF4444); // Red overload alert
+    } else if (ratio >= 0.60) {
+      statusColor = const Color(0xFFF59E0B); // Amber caution
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E232E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: statusColor.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.two_wheeler_rounded, size: 16, color: statusColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Vehicle Cargo Payload',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${current.toStringAsFixed(1)} / ${max.toStringAsFixed(0)} kg · ${remaining.toStringAsFixed(1)} kg left',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 6,
+              backgroundColor: isDark ? Colors.white10 : Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   /// Renders the customer delivery address with an optional label badge.
   ///
@@ -2832,6 +2954,46 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     ],
                   ),
                 ),
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: group.isHeavyOrder
+                        ? Colors.deepOrange.withValues(alpha: 0.3)
+                        : Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: group.isHeavyOrder
+                          ? Colors.deepOrangeAccent
+                          : Colors.white24,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        group.isHeavyOrder
+                            ? Icons.fitness_center_rounded
+                            : Icons.scale_outlined,
+                        color: group.isHeavyOrder
+                            ? Colors.deepOrangeAccent
+                            : Colors.white,
+                        size: 13,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${group.totalWeightKg.toStringAsFixed(1)} kg',
+                        style: GoogleFonts.outfit(
+                          color: group.isHeavyOrder
+                              ? Colors.deepOrangeAccent
+                              : Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Icon(
                     isExpanded
@@ -3012,38 +3174,52 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Builder(builder: (context) {
-                          // 100x FIX (Domain 2): Hoarding Limit UI Lockout (Max 3 Cart Groups)
+                          // 100x FIX (Domain 2): Hoarding Limit & Vehicle Weight Capacity UI Lockout
                           final isLinkedAddon =
                               _myGroups.any((g) => g.groupId == group.groupId);
                           final isAtCapacity = _myGroups.length >= 3 && !isLinkedAddon;
+                          final exceedsWeight = !isLinkedAddon &&
+                              ((_riderCommittedWeightKg + group.totalWeightKg) >
+                                  _maxVehiclePayloadKg);
+                          final isDisabled = _isLoading ||
+                              isExpired ||
+                              _adminSuspended ||
+                              isAtCapacity ||
+                              exceedsWeight;
+
+                          String buttonLabel = 'Accept';
+                          if (isExpired) {
+                            buttonLabel = 'Expired';
+                          } else if (isAtCapacity) {
+                            buttonLabel = 'Max 3 Orders Active';
+                          } else if (exceedsWeight) {
+                            buttonLabel =
+                                'Exceeds Weight (+${group.totalWeightKg.toStringAsFixed(1)}kg)';
+                          }
+
                           return ElevatedButton(
-                            onPressed: (_isLoading ||
-                                    isExpired ||
-                                    _adminSuspended ||
-                                    isAtCapacity)
+                            onPressed: isDisabled
                                 ? null
                                 : () => _acceptOrderGroup(group),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: (isExpired || isAtCapacity)
-                                  ? Colors.grey
-                                  : AppColors.success,
+                              backgroundColor:
+                                  (isExpired || isAtCapacity || exceedsWeight)
+                                      ? Colors.grey
+                                      : AppColors.success,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14)),
-                              elevation: (isExpired || isAtCapacity) ? 0 : 4,
-                              shadowColor: (isExpired || isAtCapacity)
+                              elevation: (isExpired || isAtCapacity || exceedsWeight)
+                                  ? 0
+                                  : 4,
+                              shadowColor: (isExpired || isAtCapacity || exceedsWeight)
                                   ? Colors.transparent
                                   : AppColors.success.withValues(alpha: 0.4),
                             ),
-                            child: Text(
-                                isExpired
-                                    ? 'Expired'
-                                    : isAtCapacity
-                                        ? 'Max 3 Orders Active'
-                                        : 'Accept',
+                            child: Text(buttonLabel,
                                 style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w800, fontSize: 14)),
+                                    fontWeight: FontWeight.w800, fontSize: 13)),
                           );
                         }),
                       ),
@@ -3321,102 +3497,114 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                 ),
                 const SizedBox(height: 14),
 
-                // Render individual shop pickup cards
-                ...group.orders.map((o) => _buildShopPickupTile(o, isDark)),
+                // Render individual shop pickup cards strictly for active orders
+                ...group.activeOrders.map((o) => _buildShopPickupTile(o, isDark)),
 
-                // Master Actions
+                // Master Actions with dynamic order count labels
                 if (group.allPickedUp && !group.allOutForDelivery)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        // 100x FIX (Edge Case 2): Only transition orders that are
-                        // actually in 'picked_up' status. Cancelled/disputed sub-orders
-                        // would cause update_order_status RPC to throw an exception.
-                        final pickedUpOrders = group.activeOrders
-                            .where((o) => o.status == 'picked_up')
-                            .toList();
-                        final Set<String> notifiedCustomerIds = {};
-                        for (int i = 0; i < pickedUpOrders.length; i++) {
-                          final o = pickedUpOrders[i];
-                          final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
-                          if (shouldNotify) notifiedCustomerIds.add(o.customerId);
-                          await _updateStatus(
-                              o, 'out_for_delivery',
-                              skipReload: true, notifyCustomer: shouldNotify);
-                        }
-                        _loadOrders(isInitial: true);
-                      },
-                      icon: const Icon(Icons.rocket_launch, size: 18),
-                      label: Text('Mark All Out for Delivery',
-                          style:
-                              GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4C6EF5),
-                          foregroundColor: Colors.white),
-                    ),
-                  ),
+                  Builder(builder: (context) {
+                    final pickedUpOrders = group.activeOrders
+                        .where((o) => o.status == 'picked_up')
+                        .toList();
+                    if (pickedUpOrders.isEmpty) return const SizedBox.shrink();
+                    final label = pickedUpOrders.length > 1
+                        ? 'Mark ${pickedUpOrders.length} Orders Out for Delivery'
+                        : 'Mark Out for Delivery';
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          // 100x FIX (Edge Case 2): Only transition orders that are
+                          // actually in 'picked_up' status. Cancelled/disputed sub-orders
+                          // would cause update_order_status RPC to throw an exception.
+                          final Set<String> notifiedCustomerIds = {};
+                          for (int i = 0; i < pickedUpOrders.length; i++) {
+                            final o = pickedUpOrders[i];
+                            final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
+                            if (shouldNotify) notifiedCustomerIds.add(o.customerId);
+                            await _updateStatus(
+                                o, 'out_for_delivery',
+                                skipReload: true, notifyCustomer: shouldNotify);
+                          }
+                          _loadOrders(isInitial: true);
+                        },
+                        icon: const Icon(Icons.rocket_launch, size: 18),
+                        label: Text(label,
+                            style:
+                                GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4C6EF5),
+                            foregroundColor: Colors.white),
+                      ),
+                    );
+                  }),
                 if (group.allOutForDelivery && group.groupStatus != 'delivered')
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        if (_riderLat == null || _riderLng == null) {
-                          await _fetchRiderLocation();
+                  Builder(builder: (context) {
+                    final deliverableOrders = group.activeOrders
+                        .where((o) => o.status != 'delivered')
+                        .toList();
+                    if (deliverableOrders.isEmpty) return const SizedBox.shrink();
+                    final label = deliverableOrders.length > 1
+                        ? 'Mark ${deliverableOrders.length} Orders Delivered'
+                        : 'Mark Delivered';
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
                           if (_riderLat == null || _riderLng == null) {
-                            _showSnack(
-                                '⚠️ Cannot fetch your GPS to verify delivery.',
-                                isError: true);
-                            return;
+                            await _fetchRiderLocation();
+                            if (_riderLat == null || _riderLng == null) {
+                              _showSnack(
+                                  '⚠️ Cannot fetch your GPS to verify delivery.',
+                                  isError: true);
+                              return;
+                            }
                           }
-                        }
 
-                        final deliverableOrders = group.activeOrders
-                            .where((o) => o.status != 'delivered')
-                            .toList();
-                        bool allSuccess = true;
-                        final Set<String> notifiedCustomerIds = {};
-                        for (int i = 0; i < deliverableOrders.length; i++) {
-                          final o = deliverableOrders[i];
-                          final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
-                          if (shouldNotify) notifiedCustomerIds.add(o.customerId);
-                          final success = await _updateStatus(
-                              o, 'delivered',
-                              skipReload: true,
-                              skipRating: true,
-                              notifyCustomer: shouldNotify);
-                          if (!success) {
-                            allSuccess = false;
-                            break;
+                          bool allSuccess = true;
+                          final Set<String> notifiedCustomerIds = {};
+                          for (int i = 0; i < deliverableOrders.length; i++) {
+                            final o = deliverableOrders[i];
+                            final shouldNotify = !notifiedCustomerIds.contains(o.customerId);
+                            if (shouldNotify) notifiedCustomerIds.add(o.customerId);
+                            final success = await _updateStatus(
+                                o, 'delivered',
+                                skipReload: true,
+                                skipRating: true,
+                                notifyCustomer: shouldNotify);
+                            if (!success) {
+                              allSuccess = false;
+                              break;
+                            }
                           }
-                        }
 
-                        if (allSuccess) {
-                          // Optimistic update for UI feel
-                          if (mounted) {
-                            setState(() {
-                              _myGroups.removeWhere(
-                                  (g) => g.groupId == group.groupId);
-                            });
+                          if (allSuccess) {
+                            // Optimistic update for UI feel
+                            if (mounted) {
+                              setState(() {
+                                _myGroups.removeWhere(
+                                    (g) => g.groupId == group.groupId);
+                              });
+                            }
+                            _loadOrders(isInitial: true);
+                            if (mounted) {
+                              _showGroupDeliveryRatingFlow(group);
+                            }
+                          } else {
+                            // If failed, reload to ensure correct state
+                            _loadOrders(isInitial: true);
                           }
-                          _loadOrders(isInitial: true);
-                          if (mounted) {
-                            _showGroupDeliveryRatingFlow(group);
-                          }
-                        } else {
-                          // If failed, reload to ensure correct state
-                          _loadOrders(isInitial: true);
-                        }
-                      },
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: Text('Mark All Delivered',
-                          style:
-                              GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          foregroundColor: Colors.white),
-                    ),
-                  ),
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: Text(label,
+                            style:
+                                GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white),
+                      ),
+                    );
+                  }),
               ]),
             ),
         ]),
@@ -3629,7 +3817,8 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: nextStatus == null
+                onPressed: (nextStatus == null ||
+                        _updatingOrderIds.contains(order.id))
                     ? null
                     : () {
                         _updateStatus(order, nextStatus!);
@@ -3640,7 +3829,16 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   elevation: 0,
                 ),
-                child: Text(nextLabel, style: GoogleFonts.outfit(fontSize: 12)),
+                child: _updatingOrderIds.contains(order.id)
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : Text(nextLabel,
+                        style: GoogleFonts.outfit(
+                            fontSize: 12, fontWeight: FontWeight.w700)),
               ),
             ),
           ],

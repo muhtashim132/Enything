@@ -381,7 +381,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage>
           .select('status')
           .eq('id', order.id)
           .maybeSingle();
-      if (latest == null || latest['status'] != 'awaiting_acceptance') {
+      if (latest == null ||
+          (latest['status'] != 'awaiting_acceptance' &&
+              latest['status'] != 'pending')) {
         if (mounted) {
           _showSnack('Order is no longer available to accept.', isError: true);
         }

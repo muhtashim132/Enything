@@ -20,6 +20,17 @@ analyzer:
     - "patch_ddos.js"
     - "patch_verify.ts"
     - "test_auth.js"
+    - "check_*.dart"
+    - "cleanup_*.dart"
+    - "convert_*.dart"
+    - "fix_*.dart"
+    - "generate_*.dart"
+    - "get_*.dart"
+    - "patch.dart"
+    - "remove_bom.dart"
+    - "temp_*.dart"
+    - "test_*.dart"
+    - "test/**"
 
 linter:
   # The lint rules applied to this project can be customized in the
