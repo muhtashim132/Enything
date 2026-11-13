@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:math';
 
 import '../../providers/cart_provider.dart';
 import '../../config/route_observer.dart';
@@ -154,7 +153,8 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble>
 
   bool _isCartInteracting = false;
 
-  void _handleTap(List<ShopModel> allShops, {List<ShopModel> pendingShops = const []}) {
+  void _handleTap(List<ShopModel> allShops,
+      {List<ShopModel> pendingShops = const []}) {
     if (_isCartInteracting || allShops.isEmpty) return;
     _isCartInteracting = true;
     SensoryHaptics.selection();
@@ -186,7 +186,8 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble>
           return Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF141420) : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.15),
@@ -225,7 +226,8 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble>
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.2,
-                            color: isDark ? Colors.white : const Color(0xFF1E293B),
+                            color:
+                                isDark ? Colors.white : const Color(0xFF1E293B),
                           ),
                         ),
                         if (allShops.length < 3)
@@ -233,10 +235,12 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                color: const Color(0xFF10B981)
+                                    .withValues(alpha: 0.3),
                                 width: 1,
                               ),
                             ),
@@ -460,7 +464,8 @@ class _DraggableCartBubbleState extends State<DraggableCartBubble>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withValues(alpha: 0.42),
+                          color:
+                              const Color(0xFF6366F1).withValues(alpha: 0.42),
                           blurRadius: 18,
                           offset: const Offset(0, 6),
                           spreadRadius: 1,

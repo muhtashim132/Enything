@@ -1874,11 +1874,15 @@ class CustomerHomeViewState extends State<CustomerHomeView>
               // Direct or punctuation-agnostic match (e.g. loreal matches l'oreal)
               if (searchable.contains(t) ||
                   cleanSearchable.contains(cleanT) ||
-                  spacedSearchable.contains(t)) return true;
+                  spacedSearchable.contains(t)) {
+                return true;
+              }
               if (t.endsWith('s') && t.length > 3) {
                 final stem = t.substring(0, t.length - 1);
-                if (searchable.contains(stem) || cleanSearchable.contains(stem))
+                if (searchable.contains(stem) ||
+                    cleanSearchable.contains(stem)) {
                   return true;
+                }
               }
               return false;
             });
@@ -2081,8 +2085,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !config.isActiveCategory(shop.category))
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) {
             continue;
+          }
           if (!locationProvider.hasLocation &&
               effectiveCategories != null &&
               !effectiveCategories.contains(shop.category)) {
@@ -2327,11 +2332,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           // Exactly match the shop filtering logic of _openCategoryListing:
           final matchingShopIds = nearbyShops
               .where((s) {
-                if (lowerCats.contains(s.category.trim().toLowerCase()))
+                if (lowerCats.contains(s.category.trim().toLowerCase())) {
                   return true;
+                }
                 if (s.categories
-                    .any((c) => lowerCats.contains(c.trim().toLowerCase())))
+                    .any((c) => lowerCats.contains(c.trim().toLowerCase()))) {
                   return true;
+                }
                 if (lowerCats.any((t) =>
                     t.contains('cosmetic') ||
                     t.contains('beauty') ||
@@ -2603,8 +2610,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !config.isActiveCategory(shop.category))
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) {
             continue;
+          }
 
           final matchesCategory = AppCategories.matchesBrowsingCategory(
             productCategory: product.category,
@@ -2654,14 +2662,17 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             for (final p in (cosResp as List)) {
               if (p['shops'] == null) continue;
               final shop = ShopModel.fromMap(p['shops']);
-              if (!shop.isActive || !config.isActiveCategory(shop.category))
+              if (!shop.isActive || !config.isActiveCategory(shop.category)) {
                 continue;
+              }
               final product = ProductModel.fromMap(p);
               if (!config.isActiveCategory(product.category)) continue;
 
               if (locationProvider.hasLocation) {
-                if (shop.location.latitude == 0 || shop.location.longitude == 0)
+                if (shop.location.latitude == 0 ||
+                    shop.location.longitude == 0) {
                   continue;
+                }
                 final d = locationProvider.distanceTo(shop.location);
                 if (!DeliveryCalculator.isWithinRange(d)) continue;
               }
@@ -2961,8 +2972,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           if (p['shops'] == null) continue;
 
           final shop = ShopModel.fromMap(p['shops']);
-          if (!shop.isActive || !config.isActiveCategory(shop.category))
+          if (!shop.isActive || !config.isActiveCategory(shop.category)) {
             continue;
+          }
 
           final product = ProductModel.fromMap(p);
           if (!config.isActiveCategory(product.category)) continue;
@@ -3429,8 +3441,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             Builder(
               builder: (context) {
                 final config = context.watch<PlatformConfigProvider>();
-                if (!config.isMaintenanceMode)
+                if (!config.isMaintenanceMode) {
                   return const SliverToBoxAdapter(child: SizedBox.shrink());
+                }
                 return SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),

@@ -71,11 +71,7 @@ class _ProductCardState extends State<ProductCard> {
 
     final resolvedShop = shop ??
         (product.shopId.isNotEmpty
-            ? context
-                .watch<CartProvider>()
-                .shops
-                .cast<ShopModel?>()
-                .firstWhere(
+            ? context.watch<CartProvider>().shops.cast<ShopModel?>().firstWhere(
                   (s) => s?.id == product.shopId,
                   orElse: () => null,
                 )
@@ -99,10 +95,10 @@ class _ProductCardState extends State<ProductCard> {
       onTap: isShopClosed
           ? () => ClosedStoreFeedback.showClosedStoreNotice(
                 context,
-                shopName: (resolvedShop?.name.isNotEmpty == true)
-                    ? resolvedShop!.name
+                shopName: (resolvedShop.name.isNotEmpty == true)
+                    ? resolvedShop.name
                     : (shop?.name ?? 'Store'),
-                openTime: resolvedShop?.openTime ?? shop?.openTime,
+                openTime: resolvedShop.openTime ?? shop?.openTime,
               )
           : (isProductUnavailable
               ? () => ClosedStoreFeedback.showProductUnavailableNotice(
@@ -131,615 +127,619 @@ class _ProductCardState extends State<ProductCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-              // ── Product Image ────────────────────────────────────────────
-              AspectRatio(
-                aspectRatio: widget.imageAspectRatio ?? 1.0,
-                child: Stack(
-                  children: [
-                    // Image container with gradient background
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(PremiumRadius.large)),
-                      child: Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration:
-                            PremiumDecorations.imageContainerBg(isDark: isDark),
-                        child: product.displayImage.isNotEmpty
-                            ? PremiumProductImage(
-                                imageUrl: product.displayImage,
-                                isDark: isDark,
-                              )
-                            : _buildImageError(isDark),
+            // ── Product Image ────────────────────────────────────────────
+            AspectRatio(
+              aspectRatio: widget.imageAspectRatio ?? 1.0,
+              child: Stack(
+                children: [
+                  // Image container with gradient background
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(PremiumRadius.large)),
+                    child: Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration:
+                          PremiumDecorations.imageContainerBg(isDark: isDark),
+                      child: product.displayImage.isNotEmpty
+                          ? PremiumProductImage(
+                              imageUrl: product.displayImage,
+                              isDark: isDark,
+                            )
+                          : _buildImageError(isDark),
+                    ),
+                  ),
+
+                  // Subtle inner shadow at bottom of image
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 28,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            isDark
+                                ? Colors.black.withValues(alpha: 0.25)
+                                : Colors.black.withValues(alpha: 0.05),
+                          ],
+                        ),
                       ),
                     ),
+                  ),
 
-                    // Subtle inner shadow at bottom of image
+                  // Discount badge — top-right
+                  if (hasDiscount)
                     Positioned(
-                      bottom: 0,
-                      left: 0,
+                      top: 0,
                       right: 0,
-                      height: 28,
-                      child: DecoratedBox(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 4),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              isDark
-                                  ? Colors.black.withValues(alpha: 0.25)
-                                  : Colors.black.withValues(alpha: 0.05),
-                            ],
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF6B35), Color(0xFFFF3366)],
                           ),
-                        ),
-                      ),
-                    ),
-
-                    // Discount badge — top-right
-                    if (hasDiscount)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 4),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF6B35), Color(0xFFFF3366)],
-                            ),
-                            borderRadius: const BorderRadius.only(
-                              topRight: Radius.circular(PremiumRadius.large),
-                              bottomLeft: Radius.circular(8),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFF3366)
-                                    .withValues(alpha: 0.40),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(PremiumRadius.large),
+                            bottomLeft: Radius.circular(8),
                           ),
-                          child: Text(
-                            '${product.discountPercent!.toStringAsFixed(0)}% OFF',
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    // Top-Left Badges Stack (Diet / Rx / Bestseller / Low Stock)
-                    Positioned(
-                      top: 7,
-                      left: 7,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Veg / Non-Veg Icon (Food & Grocery items only)
-                              if (product.showsDietEmblem) ...[
-                                _buildDietEmblem(product.isVeg!),
-                                const SizedBox(width: 3),
-                              ],
-                              // Prescription Tag
-                              if (product.requiresPrescription) ...[
-                                _buildRxBadge(),
-                                const SizedBox(width: 3),
-                              ],
-                              // Bestseller badge
-                              if (isBestseller)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 5, vertical: 2.5),
-                                  decoration: PremiumDecorations.gradientBadge(
-                                    colors: const [
-                                      Color(0xFFFF9F43),
-                                      Color(0xFFEE5A24)
-                                    ],
-                                    borderRadius: 5,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                          Icons.local_fire_department_rounded,
-                                          size: 9,
-                                          color: Colors.white),
-                                      const SizedBox(width: 2),
-                                      Text('BEST',
-                                          style: GoogleFonts.outfit(
-                                              color: Colors.white,
-                                              fontSize: 8.5,
-                                              fontWeight: FontWeight.w900)),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                          // Low Stock Alert Badge
-                          if (isLowStock) ...[
-                            const SizedBox(height: 3),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD97706),
-                                borderRadius: BorderRadius.circular(5),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFFD97706)
-                                        .withValues(alpha: 0.35),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.bolt_rounded,
-                                      size: 9, color: Colors.white),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    'Only ${product.totalQuantity} left',
-                                    style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF3366)
+                                  .withValues(alpha: 0.40),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
                           ],
-                        ],
-                      ),
-                    ),
-
-                    // Favorite button
-                    Positioned(
-                      bottom: 6,
-                      left: 6,
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          if (auth.currentUserId != null) {
-                            favs.toggleProductFavorite(
-                              auth.currentUserId!,
-                              product.id,
-                              product: product,
-                              shop: shop,
-                            );
-                          } else {
-                            AppToast.showInfo(
-                              context,
-                              title: 'Sign In Required 🔐',
-                              message:
-                                  'Please sign in to save items to your favorites.',
-                            );
-                          }
-                        },
-                        child: AnimatedContainer(
-                          duration: PremiumAnimations.fast,
-                          padding: const EdgeInsets.all(5.5),
-                          decoration: BoxDecoration(
-                            color: isFav
-                                ? Colors.red.withValues(alpha: 0.15)
-                                : (isDark
-                                    ? Colors.black.withValues(alpha: 0.45)
-                                    : Colors.white.withValues(alpha: 0.9)),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
-                                  blurRadius: 5)
-                            ],
-                          ),
-                          child: AnimatedSwitcher(
-                            duration: PremiumAnimations.fast,
-                            child: Icon(
-                              key: ValueKey(isFav),
-                              isFav
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              size: 13,
-                              color: isFav
-                                  ? Colors.red
-                                  : (isDark
-                                      ? Colors.white70
-                                      : AppColors.textSecondary),
-                            ),
+                        ),
+                        child: Text(
+                          '${product.discountPercent!.toStringAsFixed(0)}% OFF',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),
                     ),
 
-                    // Share button
-                    Positioned(
-                      bottom: 6,
-                      left: 36,
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          ShareUtils.shareProduct(product, shop: shop);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(4.5),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.black.withValues(alpha: 0.45)
-                                : Colors.white.withValues(alpha: 0.9),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.10),
-                                  blurRadius: 5)
+                  // Top-Left Badges Stack (Diet / Rx / Bestseller / Low Stock)
+                  Positioned(
+                    top: 7,
+                    left: 7,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Veg / Non-Veg Icon (Food & Grocery items only)
+                            if (product.showsDietEmblem) ...[
+                              _buildDietEmblem(product.isVeg!),
+                              const SizedBox(width: 3),
                             ],
-                          ),
-                          child: Icon(
-                            Icons.ios_share_rounded,
-                            size: 12,
-                            color: isDark ? Colors.white70 : AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Availability / Closed Overlay
-                    if (isLocked)
-                      Positioned.fill(
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(PremiumRadius.large)),
-                          child: Container(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            child: Center(
-                              child: Container(
+                            // Prescription Tag
+                            if (product.requiresPrescription) ...[
+                              _buildRxBadge(),
+                              const SizedBox(width: 3),
+                            ],
+                            // Bestseller badge
+                            if (isBestseller)
+                              Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.85),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.white38),
+                                    horizontal: 5, vertical: 2.5),
+                                decoration: PremiumDecorations.gradientBadge(
+                                  colors: const [
+                                    Color(0xFFFF9F43),
+                                    Color(0xFFEE5A24)
+                                  ],
+                                  borderRadius: 5,
                                 ),
-                                child: Text(
-                                  isShopClosed
-                                      ? 'SHOP CLOSED'
-                                      : isOutOfStock
-                                          ? 'OUT OF STOCK'
-                                          : 'UNAVAILABLE',
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                        Icons.local_fire_department_rounded,
+                                        size: 9,
+                                        color: Colors.white),
+                                    const SizedBox(width: 2),
+                                    Text('BEST',
+                                        style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 8.5,
+                                            fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        // Low Stock Alert Badge
+                        if (isLowStock) ...[
+                          const SizedBox(height: 3),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD97706),
+                              borderRadius: BorderRadius.circular(5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFD97706)
+                                      .withValues(alpha: 0.35),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.bolt_rounded,
+                                    size: 9, color: Colors.white),
+                                const SizedBox(width: 2),
+                                Text(
+                                  'Only ${product.totalQuantity} left',
                                   style: GoogleFonts.outfit(
                                     color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.0,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800,
                                   ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Favorite button
+                  Positioned(
+                    bottom: 6,
+                    left: 6,
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        if (auth.currentUserId != null) {
+                          favs.toggleProductFavorite(
+                            auth.currentUserId!,
+                            product.id,
+                            product: product,
+                            shop: shop,
+                          );
+                        } else {
+                          AppToast.showInfo(
+                            context,
+                            title: 'Sign In Required 🔐',
+                            message:
+                                'Please sign in to save items to your favorites.',
+                          );
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: PremiumAnimations.fast,
+                        padding: const EdgeInsets.all(5.5),
+                        decoration: BoxDecoration(
+                          color: isFav
+                              ? Colors.red.withValues(alpha: 0.15)
+                              : (isDark
+                                  ? Colors.black.withValues(alpha: 0.45)
+                                  : Colors.white.withValues(alpha: 0.9)),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 5)
+                          ],
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: PremiumAnimations.fast,
+                          child: Icon(
+                            key: ValueKey(isFav),
+                            isFav
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                            size: 13,
+                            color: isFav
+                                ? Colors.red
+                                : (isDark
+                                    ? Colors.white70
+                                    : AppColors.textSecondary),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Share button
+                  Positioned(
+                    bottom: 6,
+                    left: 36,
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        ShareUtils.shareProduct(product, shop: shop);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4.5),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.45)
+                              : Colors.white.withValues(alpha: 0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 5)
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.ios_share_rounded,
+                          size: 12,
+                          color: isDark ? Colors.white70 : AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Availability / Closed Overlay
+                  if (isLocked)
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(PremiumRadius.large)),
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.85),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.white38),
+                              ),
+                              child: Text(
+                                isShopClosed
+                                    ? 'SHOP CLOSED'
+                                    : isOutOfStock
+                                        ? 'OUT OF STOCK'
+                                        : 'UNAVAILABLE',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.0,
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
+            ),
 
-              // ── Info ─────────────────────────────────────────────────────
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 3, 8, 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Top Info Stack: Brand/Weight, Name, Rating
-                      Flexible(
-                        child: SingleChildScrollView(
-                          physics: const NeverScrollableScrollPhysics(),
-                          clipBehavior: Clip.none,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                          // Brand & Unit/Weight row
-                          if (hasBrand || weightLabel.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Row(
-                                children: [
-                                  if (hasBrand)
-                                    Expanded(
-                                      child: Text(
-                                        product.brand!.toUpperCase(),
-                                        style: GoogleFonts.outfit(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 9,
-                                          color: isDark
-                                              ? AppColors.primaryLight
-                                              : AppColors.primary,
-                                          letterSpacing: 0.4,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  if (weightLabel.isNotEmpty) ...[
-                                    if (hasBrand) const SizedBox(width: 4),
-                                    Flexible(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: isDark
-                                              ? Colors.white
-                                                  .withValues(alpha: 0.08)
-                                              : Colors.grey.shade100,
-                                          borderRadius:
-                                              BorderRadius.circular(3),
-                                          border: Border.all(
-                                            color: isDark
-                                                ? Colors.white12
-                                                : Colors.grey.shade300,
-                                            width: 0.7,
-                                          ),
-                                        ),
+            // ── Info ─────────────────────────────────────────────────────
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 3, 8, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Top Info Stack: Brand/Weight, Name, Rating
+                    Flexible(
+                      child: SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        clipBehavior: Clip.none,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Brand & Unit/Weight row
+                            if (hasBrand || weightLabel.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Row(
+                                  children: [
+                                    if (hasBrand)
+                                      Expanded(
                                         child: Text(
-                                          weightLabel,
+                                          product.brand!.toUpperCase(),
                                           style: GoogleFonts.outfit(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 8.5,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 9,
                                             color: isDark
-                                                ? Colors.white70
-                                                : AppColors.textSecondary,
+                                                ? AppColors.primaryLight
+                                                : AppColors.primary,
+                                            letterSpacing: 0.4,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-
-                          // Product name
-                          Builder(
-                            builder: (context) {
-                              final hasPharmacySalt = (product.category == 'Pharmacy' ||
-                                      AppCategories.isPharmacyCategory(product.category)) &&
-                                  product.description != null &&
-                                  product.description!.trim().isNotEmpty;
-                              return Text(
-                                product.name,
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF1A1A2E),
-                                  letterSpacing: -0.2,
-                                  height: 1.15,
-                                ),
-                                maxLines: hasPharmacySalt ? 1 : 2,
-                                overflow: TextOverflow.ellipsis,
-                              );
-                            },
-                          ),
-
-                          // Salt / Composition for pharmacy medicines
-                          if ((product.category == 'Pharmacy' ||
-                                  AppCategories.isPharmacyCategory(product.category)) &&
-                              product.description != null &&
-                              product.description!.trim().isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1.5),
-                              child: Text(
-                                product.description!.trim(),
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 8.5,
-                                  color: isDark
-                                      ? const Color(0xFF6EE7B7)
-                                      : const Color(0xFF059669),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-
-                          // Rating & Shop Distance row
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2.5),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.star_rounded,
-                                    color: Color(0xFFF6C90E), size: 11),
-                                const SizedBox(width: 2),
-                                Text(
-                                  product.totalReviews > 0
-                                      ? product.rating.toStringAsFixed(1)
-                                      : 'New',
-                                  style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                    color: isDark
-                                        ? Colors.white70
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                                if (product.totalReviews > 0)
-                                  Text(
-                                    product.totalReviews > 99
-                                        ? ' (99+)'
-                                        : ' (${product.totalReviews})',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 9,
-                                      color: isDark
-                                          ? Colors.white38
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                if (shop != null) ...[
-                                  Builder(builder: (ctx) {
-                                    final locProv = ctx.watch<LocationProvider>();
-                                    final hasValidCoords = locProv.hasLocation &&
-                                        shop!.location.latitude != 0 &&
-                                        shop!.location.longitude != 0;
-                                    final d = hasValidCoords
-                                        ? locProv.distanceTo(shop!.location)
-                                        : -1.0;
-                                    if (d < 0) return const SizedBox.shrink();
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const SizedBox(width: 3),
-                                        Container(
-                                            width: 2.5,
-                                            height: 2.5,
-                                            decoration: BoxDecoration(
-                                                color: isDark
-                                                    ? Colors.white38
-                                                    : AppColors.textSecondary,
-                                                shape: BoxShape.circle)),
-                                        const SizedBox(width: 3),
-                                        Flexible(
-                                          child: Text(
-                                            '${d.toStringAsFixed(1)}km',
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w600,
+                                    if (weightLabel.isNotEmpty) ...[
+                                      if (hasBrand) const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Colors.white
+                                                    .withValues(alpha: 0.08)
+                                                : Colors.grey.shade100,
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                            border: Border.all(
                                               color: isDark
-                                                  ? Colors.white54
+                                                  ? Colors.white12
+                                                  : Colors.grey.shade300,
+                                              width: 0.7,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            weightLabel,
+                                            style: GoogleFonts.outfit(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 8.5,
+                                              color: isDark
+                                                  ? Colors.white70
                                                   : AppColors.textSecondary,
                                             ),
+                                            maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                      ],
-                                    );
-                                  }),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
 
-                      // Bottom Action Stack: Price, ADD / Stepper Button
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Price row with 100x responsive formatting
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                Text(
-                                  '₹${product.price.toStringAsFixed(0)}',
+                            // Product name
+                            Builder(
+                              builder: (context) {
+                                final hasPharmacySalt =
+                                    (product.category == 'Pharmacy' ||
+                                            AppCategories.isPharmacyCategory(
+                                                product.category)) &&
+                                        product.description != null &&
+                                        product.description!.trim().isNotEmpty;
+                                return Text(
+                                  product.name,
                                   style: GoogleFonts.outfit(
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
                                     color: isDark
                                         ? Colors.white
-                                        : AppColors.primary,
-                                    fontSize: 14.5,
+                                        : const Color(0xFF1A1A2E),
+                                    letterSpacing: -0.2,
+                                    height: 1.15,
                                   ),
+                                  maxLines: hasPharmacySalt ? 1 : 2,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
+                            ),
+
+                            // Salt / Composition for pharmacy medicines
+                            if ((product.category == 'Pharmacy' ||
+                                    AppCategories.isPharmacyCategory(
+                                        product.category)) &&
+                                product.description != null &&
+                                product.description!.trim().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1.5),
+                                child: Text(
+                                  product.description!.trim(),
+                                  style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 8.5,
+                                    color: isDark
+                                        ? const Color(0xFF6EE7B7)
+                                        : const Color(0xFF059669),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                if (hasDiscount) ...[
-                                  const SizedBox(width: 3),
+                              ),
+
+                            // Rating & Shop Distance row
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.5),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.star_rounded,
+                                      color: Color(0xFFF6C90E), size: 11),
+                                  const SizedBox(width: 2),
                                   Text(
-                                    '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                    product.totalReviews > 0
+                                        ? product.rating.toStringAsFixed(1)
+                                        : 'New',
                                     style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 10,
                                       color: isDark
-                                          ? Colors.white38
-                                          : AppColors.textLight,
-                                      fontSize: 9.5,
-                                      decoration: TextDecoration.lineThrough,
-                                      decorationColor: isDark
-                                          ? Colors.white38
-                                          : AppColors.textLight,
+                                          ? Colors.white70
+                                          : AppColors.textPrimary,
                                     ),
                                   ),
-                                  if (savedAmount > 0) ...[
-                                    const SizedBox(width: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 3.5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.success
-                                            .withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                      child: Text(
-                                        'Save ₹${savedAmount.toStringAsFixed(0)}',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 8,
-                                          fontWeight: FontWeight.w800,
-                                          color: AppColors.success,
-                                        ),
+                                  if (product.totalReviews > 0)
+                                    Text(
+                                      product.totalReviews > 99
+                                          ? ' (99+)'
+                                          : ' (${product.totalReviews})',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 9,
+                                        color: isDark
+                                            ? Colors.white38
+                                            : AppColors.textSecondary,
                                       ),
                                     ),
+                                  if (shop != null) ...[
+                                    Builder(builder: (ctx) {
+                                      final locProv =
+                                          ctx.watch<LocationProvider>();
+                                      final hasValidCoords =
+                                          locProv.hasLocation &&
+                                              shop!.location.latitude != 0 &&
+                                              shop!.location.longitude != 0;
+                                      final d = hasValidCoords
+                                          ? locProv.distanceTo(shop!.location)
+                                          : -1.0;
+                                      if (d < 0) return const SizedBox.shrink();
+                                      return Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const SizedBox(width: 3),
+                                          Container(
+                                              width: 2.5,
+                                              height: 2.5,
+                                              decoration: BoxDecoration(
+                                                  color: isDark
+                                                      ? Colors.white38
+                                                      : AppColors.textSecondary,
+                                                  shape: BoxShape.circle)),
+                                          const SizedBox(width: 3),
+                                          Flexible(
+                                            child: Text(
+                                              '${d.toStringAsFixed(1)}km',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark
+                                                    ? Colors.white54
+                                                    : AppColors.textSecondary,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }),
                                   ],
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
-
-                          const SizedBox(height: 3),
-
-                          // ── Add to cart / stepper ──────────────────────────
-                          AnimatedSwitcher(
-                            duration: PremiumAnimations.normal,
-                            switchInCurve: Curves.elasticOut,
-                            switchOutCurve: Curves.easeIn,
-                            transitionBuilder: (child, animation) {
-                              return ScaleTransition(
-                                scale: animation,
-                                child: FadeTransition(
-                                    opacity: animation, child: child),
-                              );
-                            },
-                            child: isLocked
-                                ? _buildUnavailableButton(isDark,
-                                    isShopClosed: isShopClosed,
-                                    currentShop: resolvedShop)
-                                : product.variants.isNotEmpty
-                                    ? (totalQuantity > 0
-                                        ? _buildVariantStepper(
-                                            cart, totalQuantity, isDark,
-                                            targetShop: resolvedShop)
-                                        : _buildVariantAddButton(isDark))
-                                    : totalQuantity > 0
-                                        ? _buildStepper(
-                                            cart, totalQuantity, isDark,
-                                            targetShop: resolvedShop)
-                                        : _buildAddButton(cart, isDark,
-                                            targetShop: resolvedShop),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+
+                    // Bottom Action Stack: Price, ADD / Stepper Button
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Price row with 100x responsive formatting
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                '₹${product.price.toStringAsFixed(0)}',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w900,
+                                  color:
+                                      isDark ? Colors.white : AppColors.primary,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                              if (hasDiscount) ...[
+                                const SizedBox(width: 3),
+                                Text(
+                                  '₹${product.originalPrice!.toStringAsFixed(0)}',
+                                  style: GoogleFonts.outfit(
+                                    color: isDark
+                                        ? Colors.white38
+                                        : AppColors.textLight,
+                                    fontSize: 9.5,
+                                    decoration: TextDecoration.lineThrough,
+                                    decorationColor: isDark
+                                        ? Colors.white38
+                                        : AppColors.textLight,
+                                  ),
+                                ),
+                                if (savedAmount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 3.5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: Text(
+                                      'Save ₹${savedAmount.toStringAsFixed(0)}',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 3),
+
+                        // ── Add to cart / stepper ──────────────────────────
+                        AnimatedSwitcher(
+                          duration: PremiumAnimations.normal,
+                          switchInCurve: Curves.elasticOut,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) {
+                            return ScaleTransition(
+                              scale: animation,
+                              child: FadeTransition(
+                                  opacity: animation, child: child),
+                            );
+                          },
+                          child: isLocked
+                              ? _buildUnavailableButton(isDark,
+                                  isShopClosed: isShopClosed,
+                                  currentShop: resolvedShop)
+                              : product.variants.isNotEmpty
+                                  ? (totalQuantity > 0
+                                      ? _buildVariantStepper(
+                                          cart, totalQuantity, isDark,
+                                          targetShop: resolvedShop)
+                                      : _buildVariantAddButton(isDark))
+                                  : totalQuantity > 0
+                                      ? _buildStepper(
+                                          cart, totalQuantity, isDark,
+                                          targetShop: resolvedShop)
+                                      : _buildAddButton(cart, isDark,
+                                          targetShop: resolvedShop),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
   Widget _buildDietEmblem(bool isVeg) {
     final color = isVeg ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
@@ -869,8 +869,7 @@ class _ProductCardState extends State<ProductCard> {
             Text(
               'ADD',
               style: GoogleFonts.outfit(
-                color:
-                    isDark ? AppColors.secondaryLight : AppColors.secondary,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
                 fontWeight: FontWeight.w900,
                 fontSize: 11,
                 letterSpacing: 0.3,
@@ -911,8 +910,7 @@ class _ProductCardState extends State<ProductCard> {
     );
   }
 
-  Widget _buildVariantStepper(
-      CartProvider cart, int totalQuantity, bool isDark,
+  Widget _buildVariantStepper(CartProvider cart, int totalQuantity, bool isDark,
       {ShopModel? targetShop}) {
     final effectiveShop = targetShop ?? shop;
     final productItems = cart.getItemsForProduct(product.id);
@@ -1029,7 +1027,8 @@ class _ProductCardState extends State<ProductCard> {
                       SnackBar(
                         content: Text(
                           'Maximum delivery weight reached (${PaymentConfig.maxWeightKg.toInt()} kg)',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w700),
                         ),
                         backgroundColor: const Color(0xFFEF4444),
                         duration: const Duration(seconds: 2),
@@ -1046,7 +1045,8 @@ class _ProductCardState extends State<ProductCard> {
                       SnackBar(
                         content: Text(
                           'Only ${product.totalQuantity} items in stock',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w700),
                         ),
                         duration: const Duration(seconds: 2),
                         behavior: SnackBarBehavior.floating,
@@ -1160,7 +1160,8 @@ class _ProductCardState extends State<ProductCard> {
               width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: AppColors.secondary.withValues(alpha: isDark ? 0.20 : 0.10),
+              color:
+                  AppColors.secondary.withValues(alpha: isDark ? 0.20 : 0.10),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -1177,16 +1178,14 @@ class _ProductCardState extends State<ProductCard> {
               child: Icon(
                 Icons.add_rounded,
                 size: 13,
-                color:
-                    isDark ? AppColors.secondaryLight : AppColors.secondary,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
               ),
             ),
             const SizedBox(width: 3.5),
             Text(
               'ADD',
               style: GoogleFonts.outfit(
-                color:
-                    isDark ? AppColors.secondaryLight : AppColors.secondary,
+                color: isDark ? AppColors.secondaryLight : AppColors.secondary,
                 fontWeight: FontWeight.w900,
                 fontSize: 11,
                 letterSpacing: 0.5,
@@ -1272,7 +1271,8 @@ class _ProductCardState extends State<ProductCard> {
                       SnackBar(
                         content: Text(
                           'Only ${product.totalQuantity} items in stock',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w700),
                         ),
                         duration: const Duration(seconds: 2),
                         behavior: SnackBarBehavior.floating,
@@ -1280,8 +1280,8 @@ class _ProductCardState extends State<ProductCard> {
                     );
                     return;
                   }
-                  final err =
-                      cart.checkAddItemEligibility(product, shop: effectiveShop);
+                  final err = cart.checkAddItemEligibility(product,
+                      shop: effectiveShop);
                   if (err != null) {
                     SensoryHaptics.error();
                     AppToast.showWarning(

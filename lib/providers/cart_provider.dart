@@ -135,9 +135,11 @@ class CartProvider extends ChangeNotifier {
       'enything_cart_v2'; // Bumped for variant support
   static const String _legacyCartKey = 'enything_cart_v1';
   static const String _pendingCartGroupKey = 'enything_pending_cart_group_id';
-  static const String _pendingOrderCancelKey = 'enything_pending_order_to_cancel';
+  static const String _pendingOrderCancelKey =
+      'enything_pending_order_to_cancel';
   static const String _pendingActiveShopsKey = 'enything_pending_active_shops';
-  static const String _pendingActiveWeightKey = 'enything_pending_active_weight';
+  static const String _pendingActiveWeightKey =
+      'enything_pending_active_weight';
   final List<CartItem> _items = [];
   final Set<String> _inFlightRestores = {};
 
@@ -162,13 +164,15 @@ class CartProvider extends ChangeNotifier {
   }
 
   List<ShopModel> _activePendingShops = [];
-  List<ShopModel> get activePendingShops => List.unmodifiable(_activePendingShops);
+  List<ShopModel> get activePendingShops =>
+      List.unmodifiable(_activePendingShops);
   double _activePendingWeight = 0.0;
   double get activePendingWeight => _activePendingWeight;
   bool get isPendingReplacementActive =>
       _pendingCartGroupId != null || _activePendingShops.isNotEmpty;
 
-  void setActivePendingShops(List<ShopModel> shops, [double activeWeight = 0.0]) {
+  void setActivePendingShops(List<ShopModel> shops,
+      [double activeWeight = 0.0]) {
     _activePendingShops = List.from(shops);
     _activePendingWeight = math.max(0.0, activeWeight);
     _persistPendingFields();
@@ -190,7 +194,8 @@ class CartProvider extends ChangeNotifier {
         await prefs.remove(_pendingOrderCancelKey);
       }
       if (_activePendingShops.isNotEmpty) {
-        final encoded = jsonEncode(_activePendingShops.map((s) => s.toMap()).toList());
+        final encoded =
+            jsonEncode(_activePendingShops.map((s) => s.toMap()).toList());
         await prefs.setString(_pendingActiveShopsKey, encoded);
       } else {
         await prefs.remove(_pendingActiveShopsKey);
@@ -293,7 +298,8 @@ class CartProvider extends ChangeNotifier {
   }
 
   /// Whether the cart has reached or exceeded the physical two-wheeler limit (15 kg).
-  bool get isMaxWeightReached => effectiveAggregateWeight >= PaymentConfig.maxWeightKg;
+  bool get isMaxWeightReached =>
+      effectiveAggregateWeight >= PaymentConfig.maxWeightKg;
 
   /// Whether the cart has entered the heavy order surcharge bracket (> 10 kg).
   bool get isHeavyOrder {
@@ -308,13 +314,16 @@ class CartProvider extends ChangeNotifier {
   bool get hasClosedShops => shops.any((s) => !s.isOpenRightNow);
 
   /// Whether every shop in the cart is currently closed.
-  bool get areAllShopsClosed => shops.isNotEmpty && shops.every((s) => !s.isOpenRightNow);
+  bool get areAllShopsClosed =>
+      shops.isNotEmpty && shops.every((s) => !s.isOpenRightNow);
 
   /// Returns the subset of shops in the cart that are currently closed.
-  List<ShopModel> get closedShops => shops.where((s) => !s.isOpenRightNow).toList();
+  List<ShopModel> get closedShops =>
+      shops.where((s) => !s.isOpenRightNow).toList();
 
   /// Returns the subset of shops in the cart that are currently open.
-  List<ShopModel> get openShops => shops.where((s) => s.isOpenRightNow).toList();
+  List<ShopModel> get openShops =>
+      shops.where((s) => s.isOpenRightNow).toList();
 
   /// 1-tap removal of all cart items originating from a specific shop.
   void removeItemsFromShop(String shopId) {
@@ -332,10 +341,11 @@ class CartProvider extends ChangeNotifier {
     try {
       final res = await Supabase.instance.client
           .from('shops')
-          .select('id, name, is_active, is_accepting_orders, is_open, is_manually_closed, open_time, close_time, opening_time, closing_time')
+          .select(
+              'id, name, is_active, is_accepting_orders, is_open, is_manually_closed, open_time, close_time, opening_time, closing_time')
           .inFilter('id', shopIds);
 
-      if (res is List && res.isNotEmpty) {
+      if (res.isNotEmpty) {
         final Map<String, Map<String, dynamic>> shopMap = {
           for (final row in res) (row['id'] as String): row,
         };
@@ -466,7 +476,8 @@ class CartProvider extends ChangeNotifier {
   /// Proactively checks whether an existing cart item can be incremented by 1 unit.
   bool canIncrementItem(CartItem item) {
     if (totalItemCount + 1 > PaymentConfig.maxItemsPerOrder) return false;
-    return (effectiveAggregateWeight + item.unitWeightKg) <= PaymentConfig.maxWeightKg;
+    return (effectiveAggregateWeight + item.unitWeightKg) <=
+        PaymentConfig.maxWeightKg;
   }
 
   /// Proactively checks whether a product in the cart can be incremented by 1 unit.
@@ -476,7 +487,8 @@ class CartProvider extends ChangeNotifier {
         item.product.id == productId &&
         (variantName == null || item.selectedVariant?.name == variantName));
     if (idx == -1) return false;
-    return (effectiveAggregateWeight + _items[idx].unitWeightKg) <= PaymentConfig.maxWeightKg;
+    return (effectiveAggregateWeight + _items[idx].unitWeightKg) <=
+        PaymentConfig.maxWeightKg;
   }
 
   double get subtotal => _items.fold(0.0, (sum, item) => sum + item.totalPrice);
@@ -508,8 +520,8 @@ class CartProvider extends ChangeNotifier {
       _items.where((item) => item.shop.id == shopId).toList();
 
   /// Returns whether any product from [shopId] requires a doctor's prescription.
-  bool shopRequiresPrescription(String shopId) =>
-      _items.any((item) => item.shop.id == shopId && item.product.requiresPrescription);
+  bool shopRequiresPrescription(String shopId) => _items.any(
+      (item) => item.shop.id == shopId && item.product.requiresPrescription);
 
   // ---------------------------------------------------------------------------
   // Add-On GST helpers (tax_config.dart — ADD-ON MODEL)
@@ -549,7 +561,8 @@ class CartProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get taxBreakdownItems => _items
       .map((i) => {
             'category': i.product.category,
-            'price': i.selectedVariant?.price ?? i.product.price, // BASE price, pre-GST
+            'price': i.selectedVariant?.price ??
+                i.product.price, // BASE price, pre-GST
             'quantity': i.quantity,
             'gst_rate_override':
                 i.product.gstRateOverride, // null = use category
@@ -672,8 +685,8 @@ class CartProvider extends ChangeNotifier {
 
       // 100x SYNC: Set global 3-second notification in CartProvider for both in-sheet & home bottom-nav
       final notifId = DateTime.now().millisecondsSinceEpoch.toString();
-      _recentNotification =
-          CartNotification(id: notifId, title: title, message: msg, isError: false);
+      _recentNotification = CartNotification(
+          id: notifId, title: title, message: msg, isError: false);
       safeNotifyListeners();
 
       _notificationTimer?.cancel();
@@ -695,7 +708,8 @@ class CartProvider extends ChangeNotifier {
     safeNotifyListeners();
   }
 
-  String? updateQuantity(String productId, int quantity, {String? variantName}) {
+  String? updateQuantity(String productId, int quantity,
+      {String? variantName}) {
     final idx = _items.indexWhere((item) =>
         item.product.id == productId &&
         item.selectedVariant?.name == variantName);
@@ -713,13 +727,15 @@ class CartProvider extends ChangeNotifier {
 
       if (deltaQty > 0) {
         if (!_items[idx].shop.isOpenRightNow) {
-          const err = 'This shop is currently closed. Cannot accept orders right now.';
+          const err =
+              'This shop is currently closed. Cannot accept orders right now.';
           _showTransientError(err);
           return err;
         }
 
         if (totalItemCount + deltaQty > PaymentConfig.maxItemsPerOrder) {
-          const err = 'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
+          const err =
+              'Maximum ${PaymentConfig.maxItemsPerOrder} items allowed per order';
           _showTransientError(err);
           return err;
         }
@@ -728,7 +744,8 @@ class CartProvider extends ChangeNotifier {
         final projectedWeight = effectiveAggregateWeight + deltaWeight;
         if (projectedWeight > PaymentConfig.maxWeightKg) {
           final remaining = remainingWeightCapacityKg;
-          final err = 'Maximum delivery weight of ${PaymentConfig.maxWeightKg.toInt()} kg reached (${remaining.toStringAsFixed(2)} kg capacity left).';
+          final err =
+              'Maximum delivery weight of ${PaymentConfig.maxWeightKg.toInt()} kg reached (${remaining.toStringAsFixed(2)} kg capacity left).';
           _showTransientError(err);
           return err;
         }
@@ -755,10 +772,12 @@ class CartProvider extends ChangeNotifier {
 
   void clear() {
     _items.clear();
-    _pendingCartGroupId = null;      // Bug 1.1: prevent cross-account injection
-    _pendingOrderIdToCancel = null;  // Bug 1.1: prevent cross-account injection
-    _activePendingShops = [];        // 100x FIX: Flush ghost replacement shops from memory
-    _activePendingWeight = 0.0;      // 100x FIX: Flush ghost replacement weight from memory
+    _pendingCartGroupId = null; // Bug 1.1: prevent cross-account injection
+    _pendingOrderIdToCancel = null; // Bug 1.1: prevent cross-account injection
+    _activePendingShops =
+        []; // 100x FIX: Flush ghost replacement shops from memory
+    _activePendingWeight =
+        0.0; // 100x FIX: Flush ghost replacement weight from memory
     scaffoldMessengerKey.currentState?.clearSnackBars();
     _saveCart(); // Bug #20
     _clearPersistedPendingFields();
@@ -768,10 +787,12 @@ class CartProvider extends ChangeNotifier {
   /// Explicitly await the disk persistence before proceeding to prevent race conditions.
   Future<void> clearAsync() async {
     _items.clear();
-    _pendingCartGroupId = null;      // Bug 1.1: prevent cross-account injection
-    _pendingOrderIdToCancel = null;  // Bug 1.1: prevent cross-account injection
-    _activePendingShops = [];        // 100x FIX: Flush ghost replacement shops from memory
-    _activePendingWeight = 0.0;      // 100x FIX: Flush ghost replacement weight from memory
+    _pendingCartGroupId = null; // Bug 1.1: prevent cross-account injection
+    _pendingOrderIdToCancel = null; // Bug 1.1: prevent cross-account injection
+    _activePendingShops =
+        []; // 100x FIX: Flush ghost replacement shops from memory
+    _activePendingWeight =
+        0.0; // 100x FIX: Flush ghost replacement weight from memory
     scaffoldMessengerKey.currentState?.clearSnackBars();
     safeNotifyListeners();
     await _saveCart();
@@ -850,7 +871,9 @@ class CartProvider extends ChangeNotifier {
       _pendingCartGroupId ??= prefs.getString(_pendingCartGroupKey);
       _pendingOrderIdToCancel ??= prefs.getString(_pendingOrderCancelKey);
       final rawShops = prefs.getString(_pendingActiveShopsKey);
-      if (rawShops != null && rawShops.isNotEmpty && _activePendingShops.isEmpty) {
+      if (rawShops != null &&
+          rawShops.isNotEmpty &&
+          _activePendingShops.isEmpty) {
         try {
           final List decoded = jsonDecode(rawShops);
           _activePendingShops = decoded

@@ -3557,8 +3557,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             final o = pickedUpOrders[i];
                             final shouldNotify =
                                 !notifiedCustomerIds.contains(o.customerId);
-                            if (shouldNotify)
+                            if (shouldNotify) {
                               notifiedCustomerIds.add(o.customerId);
+                            }
                             await _updateStatus(o, 'out_for_delivery',
                                 skipReload: true, notifyCustomer: shouldNotify);
                           }
@@ -3579,8 +3580,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                     final deliverableOrders = group.activeOrders
                         .where((o) => o.status != 'delivered')
                         .toList();
-                    if (deliverableOrders.isEmpty)
+                    if (deliverableOrders.isEmpty) {
                       return const SizedBox.shrink();
+                    }
                     final label = deliverableOrders.length > 1
                         ? 'Mark ${deliverableOrders.length} Orders Delivered'
                         : 'Mark Delivered';
@@ -3604,8 +3606,9 @@ class _DeliveryDashboardPageState extends State<DeliveryDashboardPage>
                             final o = deliverableOrders[i];
                             final shouldNotify =
                                 !notifiedCustomerIds.contains(o.customerId);
-                            if (shouldNotify)
+                            if (shouldNotify) {
                               notifiedCustomerIds.add(o.customerId);
+                            }
                             final success = await _updateStatus(o, 'delivered',
                                 skipReload: true,
                                 skipRating: true,
