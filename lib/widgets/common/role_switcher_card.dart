@@ -2,10 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../pages/customer/home_page.dart';
 import '../../models/user_model.dart';
 import '../../theme/app_colors.dart';
 import '../../config/routes.dart';
+import 'role_switch_warning_dialogs.dart';
 
 /// A premium, animated role switcher card shown on the profile page.
 ///
@@ -95,13 +98,122 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
     if (user == null || _switchingTo != null) return;
     if (role == user.activeSessionRole) return; // already on this role
 
+    // 100x Forensic Pre-Flight Check & Warning Safeguards
+    bool pauseSellerShop = false;
+    String? switchToastMessage;
+
+    if (role == 'customer') {
+      final supabase = Supabase.instance.client;
+
+      // ── CASE 1: RIDER SWITCHING TO CUSTOMER ──────────────────────
+      if (user.activeSessionRole == 'delivery_partner') {
+        try {
+          final partnerResp = await supabase
+              .from('delivery_partners')
+              .select('is_accepting_orders, is_active')
+              .eq('id', user.id)
+              .maybeSingle();
+
+          final bool isOnline = partnerResp?['is_accepting_orders'] == true ||
+              partnerResp?['is_active'] == true;
+
+          final inFlightOrders = await supabase
+              .from('orders')
+              .select('id')
+              .eq('delivery_partner_id', user.id)
+              .inFilter('status', [
+            'assigned',
+            'confirmed',
+            'preparing',
+            'ready_for_pickup',
+            'picked_up',
+            'out_for_delivery'
+          ]);
+          final int activeDeliveriesCount = (inFlightOrders as List).length;
+
+          if (isOnline || activeDeliveriesCount > 0) {
+            if (!ctx.mounted) return;
+            final action = await RoleSwitchWarningDialogs.showRiderWarning(
+              ctx,
+              hasActiveDeliveries: activeDeliveriesCount > 0,
+              activeDeliveriesCount: activeDeliveriesCount,
+              isOnline: isOnline,
+            );
+            if (action != RiderSwitchAction.proceed) {
+              return; // User cancelled
+            }
+            switchToastMessage = 'Switched to Customer • Rider Duty is OFF 🛵';
+          }
+        } catch (e) {
+          debugPrint('Error inspecting rider status on role switch: $e');
+        }
+      }
+
+      // ── CASE 2: SELLER SWITCHING TO CUSTOMER ──────────────────────
+      else if (user.activeSessionRole == 'seller') {
+        try {
+          final shopsResp = await supabase
+              .from('shops')
+              .select('id, name, is_accepting_orders, is_open')
+              .eq('seller_id', user.id);
+
+          final shopsList = List<Map<String, dynamic>>.from(shopsResp as List);
+          final bool hasOpenShop = shopsList.any(
+              (s) => s['is_accepting_orders'] == true || s['is_open'] == true);
+
+          final shopIds = shopsList
+              .map((s) => s['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList();
+          int activeKitchenOrdersCount = 0;
+          if (shopIds.isNotEmpty) {
+            final kitchenOrders = await supabase
+                .from('orders')
+                .select('id')
+                .inFilter('shop_id', shopIds)
+                .inFilter(
+                    'status', ['confirmed', 'preparing', 'ready_for_pickup']);
+            activeKitchenOrdersCount = (kitchenOrders as List).length;
+          }
+
+          final shopName = shopsList.isNotEmpty
+              ? (shopsList.first['name']?.toString() ?? 'Store')
+              : 'Store';
+
+          if (hasOpenShop || activeKitchenOrdersCount > 0) {
+            if (!ctx.mounted) return;
+            final action = await RoleSwitchWarningDialogs.showSellerWarning(
+              ctx,
+              shopName: shopName,
+              isAcceptingOrders: hasOpenShop,
+              activeOrdersCount: activeKitchenOrdersCount,
+            );
+            if (action == null || action == SellerSwitchAction.cancel) {
+              return; // User cancelled
+            }
+            pauseSellerShop = (action == SellerSwitchAction.pauseAndSwitch);
+            switchToastMessage = pauseSellerShop
+                ? 'Switched to Customer • Store is Paused 🏪'
+                : 'Switched to Customer • Store Remains Live 🏪';
+          }
+        } catch (e) {
+          debugPrint('Error inspecting seller status on role switch: $e');
+        }
+      }
+    }
+
+    if (!mounted) return;
     setState(() => _switchingTo = role);
 
-    // Capture navigator BEFORE the async gap
-    final navigator = Navigator.of(ctx);
+    // Capture navigator and messenger BEFORE navigation
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
 
     try {
-      await auth.switchSessionRole(role);
+      if (role == 'customer') {
+        CustomerHomeView.invalidateStaticCache();
+      }
+      await auth.switchSessionRole(role, pauseSellerShop: pauseSellerShop);
     } catch (e) {
       if (mounted) setState(() => _switchingTo = null);
       return;
@@ -123,8 +235,30 @@ class _RoleSwitcherCardState extends State<RoleSwitcherCard>
         dest = AppRoutes.customerHome;
     }
 
-    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+    messenger?.hideCurrentSnackBar();
     navigator.pushNamedAndRemoveUntil(dest, (_) => false);
+
+    if (switchToastMessage != null) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(
+              switchToastMessage!,
+              style: GoogleFonts.outfit(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      });
+    }
   }
 
   @override

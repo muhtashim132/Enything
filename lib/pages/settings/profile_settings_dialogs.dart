@@ -396,12 +396,8 @@ void _showAddressDetailSheet(
                             if (error != null) {
                               AppToast.showError(ctx, message: error);
                             } else {
-                              locProv.setLocalAddressDetails(
-                                house: flatCtrl.text.trim(),
-                                mark: landmarkCtrl.text.trim(),
-                                pin: pincodeCtrl.text.trim(),
-                                addressText: pickedAddressDisplay,
-                              );
+                              // 100x Coordinate Parity: Activate both address text AND exact coordinates atomically
+                              locProv.selectSavedAddress(addr);
                               Navigator.pop(ctx);
                               AppToast.showSuccess(
                                 context,

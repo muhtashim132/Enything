@@ -513,6 +513,47 @@ All AI models and developers working on this project MUST adhere to the architec
    - **Rating Tie-Breaker (+0 to +50 pts)**: Rating acts solely as an intra-tier tie-breaker and never bridges tier gaps.
 3. **Database Partition & Order Relevance**: In `public.search_products_geospatial` RPC (`supabase/migrations/20290000000179_100x_search_relevance_exact_name_ranking_fortress.sql`), both `ROW_NUMBER() OVER (PARTITION BY p.shop_id)` and the outer `ORDER BY` rank by query match relevance first. This prevents shops' exact query-matching products from being truncated by `p_limit_per_shop` or displaced by unrelated 5-star items.
 
+## 100x Forensic Edge-Case Audit & Remediation (Geospatial Delivery Radius, Address Desync & Reviewer Protection Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for Geospatial Delivery Radius, Address Synchronization, and Reviewer Protection:
+
+1. **Atomic Coordinate & Address Text Synchronization**:
+   - In `LocationProvider`, `_currentAddress` text and `_currentLocation` (LatLng) must update atomically.
+   - Never call `setLocalAddressDetails` with address text without updating `_currentLocation`.
+   - In `profile_settings_dialogs.dart`, saving an address calls `locProv.selectSavedAddress(addr)` to activate both address and coordinates simultaneously.
+
+2. **Apple Reviewer Demo Protection**:
+   - The 50km auto-select bypass in `LocationProvider.loadSavedAddresses()` is strictly restricted to Apple Reviewer demo test credentials (`_isAppleReviewerAccount()` checking `999999999X` / `9876500000`).
+   - Real customers, sellers, and admins located > 50km away in Srinagar or elsewhere must NEVER have their GPS location hijacked to Bandipora.
+
+3. **Missing Coordinate Self-Healing Geocoder**:
+   - In `LocationProvider.selectSavedAddress()`, `addSavedAddress()`, and `updateSavedAddress()`, if an address has `!hasValidCoordinates` (`lat == 0 || lng == 0`), the system triggers forward-geocoding via OpenStreetMap Nominatim, sets `_currentLocation`, and backfills coordinates to `saved_addresses`.
+
+4. **Zero-Leak Geospatial Early Return & Cache Purging**:
+   - In `CustomerHomeViewState._loadAllData()`, if `nearby.isEmpty` (no shops within delivery radius), immediately purge static memory caches (`_cachedShops`, `_cachedProducts`, `_cachedProductShops`, `_cachedDepartmentProductCounts`), clear state (`_shops = []`, `_products = []`), and exit immediately.
+   - Never invoke `get_feed_products` or cosmetic backfills when `nearby.isEmpty`.
+
+5. **Static Memory Cache Invalidation on Role Switch**:
+   - Switching roles (Admin -> Customer, Rider -> Customer, Seller -> Customer) in `RoleSwitcherCard` must invoke `CustomerHomeView.invalidateStaticCache()` and `LocationProvider.checkLocationOnResume()`.
+   - Never allow static in-memory shop/product caches from other sessions to survive across role changes.
+
+6. **Multi-Department Product Counter Parity**:
+   - In `_fetchDepartmentTotalCounts`, department products must be counted across all active nearby shops (`allNearbyShopIds`) matching `inFilter('category', categories)` to include omnibus stores (supermarkets, hypermarkets, departmental stores).
+   - All department section headers must wrap the count badge with `math.max(_departmentProductCounts[dept] ?? 0, products.length)` to guarantee a section with products never displays `(0)`.
+
+7. **Delivery Radius Distance Pill Suppression**:
+   - In `ProductCard`, if `d < 0 || !DeliveryCalculator.isWithinRange(d)`, suppress the distance chip (`return const SizedBox.shrink()`). Never display distance chips for out-of-range items.
+
+8. **Unserviceable Zone UI with One-Tap Relocation**:
+   - When no shops are within radius (`_buildNoShopsNearby`), render a dedicated unserviceable zone screen showing the user's current address badge, explanation of the 15km hub radius, a prominent `"Change Location"` button opening `showAddressPickerSheet(context)`, and a `"Recheck GPS"` button.
+
+## 100x Forensic Edge-Case Audit & Remediation (Seller & Rider Role Switch Warning & Toggle Deactivation Fortress)
+All AI models and developers working on this project MUST adhere to the architecture, edge cases, and remediation protocols for role transitions:
+1. **Rider Duty Pre-Flight Warning & Active Order Shield**: In `lib/widgets/common/role_switcher_card.dart`, switching from `delivery_partner` to `customer` must query `delivery_partners` duty status and in-flight orders. If active deliveries exist, prompt with high-severity alert (`Active Deliveries in Progress`). If online with no active orders, prompt with duty status warning explaining that duty toggle will be set to Offline (`is_accepting_orders = false`) and GPS stopped. If already offline, switch seamlessly.
+2. **Seller Store Status Confirmation & 1-Tap Pause**: In `RoleSwitcherCard`, switching from `seller` to `customer` must query `shops` for `is_accepting_orders` and active kitchen orders. If open, present store status dialog with options: `[Pause Store & Switch]` (`is_accepting_orders = false, is_open = false, is_manually_closed = true`), `[Keep Store Open & Switch]`, or `[Cancel]`. If already closed, switch seamlessly.
+3. **Manual Pause Immunity**: Setting `is_manually_closed = true` on store pause ensures background trigger `trg_sync_shop_hours` does not re-open the store while the merchant is browsing as a customer.
+4. **Seller Dashboard Restoration Banner**: In `lib/pages/seller/dashboard_page.dart`, if `_shopIsActive == false`, display a dedicated pause banner with 1-tap `[Open]` button that directly updates Supabase and restores store acceptance.
+
+
 
 
 

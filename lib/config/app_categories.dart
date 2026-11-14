@@ -75,7 +75,8 @@ class AppCategories {
   }
 
   /// Returns whether a category is Grocerylm (Grocery Low Margin).
-  static bool isGroceryLowMargin(String? categoryName) => isInternalOnly(categoryName);
+  static bool isGroceryLowMargin(String? categoryName) =>
+      isInternalOnly(categoryName);
 
   /// Returns only customer-facing categories (excluding internal-only categories like Grocerylm).
   static List<Map<String, String>> get publicCategories =>
@@ -251,8 +252,7 @@ class AppCategories {
       return true;
     }
 
-    final isBrowsingOmnibus =
-        lowerTargets.any(isSupermarketOrGroceryCategory);
+    final isBrowsingOmnibus = lowerTargets.any(isSupermarketOrGroceryCategory);
 
     // 2. Grocery Low Margin match
     if (isBrowsingOmnibus && isGroceryLowMargin(pCat)) {
@@ -269,8 +269,15 @@ class AppCategories {
 
     // 4. Non-omnibus specialty shop match (if shop category matches target)
     final sCat = (shopCategory ?? '').trim().toLowerCase();
-    if (!isShopOmnibus && sCat.isNotEmpty && lowerTargets.contains(sCat)) {
-      return true;
+    if (!isShopOmnibus) {
+      if (sCat.isNotEmpty && lowerTargets.contains(sCat)) {
+        return true;
+      }
+      if (shopCategories != null &&
+          shopCategories
+              .any((c) => lowerTargets.contains(c.trim().toLowerCase()))) {
+        return true;
+      }
     }
 
     return false;

@@ -266,13 +266,11 @@ class AuthProvider extends ChangeNotifier {
     if (userId != null) {
       try {
         if (role == 'seller') {
-          await _supabase
-              .from('shops')
-              .update({
-                'is_accepting_orders': false,
-                'is_open': false,
-                'is_manually_closed': true,
-              }).eq('seller_id', userId);
+          await _supabase.from('shops').update({
+            'is_accepting_orders': false,
+            'is_open': false,
+            'is_manually_closed': true,
+          }).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
@@ -328,10 +326,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       final fcmToken = await FirebaseMessaging.instance.getToken();
       if (fcmToken != null) {
-        await _supabase
-            .from('device_tokens')
-            .delete()
-            .eq('token', fcmToken);
+        await _supabase.from('device_tokens').delete().eq('token', fcmToken);
       }
     } catch (_) {}
 
@@ -637,7 +632,8 @@ class AuthProvider extends ChangeNotifier {
             // Transient network error or 5xx server glitch:
             // Do NOT mark user as nonexistent or kick them to role selection!
             debugPrint('Transient error fetching profile for $userId: $e');
-            _error = 'Unable to connect to server. Please check your internet connection.';
+            _error =
+                'Unable to connect to server. Please check your internet connection.';
             safeNotifyListeners();
             return;
           }
@@ -772,7 +768,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Switch the active session role (user must already be registered for that role).
-  Future<void> switchSessionRole(String role) async {
+  Future<void> switchSessionRole(String role,
+      {bool pauseSellerShop = false}) async {
     if (_user == null) return;
     if (!_user!.activeRoles.contains(role)) return;
 
@@ -786,6 +783,21 @@ class AuthProvider extends ChangeNotifier {
         RiderBackgroundService.instance.stopService();
       } catch (e) {
         debugPrint('Failed to deactivate delivery partner: $e');
+      }
+    }
+
+    // Auto-pause shop toggle when seller chooses to pause store upon switching away
+    if (_user!.activeSessionRole == 'seller' &&
+        role != 'seller' &&
+        pauseSellerShop) {
+      try {
+        await _supabase.from('shops').update({
+          'is_accepting_orders': false,
+          'is_open': false,
+          'is_manually_closed': true,
+        }).eq('seller_id', _user!.id);
+      } catch (e) {
+        debugPrint('Failed to pause seller shop: $e');
       }
     }
 
@@ -1022,7 +1034,8 @@ class AuthProvider extends ChangeNotifier {
           digits.endsWith('9999999992') ||
           digits.endsWith('9999999993') ||
           digits.endsWith('9999999999')) {
-        await _provisionReviewerDemoAccount(userId, phone, digits, preferredRole);
+        await _provisionReviewerDemoAccount(
+            userId, phone, digits, preferredRole);
       }
 
       // 3️⃣ Check if this user already has a profile or is an admin
@@ -1073,7 +1086,6 @@ class AuthProvider extends ChangeNotifier {
     safeNotifyListeners();
     return null;
   }
-
 
   // ─── Create / Update Profile ─────────────────────────────────────────────
   /// One phone user can have ONE profile row AND also independent rows in
@@ -1455,13 +1467,11 @@ class AuthProvider extends ChangeNotifier {
     if (userId != null) {
       try {
         if (role == 'seller') {
-          await _supabase
-              .from('shops')
-              .update({
-                'is_accepting_orders': false,
-                'is_open': false,
-                'is_manually_closed': true,
-              }).eq('seller_id', userId);
+          await _supabase.from('shops').update({
+            'is_accepting_orders': false,
+            'is_open': false,
+            'is_manually_closed': true,
+          }).eq('seller_id', userId);
         } else if (role == 'delivery_partner') {
           await _supabase
               .from('delivery_partners')
@@ -1568,7 +1578,9 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (response.status != 200) {
-        final errorMsg = response.data is Map ? response.data['error'] : 'Failed to delete account';
+        final errorMsg = response.data is Map
+            ? response.data['error']
+            : 'Failed to delete account';
         _error = errorMsg?.toString() ?? 'Deletion failed. Please try again.';
         _isLoading = false;
         safeNotifyListeners();
@@ -1597,9 +1609,12 @@ class AuthProvider extends ChangeNotifier {
     String? preferredRole,
   ) async {
     try {
-      final isCustomerDemo = digits.endsWith('9999999991') || digits.endsWith('9999999996');
-      final isSellerDemo = digits.endsWith('9999999992') || digits.endsWith('9999999997');
-      final isRiderDemo = digits.endsWith('9999999993') || digits.endsWith('9999999998');
+      final isCustomerDemo =
+          digits.endsWith('9999999991') || digits.endsWith('9999999996');
+      final isSellerDemo =
+          digits.endsWith('9999999992') || digits.endsWith('9999999997');
+      final isRiderDemo =
+          digits.endsWith('9999999993') || digits.endsWith('9999999998');
       final isUniversalDemo = digits.endsWith('9999999999');
 
       String role = 'customer';
@@ -1650,7 +1665,8 @@ class AuthProvider extends ChangeNotifier {
           await _supabase.from('saved_addresses').insert({
             'user_id': userId,
             'label': 'Home',
-            'address': 'Plan Bandipora, Ward No. 2, Bandipora, Jammu & Kashmir — 193502',
+            'address':
+                'Plan Bandipora, Ward No. 2, Bandipora, Jammu & Kashmir — 193502',
             'flat_number': 'Ward No. 2',
             'landmark': 'Near Jamia Masjid',
             'pincode': '193502',
@@ -1673,7 +1689,8 @@ class AuthProvider extends ChangeNotifier {
           await _supabase.from('shops').insert({
             'seller_id': userId,
             'name': 'Apple Demo Store',
-            'description': 'Verified demo store for Apple App Review evaluation.',
+            'description':
+                'Verified demo store for Apple App Review evaluation.',
             'address': 'Main Market, Bandipora, Jammu & Kashmir — 193502',
             'phone': phone,
             'category': 'grocery',

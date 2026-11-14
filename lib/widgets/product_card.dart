@@ -19,6 +19,7 @@ import '../utils/closed_store_feedback.dart';
 import '../config/app_categories.dart';
 import '../config/payment_config.dart';
 import '../utils/app_toast.dart';
+import '../utils/delivery_calculator.dart';
 
 class ProductCard extends StatefulWidget {
   final ProductModel product;
@@ -597,7 +598,11 @@ class _ProductCardState extends State<ProductCard> {
                                       final d = hasValidCoords
                                           ? locProv.distanceTo(shop!.location)
                                           : -1.0;
-                                      if (d < 0) return const SizedBox.shrink();
+                                      if (d < 0 ||
+                                          !DeliveryCalculator.isWithinRange(
+                                              d)) {
+                                        return const SizedBox.shrink();
+                                      }
                                       return Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [

@@ -48,6 +48,16 @@ import 'all_listings_page.dart';
 class CustomerHomeView extends StatefulWidget {
   const CustomerHomeView({super.key});
 
+  /// 100x Cache Eviction: Clears in-memory static caches on role switches or location resets.
+  static void invalidateStaticCache() {
+    CustomerHomeViewState._cachedShops = null;
+    CustomerHomeViewState._cachedProducts = null;
+    CustomerHomeViewState._cachedProductShops = null;
+    CustomerHomeViewState._cachedDepartmentProductCounts = null;
+    CustomerHomeViewState._cachedLocation = null;
+    CustomerHomeViewState._cacheTimestamp = null;
+  }
+
   @override
   State<CustomerHomeView> createState() => CustomerHomeViewState();
 }
@@ -446,6 +456,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   List<ProductModel>? _memoizedSortedCosmeticsProducts;
   List<ProductModel>? _memoizedSortedSupermarketProducts;
   List<ProductModel>? _memoizedSortedStationeryProducts;
+  List<ProductModel>? _memoizedSortedMeatAndFishProducts;
+  List<ProductModel>? _memoizedSortedDairyProducts;
+  List<ProductModel>? _memoizedSortedBakeryProducts;
+  List<ProductModel>? _memoizedSortedFruitsVegsProducts;
+  List<ProductModel>? _memoizedSortedElectronicsProducts;
+  List<ProductModel>? _memoizedSortedHardwareProducts;
+  List<ProductModel>? _memoizedSortedSalonProducts;
   List<ShopModel>? _memoizedSortedShopResults;
   List<ShopModel>? _memoizedSortedNormalShops;
 
@@ -458,6 +475,13 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     _memoizedSortedCosmeticsProducts = null;
     _memoizedSortedSupermarketProducts = null;
     _memoizedSortedStationeryProducts = null;
+    _memoizedSortedMeatAndFishProducts = null;
+    _memoizedSortedDairyProducts = null;
+    _memoizedSortedBakeryProducts = null;
+    _memoizedSortedFruitsVegsProducts = null;
+    _memoizedSortedElectronicsProducts = null;
+    _memoizedSortedHardwareProducts = null;
+    _memoizedSortedSalonProducts = null;
     _memoizedSortedShopResults = null;
     _memoizedSortedNormalShops = null;
   }
@@ -684,6 +708,90 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       applyDemographic: false,
     );
     return _memoizedSortedStationeryProducts!;
+  }
+
+  /// Returns normal products filtered for Fish, Mutton & Meat (immune to clothing demographic filter)
+  List<ProductModel> get _sortedMeatAndFishProducts {
+    if (_memoizedSortedMeatAndFishProducts != null) {
+      return _memoizedSortedMeatAndFishProducts!;
+    }
+    _memoizedSortedMeatAndFishProducts = _computeSortedCategoryProducts(
+      _tabCategories['MeatAndFish'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedMeatAndFishProducts!;
+  }
+
+  /// Returns normal products filtered for Fresh Milk, Butter, Cheese & Eggs (immune to clothing demographic filter)
+  List<ProductModel> get _sortedDairyProducts {
+    if (_memoizedSortedDairyProducts != null) {
+      return _memoizedSortedDairyProducts!;
+    }
+    _memoizedSortedDairyProducts = _computeSortedCategoryProducts(
+      _tabCategories['DairyAndEggs'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedDairyProducts!;
+  }
+
+  /// Returns normal products filtered for Bakery, Sweets & Mithai (immune to clothing demographic filter)
+  List<ProductModel> get _sortedBakeryProducts {
+    if (_memoizedSortedBakeryProducts != null) {
+      return _memoizedSortedBakeryProducts!;
+    }
+    _memoizedSortedBakeryProducts = _computeSortedCategoryProducts(
+      _tabCategories['BakeryAndSweets'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedBakeryProducts!;
+  }
+
+  /// Returns normal products filtered for Fruits, Vegs & Organic (immune to clothing demographic filter)
+  List<ProductModel> get _sortedFruitsVegsProducts {
+    if (_memoizedSortedFruitsVegsProducts != null) {
+      return _memoizedSortedFruitsVegsProducts!;
+    }
+    _memoizedSortedFruitsVegsProducts = _computeSortedCategoryProducts(
+      _tabCategories['FruitsVegsOrganic'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedFruitsVegsProducts!;
+  }
+
+  /// Returns normal products filtered for Electronics (immune to clothing demographic filter)
+  List<ProductModel> get _sortedElectronicsProducts {
+    if (_memoizedSortedElectronicsProducts != null) {
+      return _memoizedSortedElectronicsProducts!;
+    }
+    _memoizedSortedElectronicsProducts = _computeSortedCategoryProducts(
+      _tabCategories['Electronics'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedElectronicsProducts!;
+  }
+
+  /// Returns normal products filtered for Hardware (immune to clothing demographic filter)
+  List<ProductModel> get _sortedHardwareProducts {
+    if (_memoizedSortedHardwareProducts != null) {
+      return _memoizedSortedHardwareProducts!;
+    }
+    _memoizedSortedHardwareProducts = _computeSortedCategoryProducts(
+      _tabCategories['Hardware'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedHardwareProducts!;
+  }
+
+  /// Returns normal products filtered for Salon & Beauty (immune to clothing demographic filter)
+  List<ProductModel> get _sortedSalonProducts {
+    if (_memoizedSortedSalonProducts != null) {
+      return _memoizedSortedSalonProducts!;
+    }
+    _memoizedSortedSalonProducts = _computeSortedCategoryProducts(
+      _tabCategories['SalonAndBeauty'] ?? [],
+      applyDemographic: false,
+    );
+    return _memoizedSortedSalonProducts!;
   }
 
   /// Returns search shop results sorted by the current _sortMode and filtered by dietary preference.
@@ -2200,6 +2308,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
     if (!locationProvider.hasLocation) {
       await locationProvider.requestLocation();
+    } else if (locationProvider.selectedAddress == null) {
+      // 100x Background Verification: Ensure live physical GPS fix hasn't shifted away from cold cache
+      locationProvider.requestLocation(isUserAction: false);
     }
 
     // _selectedTabIndex == -1 means "All" — fetch every active shop
@@ -2217,12 +2328,34 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     'Food': [
       'Restaurant',
       'Fast Food',
-      'Bakery',
-      'Sweets & Mithai',
       'Tea & Coffee',
       'Ice Cream',
       'Paan Shop',
       'Beverages'
+    ],
+    'MeatAndFish': [
+      'Butcher',
+      'Fish & Seafood',
+      'Meat',
+      'Raw Meat',
+    ],
+    'DairyAndEggs': [
+      'Dairy & Eggs',
+      'Dairy',
+      'Fresh Milk',
+      'Milk & Eggs',
+    ],
+    'BakeryAndSweets': [
+      'Bakery',
+      'Sweets & Mithai',
+      'Sweets and Mithai',
+      'Cake & Pastry',
+    ],
+    'FruitsVegsOrganic': [
+      'Fruits & Vegs',
+      'Fruits and Vegs',
+      'Fruits & Vegetables',
+      'Organic',
     ],
     'Grocery': [
       'Grocery',
@@ -2262,8 +2395,14 @@ class CustomerHomeViewState extends State<CustomerHomeView>
     ],
     'Clothing': ['Clothing', 'Footwear', 'Jewellery'],
     'Electronics': ['Electronics', 'Mobile & Repair'],
-    'Cosmetics': ['Cosmetics & Beauty', 'Salon & Beauty'],
-    'Cosmetics & Beauty': ['Cosmetics & Beauty', 'Salon & Beauty'],
+    'Hardware': ['Hardware Store', 'Hardware', 'Tools & Hardware'],
+    'Cosmetics': ['Cosmetics & Beauty'],
+    'Cosmetics & Beauty': ['Cosmetics & Beauty'],
+    'SalonAndBeauty': [
+      'Salon & Beauty',
+      'Salon and Beauty',
+      'Beauty & Personal Care'
+    ],
     'Supermarket': [
       'Supermarket / Hypermarket',
       'Grocery',
@@ -2312,13 +2451,23 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
     final departments = <String, List<String>>{
       'Food': _tabCategories['Food'] ?? ['Food'],
+      'MeatAndFish':
+          _tabCategories['MeatAndFish'] ?? ['Butcher', 'Fish & Seafood'],
+      'DairyAndEggs': _tabCategories['DairyAndEggs'] ?? ['Dairy & Eggs'],
+      'BakeryAndSweets':
+          _tabCategories['BakeryAndSweets'] ?? ['Bakery', 'Sweets & Mithai'],
+      'FruitsVegsOrganic':
+          _tabCategories['FruitsVegsOrganic'] ?? ['Fruits & Vegs', 'Organic'],
       'Pharmacy': _tabCategories['Pharmacy'] ?? ['Pharmacy', 'Medical Store'],
       'Cosmetics': _tabCategories['Cosmetics'] ?? ['Cosmetics & Beauty'],
+      'SalonAndBeauty': _tabCategories['SalonAndBeauty'] ?? ['Salon & Beauty'],
       'Stationery': _tabCategories['Stationery'] ?? ['Stationery'],
       'Grocery': _tabCategories['Supermarket'] ??
           _tabCategories['Grocery'] ??
           ['Grocery'],
       'Clothing': _tabCategories['Clothing'] ?? ['Clothing'],
+      'Electronics': _tabCategories['Electronics'] ?? ['Electronics'],
+      'Hardware': _tabCategories['Hardware'] ?? ['Hardware Store'],
     };
 
     try {
@@ -2326,36 +2475,12 @@ class CustomerHomeViewState extends State<CustomerHomeView>
         departments.entries.map((entry) async {
           final deptKey = entry.key;
           final categories = entry.value;
-          final lowerCats =
-              categories.map((c) => c.trim().toLowerCase()).toSet();
 
-          // Exactly match the shop filtering logic of _openCategoryListing:
-          final matchingShopIds = nearbyShops
-              .where((s) {
-                if (lowerCats.contains(s.category.trim().toLowerCase())) {
-                  return true;
-                }
-                if (s.categories
-                    .any((c) => lowerCats.contains(c.trim().toLowerCase()))) {
-                  return true;
-                }
-                if (lowerCats.any((t) =>
-                    t.contains('cosmetic') ||
-                    t.contains('beauty') ||
-                    t.contains('grocery'))) {
-                  final sCat = s.category.trim().toLowerCase();
-                  if (sCat.contains('supermarket') ||
-                      sCat.contains('hypermarket') ||
-                      sCat.contains('departmental')) {
-                    return true;
-                  }
-                }
-                return false;
-              })
-              .map((s) => s.id)
-              .toList();
-
-          if (matchingShopIds.isEmpty) {
+          // 100x Multi-Department Omnibus Count Parity:
+          // Query all active nearby shops to count products in target department,
+          // ensuring omnibus stores carrying food/cosmetics/clothing aren't excluded.
+          final allNearbyShopIds = nearbyShops.map((s) => s.id).toList();
+          if (allNearbyShopIds.isEmpty) {
             counts[deptKey] = 0;
             return;
           }
@@ -2365,7 +2490,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
             final countResp = await _supabase
                 .from('products')
                 .select('id')
-                .inFilter('shop_id', matchingShopIds)
+                .inFilter('shop_id', allNearbyShopIds)
                 .inFilter('category', categories)
                 .eq('is_deleted', false)
                 .eq('is_available', true);
@@ -2508,6 +2633,35 @@ class CustomerHomeViewState extends State<CustomerHomeView>
           });
       }
 
+      // 100x Geospatial Radius Fortress: If no active shops exist within the delivery radius,
+      // fail fast, purge stale in-memory static caches, and display the unserviceable location screen.
+      if (nearby.isEmpty) {
+        if (_fetchId != currentFetchId) return;
+        _cachedShops = [];
+        _cachedProducts = [];
+        _cachedProductShops = {};
+        _cachedDepartmentProductCounts = {};
+        _cachedLocation = locationProvider.currentLocation;
+        _cacheTimestamp = DateTime.now();
+
+        if (mounted) {
+          _invalidateSortMemo();
+          setState(() {
+            _shops = [];
+            _products = [];
+            _productShops = {};
+            _departmentProductCounts = {};
+            _comingSoonMessage = 'No stores deliver to this location yet';
+            _comingSoonSubMessage =
+                'We currently deliver within a ${DeliveryCalculator.maxRadiusKm.toInt()} km radius of our active hubs. Stores will be available in your area soon!';
+            _isLoading = false;
+            _hasLoadedOnce = true;
+            _loadRetryCount = 0;
+          });
+        }
+        return;
+      }
+
       // Stratified Diverse Category Selection: Sample across Pharmacy, Grocery, Clothing, Food & other
       // to ensure all dedicated dashboard sections have rich product discovery without starving any category.
       bool isShopInCategories(ShopModel s, List<String> targetCats) {
@@ -2532,35 +2686,71 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
 
       // Stratified sampling: ensure all dedicated homepage department sections
-      // (Food, Pharmacy, Grocery/Supermarket, Cosmetics, Stationery, Clothing)
+      // (Food, Pharmacy, Grocery/Supermarket, Cosmetics, Stationery, Clothing,
+      // Meat/Fish, Dairy, Bakery/Sweets, Fruits/Vegs, Electronics, Hardware, Salon)
       // have products by sampling shops from each category group.
       final foodShops = nearby
           .where((s) => isShopInCategories(s, _tabCategories['Food'] ?? []))
           .take(12);
+      final bakeryShops = nearby
+          .where((s) =>
+              isShopInCategories(s, _tabCategories['BakeryAndSweets'] ?? []))
+          .take(8);
+      final dairyShops = nearby
+          .where((s) =>
+              isShopInCategories(s, _tabCategories['DairyAndEggs'] ?? []))
+          .take(8);
+      final fruitsVegsShops = nearby
+          .where((s) =>
+              isShopInCategories(s, _tabCategories['FruitsVegsOrganic'] ?? []))
+          .take(8);
+      final meatShops = nearby
+          .where(
+              (s) => isShopInCategories(s, _tabCategories['MeatAndFish'] ?? []))
+          .take(8);
       final pharmacyShops = nearby
           .where((s) => isShopInCategories(s, _tabCategories['Pharmacy'] ?? []))
-          .take(10);
-      final groceryShops = nearby
-          .where((s) => isShopInCategories(s, _tabCategories['Grocery'] ?? []))
-          .take(12);
-      final clothingShops = nearby
-          .where((s) => isShopInCategories(s, _tabCategories['Clothing'] ?? []))
           .take(10);
       final cosmeticsShops = nearby
           .where(
               (s) => isShopInCategories(s, _tabCategories['Cosmetics'] ?? []))
           .take(8);
+      final salonShops = nearby
+          .where((s) =>
+              isShopInCategories(s, _tabCategories['SalonAndBeauty'] ?? []))
+          .take(8);
+      final clothingShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Clothing'] ?? []))
+          .take(10);
+      final electronicsShops = nearby
+          .where(
+              (s) => isShopInCategories(s, _tabCategories['Electronics'] ?? []))
+          .take(8);
+      final hardwareShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Hardware'] ?? []))
+          .take(8);
       final stationeryShops = nearby
           .where(
               (s) => isShopInCategories(s, _tabCategories['Stationery'] ?? []))
           .take(8);
+      final groceryShops = nearby
+          .where((s) => isShopInCategories(s, _tabCategories['Grocery'] ?? []))
+          .take(12);
       final otherShops = nearby
           .where((s) =>
               !isShopInCategories(s, _tabCategories['Food'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['BakeryAndSweets'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['DairyAndEggs'] ?? []) &&
+              !isShopInCategories(
+                  s, _tabCategories['FruitsVegsOrganic'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['MeatAndFish'] ?? []) &&
               !isShopInCategories(s, _tabCategories['Pharmacy'] ?? []) &&
-              !isShopInCategories(s, _tabCategories['Grocery'] ?? []) &&
-              !isShopInCategories(s, _tabCategories['Clothing'] ?? []) &&
               !isShopInCategories(s, _tabCategories['Cosmetics'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['SalonAndBeauty'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Clothing'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Electronics'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Hardware'] ?? []) &&
+              !isShopInCategories(s, _tabCategories['Grocery'] ?? []) &&
               !isShopInCategories(s, _tabCategories['Stationery'] ?? []))
           .take(15);
 
@@ -2568,16 +2758,37 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       for (final s in foodShops) {
         diverseShopIds.add(s.id);
       }
+      for (final s in bakeryShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in dairyShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in fruitsVegsShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in meatShops) {
+        diverseShopIds.add(s.id);
+      }
       for (final s in pharmacyShops) {
         diverseShopIds.add(s.id);
       }
-      for (final s in groceryShops) {
+      for (final s in cosmeticsShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in salonShops) {
         diverseShopIds.add(s.id);
       }
       for (final s in clothingShops) {
         diverseShopIds.add(s.id);
       }
-      for (final s in cosmeticsShops) {
+      for (final s in electronicsShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in hardwareShops) {
+        diverseShopIds.add(s.id);
+      }
+      for (final s in groceryShops) {
         diverseShopIds.add(s.id);
       }
       for (final s in stationeryShops) {
@@ -2588,7 +2799,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       }
 
       for (final s in nearby) {
-        if (diverseShopIds.length >= 75) break;
+        if (diverseShopIds.length >= 95) break;
         diverseShopIds.add(s.id);
       }
 
@@ -4147,9 +4358,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                             ),
 
                           // ── Dedicated Department Category Showcases (Primary) ──
-                          // Order: Food → Medicines → Cosmetics → Supermarket/Grocery
+                          // Hierarchy: Food → Bakery → Dairy → Fruits/Vegs → Meat/Fish → Medicines → Cosmetics → Salon → Clothing → Electronics → Hardware → Stationery → Supermarket
                           if (_selectedTabIndex < 0) ...[
-                            // 1. Food & Restaurants (Premier Showcase)
+                            // 1. Food & Restaurants (Bakery-free Showcase)
                             if (_sortedFoodProducts.isNotEmpty) ...[
                               Builder(builder: (ctx) {
                                 final recentProv =
@@ -4173,8 +4384,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Fresh meals, snacks & cuisines delivered hot',
                                   emoji: '🍔',
-                                  count: _departmentProductCounts['Food'] ??
-                                      _sortedFoodProducts.length,
+                                  count: math.max(
+                                      _departmentProductCounts['Food'] ?? 0,
+                                      _sortedFoodProducts.length),
                                   accentGradient: const [
                                     Color(0xFFFF6B6B),
                                     Color(0xFFEE5A24),
@@ -4203,7 +4415,188 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                             ],
 
-                            // 2. Medicines & Healthcare (Under Food)
+                            // 2. Bakery, Sweets & Mithai (Dedicated Showcase)
+                            if (_sortedBakeryProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Bakery, Sweets & Mithai',
+                                  subtitle:
+                                      'Fresh bread, artisan cakes, cookies & traditional mithai',
+                                  emoji: '🥖',
+                                  count: math.max(
+                                      _departmentProductCounts[
+                                              'BakeryAndSweets'] ??
+                                          0,
+                                      _sortedBakeryProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFFF59E0B),
+                                    Color(0xFFD97706),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Bakery, Sweets & Mithai',
+                                    products: _sortedBakeryProducts,
+                                    categories:
+                                        _tabCategories['BakeryAndSweets'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedBakeryProducts,
+                                  sectionTitle: 'Bakery & Sweets',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Bakery, Sweets & Mithai',
+                                    products: _sortedBakeryProducts,
+                                    categories:
+                                        _tabCategories['BakeryAndSweets'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 3. Fresh Milk, Butter, Cheese & Eggs
+                            if (_sortedDairyProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Fresh Milk, Butter, Cheese & Eggs',
+                                  subtitle:
+                                      'Farm-fresh milk, butter, artisanal cheese & eggs',
+                                  emoji: '🥛',
+                                  count: math.max(
+                                      _departmentProductCounts[
+                                              'DairyAndEggs'] ??
+                                          0,
+                                      _sortedDairyProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFF0288D1),
+                                    Color(0xFF26C6DA),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Fresh Milk, Butter, Cheese & Eggs',
+                                    products: _sortedDairyProducts,
+                                    categories:
+                                        _tabCategories['DairyAndEggs'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedDairyProducts,
+                                  sectionTitle: 'Dairy & Eggs',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Fresh Milk, Butter, Cheese & Eggs',
+                                    products: _sortedDairyProducts,
+                                    categories:
+                                        _tabCategories['DairyAndEggs'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 4. Fruits, Vegs & Organic
+                            if (_sortedFruitsVegsProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Fruits, Vegs & Organic',
+                                  subtitle:
+                                      'Farm fresh fruits, crisp vegetables & certified organic',
+                                  emoji: '🥬',
+                                  count: math.max(
+                                      _departmentProductCounts[
+                                              'FruitsVegsOrganic'] ??
+                                          0,
+                                      _sortedFruitsVegsProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFF10B981),
+                                    Color(0xFF059669),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Fruits, Vegs & Organic',
+                                    products: _sortedFruitsVegsProducts,
+                                    categories:
+                                        _tabCategories['FruitsVegsOrganic'] ??
+                                            [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedFruitsVegsProducts,
+                                  sectionTitle: 'Fruits & Vegs',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Fruits, Vegs & Organic',
+                                    products: _sortedFruitsVegsProducts,
+                                    categories:
+                                        _tabCategories['FruitsVegsOrganic'] ??
+                                            [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 5. Fish, Mutton & Meat
+                            if (_sortedMeatAndFishProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Fish, Mutton & Meat',
+                                  subtitle:
+                                      'Fresh cut chicken, mutton, fish & seafood',
+                                  emoji: '🥩',
+                                  count: math.max(
+                                      _departmentProductCounts['MeatAndFish'] ??
+                                          0,
+                                      _sortedMeatAndFishProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFFE53935),
+                                    Color(0xFFD32F2F),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Fish, Mutton & Meat',
+                                    products: _sortedMeatAndFishProducts,
+                                    categories:
+                                        _tabCategories['MeatAndFish'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedMeatAndFishProducts,
+                                  sectionTitle: 'Meat & Fish',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Fish, Mutton & Meat',
+                                    products: _sortedMeatAndFishProducts,
+                                    categories:
+                                        _tabCategories['MeatAndFish'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 6. Medicines & Healthcare
                             if (_sortedPharmacyProducts.isNotEmpty) ...[
                               const SliverToBoxAdapter(
                                   child: SizedBox(height: 24)),
@@ -4213,8 +4606,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Prescription drugs, vitamins & wellness',
                                   emoji: '💊',
-                                  count: _departmentProductCounts['Pharmacy'] ??
-                                      _sortedPharmacyProducts.length,
+                                  count: math.max(
+                                      _departmentProductCounts['Pharmacy'] ?? 0,
+                                      _sortedPharmacyProducts.length),
                                   accentGradient: const [
                                     Color(0xFF0284C7),
                                     Color(0xFF06B6D4),
@@ -4245,7 +4639,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                             ],
 
-                            // 3. Cosmetics & Beauty (Under Medicines)
+                            // 7. Cosmetics & Beauty
                             if (_sortedCosmeticsProducts.isNotEmpty) ...[
                               const SliverToBoxAdapter(
                                   child: SizedBox(height: 24)),
@@ -4255,9 +4649,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Skincare, makeup & fragrances near you',
                                   emoji: '💄',
-                                  count:
+                                  count: math.max(
                                       _departmentProductCounts['Cosmetics'] ??
-                                          _sortedCosmeticsProducts.length,
+                                          0,
+                                      _sortedCosmeticsProducts.length),
                                   accentGradient: const [
                                     Color(0xFFE91E8C),
                                     Color(0xFFFF6FB5),
@@ -4288,7 +4683,182 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                             ],
 
-                            // 4. Stationery & Office Supplies (After Cosmetics & Beauty)
+                            // 8. Salon & Beauty
+                            if (_sortedSalonProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Salon & Beauty',
+                                  subtitle:
+                                      'Haircare, styling, grooming & professional salon essentials',
+                                  emoji: '💇',
+                                  count: math.max(
+                                      _departmentProductCounts[
+                                              'SalonAndBeauty'] ??
+                                          0,
+                                      _sortedSalonProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFFD946EF),
+                                    Color(0xFFA855F7),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Salon & Beauty',
+                                    products: _sortedSalonProducts,
+                                    categories:
+                                        _tabCategories['SalonAndBeauty'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedSalonProducts,
+                                  sectionTitle: 'Salon & Beauty',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Salon & Beauty',
+                                    products: _sortedSalonProducts,
+                                    categories:
+                                        _tabCategories['SalonAndBeauty'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 9. Clothing & Footwear
+                            if (_sortedClothingProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Clothing & Footwear',
+                                  subtitle:
+                                      'Trending styles, apparel, footwear & accessories',
+                                  emoji: '👕',
+                                  count: math.max(
+                                      _departmentProductCounts['Clothing'] ?? 0,
+                                      _sortedClothingProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFF8B5CF6),
+                                    Color(0xFFEC4899),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Clothing & Footwear',
+                                    products: _sortedClothingProducts,
+                                    categories:
+                                        _tabCategories['Clothing'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedClothingProducts,
+                                  sectionTitle: 'Fashion',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Clothing & Footwear',
+                                    products: _sortedClothingProducts,
+                                    categories:
+                                        _tabCategories['Clothing'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 10. Electronics & Gadgets
+                            if (_sortedElectronicsProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Electronics & Gadgets',
+                                  subtitle:
+                                      'Smartphones, audio, smart gadgets & accessories',
+                                  emoji: '📱',
+                                  count: math.max(
+                                      _departmentProductCounts['Electronics'] ??
+                                          0,
+                                      _sortedElectronicsProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFF3B82F6),
+                                    Color(0xFF1D4ED8),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Electronics & Gadgets',
+                                    products: _sortedElectronicsProducts,
+                                    categories:
+                                        _tabCategories['Electronics'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedElectronicsProducts,
+                                  sectionTitle: 'Electronics',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Electronics & Gadgets',
+                                    products: _sortedElectronicsProducts,
+                                    categories:
+                                        _tabCategories['Electronics'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 11. Hardware & Tools
+                            if (_sortedHardwareProducts.isNotEmpty) ...[
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 24)),
+                              SliverToBoxAdapter(
+                                child: _buildDepartmentSectionHeader(
+                                  title: 'Hardware & Tools',
+                                  subtitle:
+                                      'Tools, fixtures, electrical & home repair essentials',
+                                  emoji: '🔨',
+                                  count: math.max(
+                                      _departmentProductCounts['Hardware'] ?? 0,
+                                      _sortedHardwareProducts.length),
+                                  accentGradient: const [
+                                    Color(0xFFF97316),
+                                    Color(0xFFEA580C),
+                                  ],
+                                  onSeeAllTap: () => _openCategoryListing(
+                                    title: 'Hardware & Tools',
+                                    products: _sortedHardwareProducts,
+                                    categories:
+                                        _tabCategories['Hardware'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SliverToBoxAdapter(
+                                  child: SizedBox(height: 14)),
+                              SliverToBoxAdapter(
+                                child: _buildCategoryHorizontalCarousel(
+                                  products: _sortedHardwareProducts,
+                                  sectionTitle: 'Hardware',
+                                  onViewAllTap: () => _openCategoryListing(
+                                    title: 'Hardware & Tools',
+                                    products: _sortedHardwareProducts,
+                                    categories:
+                                        _tabCategories['Hardware'] ?? [],
+                                  ),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+
+                            // 12. Stationery & Office Supplies
                             if (_sortedStationeryProducts.isNotEmpty) ...[
                               const SliverToBoxAdapter(
                                   child: SizedBox(height: 24)),
@@ -4298,9 +4868,10 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Books, pens, art & school essentials',
                                   emoji: '📚',
-                                  count:
+                                  count: math.max(
                                       _departmentProductCounts['Stationery'] ??
-                                          _sortedStationeryProducts.length,
+                                          0,
+                                      _sortedStationeryProducts.length),
                                   accentGradient: const [
                                     Color(0xFF5B86E5),
                                     Color(0xFF36D1DC),
@@ -4331,7 +4902,7 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                               ),
                             ],
 
-                            // 5. Supermarket, Hypermarket & Grocery (Under Stationery)
+                            // 13. Supermarket, Hypermarket & Grocery
                             if (_sortedSupermarketProducts.isNotEmpty) ...[
                               const SliverToBoxAdapter(
                                   child: SizedBox(height: 24)),
@@ -4341,8 +4912,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                   subtitle:
                                       'Daily staples, fresh veggies & household needs',
                                   emoji: '🏬',
-                                  count: _departmentProductCounts['Grocery'] ??
-                                      _sortedSupermarketProducts.length,
+                                  count: math.max(
+                                      _departmentProductCounts['Grocery'] ?? 0,
+                                      _sortedSupermarketProducts.length),
                                   accentGradient: const [
                                     Color(0xFF00B074),
                                     Color(0xFF10B981),
@@ -4472,52 +5044,6 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                                           productMeta.categoryFilter,
                                       'sectionTitle': productMeta.sectionTitle,
                                     },
-                                  ),
-                                  isDark: isDark,
-                                ),
-                              ),
-                            ],
-                          ],
-
-                          // ── Dedicated Department Category Showcases (Secondary) ──
-                          // Order: Clothing & Fashion (directly under Popular in your area)
-                          if (_selectedTabIndex < 0) ...[
-                            // 6. Clothing & Fashion
-                            if (_sortedClothingProducts.isNotEmpty) ...[
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 24)),
-                              SliverToBoxAdapter(
-                                child: _buildDepartmentSectionHeader(
-                                  title: 'Clothing & Fashion',
-                                  subtitle:
-                                      'Trending styles, apparel & accessories',
-                                  emoji: '👕',
-                                  count: _departmentProductCounts['Clothing'] ??
-                                      _sortedClothingProducts.length,
-                                  accentGradient: const [
-                                    Color(0xFF8B5CF6),
-                                    Color(0xFFEC4899),
-                                  ],
-                                  onSeeAllTap: () => _openCategoryListing(
-                                    title: 'Clothing & Fashion',
-                                    products: _sortedClothingProducts,
-                                    categories:
-                                        _tabCategories['Clothing'] ?? [],
-                                  ),
-                                  isDark: isDark,
-                                ),
-                              ),
-                              const SliverToBoxAdapter(
-                                  child: SizedBox(height: 14)),
-                              SliverToBoxAdapter(
-                                child: _buildCategoryHorizontalCarousel(
-                                  products: _sortedClothingProducts,
-                                  sectionTitle: 'Fashion',
-                                  onViewAllTap: () => _openCategoryListing(
-                                    title: 'Clothing & Fashion',
-                                    products: _sortedClothingProducts,
-                                    categories:
-                                        _tabCategories['Clothing'] ?? [],
                                   ),
                                   isDark: isDark,
                                 ),
@@ -4779,7 +5305,9 @@ class CustomerHomeViewState extends State<CustomerHomeView>
                           // Ensures content stops exactly with a 12dp optical margin above the floating bottom navigation bar
                           SliverToBoxAdapter(
                             child: SizedBox(
-                              height: _getFloatingBottomNavClearance(context),
+                              height: _getFloatingBottomNavClearance(context,
+                                  hasPrecedingButtonPadding:
+                                      _sortedNormalShops.isNotEmpty),
                             ),
                           ),
                         ],
@@ -7015,28 +7543,39 @@ class CustomerHomeViewState extends State<CustomerHomeView>
 
   /// Industrial Standard Floating Bottom Nav Clearance
   /// Calculates the exact clearance required for the floating bottom navigation bar
-  /// so that scrolled content never overlaps the bar, and never creates an excessive blank void.
-  double _getFloatingBottomNavClearance(BuildContext context) {
-    final viewPadding = MediaQuery.viewPaddingOf(context).bottom;
-    final padding = MediaQuery.paddingOf(context).bottom;
-    final bottomInset = math.max(viewPadding, padding);
+  /// so that scrolled content stops exactly with a 12dp optical margin above the bar.
+  /// Zero overlap, zero excessive whitespace, and zero text/footer widgets.
+  double _getFloatingBottomNavClearance(BuildContext context,
+      {bool hasPrecedingButtonPadding = false}) {
+    // 100x Forensic Geometry: Read raw hardware inset from viewPadding.
+    // In Flutter, Scaffold(extendBody: true) automatically inflates MediaQuery.paddingOf(context).bottom
+    // by the height of the bottomNavigationBar. Using paddingOf causes a double-counting bug.
+    // viewPaddingOf contains the true unpolluted hardware inset (e.g. 34.0 on iOS, 48.0 on 3-button nav).
+    final hardwareBottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    final double bottomMargin;
-    if (bottomInset <= 0) {
-      bottomMargin = 10.0;
-    } else if (bottomInset >= 36.0) {
-      bottomMargin = bottomInset + 4.0;
+    final double barBottomMargin;
+    if (hardwareBottomInset <= 0) {
+      // Hardware buttons / Web / Desktop / older iPhone
+      barBottomMargin = 10.0;
+    } else if (hardwareBottomInset >= 36.0) {
+      // Android 3-button or 2-button navigation bar (typically 40.0 to 54.0 dp)
+      barBottomMargin = hardwareBottomInset + 4.0;
     } else if (Theme.of(context).platform == TargetPlatform.iOS) {
-      bottomMargin = bottomInset;
+      // iOS Home Indicator (typically 34.0 dp)
+      barBottomMargin = hardwareBottomInset;
     } else {
-      bottomMargin = bottomInset + 4.0;
+      // Android Gesture Navigation (typically 16.0 to 24.0 dp)
+      barBottomMargin = hardwareBottomInset + 4.0;
     }
 
     // Floating bar is 68.0 dp tall.
-    // Target optical cushion between bottom of visible "See all stores ->" card and top of bar is ~32.0 dp (~65px raster cushion).
-    // _buildModernSeeAllButton has 8.0 dp internal bottom padding.
-    // Required spacer height = 68.0 + bottomMargin + (32.0 - 8.0) = 68.0 + bottomMargin + 24.0 (bottomMargin + 92.0 dp).
-    return 68.0 + bottomMargin + 24.0;
+    // Floating bar top edge from bottom of screen = 68.0 + barBottomMargin.
+    // Setting optical cushion to 28.0 dp ensures the "See all stores ->" button and product cards
+    // clear the floating bar and its blur shadow with a clean, comfortable breathing gap (~16-20 dp),
+    // eliminating any overlap while strictly preventing excessive white space void.
+    const double opticalCushion = 28.0;
+
+    return 68.0 + barBottomMargin + opticalCushion;
   }
 
   void _openCategoryListing({
@@ -7051,11 +7590,18 @@ class CustomerHomeViewState extends State<CustomerHomeView>
       if (s.categories.any((c) => lowerCats.contains(c.trim().toLowerCase()))) {
         return true;
       }
-      // 100x Multi-department omnibus store check: Supermarkets & Hypermarkets carry cosmetics & grocery
+      // 100x Multi-department omnibus store check: Supermarkets & Hypermarkets carry cosmetics, grocery, dairy, produce, bakery, meat, etc.
       if (lowerCats.any((t) =>
           t.contains('cosmetic') ||
           t.contains('beauty') ||
-          t.contains('grocery'))) {
+          t.contains('grocery') ||
+          t.contains('dairy') ||
+          t.contains('fruit') ||
+          t.contains('bakery') ||
+          t.contains('meat') ||
+          t.contains('fish') ||
+          t.contains('sweets') ||
+          t.contains('egg'))) {
         final sCat = s.category.trim().toLowerCase();
         if (sCat.contains('supermarket') ||
             sCat.contains('hypermarket') ||
@@ -7402,24 +7948,138 @@ class CustomerHomeViewState extends State<CustomerHomeView>
   }
 
   Widget _buildNoShopsNearby() {
+    final loc = context.watch<LocationProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentAddress =
+        loc.currentAddress.isNotEmpty ? loc.currentAddress : 'Your location';
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('🏪', style: TextStyle(fontSize: 64)),
-            const SizedBox(height: 16),
-            Text(
-              'No shops nearby',
-              style:
-                  GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.primary.withValues(alpha: 0.15)
+                    : AppColors.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Text('📍', style: TextStyle(fontSize: 38)),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 20),
             Text(
-              'No shops found within ${DeliveryCalculator.maxRadiusKm.toInt()} km of\nyour location in this category.',
+              'No Stores Deliver Here Yet',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
-                  color: AppColors.textSecondary, height: 1.5),
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color:
+                    isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on_rounded,
+                      size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      currentAddress,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color:
+                            isDark ? Colors.white70 : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'We currently deliver within a ${DeliveryCalculator.maxRadiusKm.toInt()} km radius of our active store hubs.\nWe\'ll be expanding to your area soon!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                color: isDark ? Colors.white54 : AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await showAddressPickerSheet(context);
+                    if (mounted) {
+                      _locationDebounceTimer?.cancel();
+                      if (_selectedTabIndex < 0) {
+                        _loadAllData();
+                      } else {
+                        _loadData(
+                            _categories[_selectedTabIndex]['name']! as String);
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.edit_location_alt_rounded, size: 18),
+                  label: Text(
+                    'Change Location',
+                    style: GoogleFonts.outfit(
+                        fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    loc.requestLocation(isUserAction: true);
+                  },
+                  icon: const Icon(Icons.my_location_rounded, size: 18),
+                  label: Text(
+                    'Recheck GPS',
+                    style: GoogleFonts.outfit(
+                        fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        isDark ? Colors.white70 : AppColors.textPrimary,
+                    side: BorderSide(
+                      color: isDark ? Colors.white24 : Colors.black12,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

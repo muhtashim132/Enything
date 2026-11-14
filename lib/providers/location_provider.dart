@@ -75,8 +75,10 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
         await prefs.setString('cached_delivery_address', _currentAddress);
       }
       if (isValidCoordinates(_currentLocation)) {
-        await prefs.setDouble('cached_delivery_lat', _currentLocation!.latitude);
-        await prefs.setDouble('cached_delivery_lng', _currentLocation!.longitude);
+        await prefs.setDouble(
+            'cached_delivery_lat', _currentLocation!.latitude);
+        await prefs.setDouble(
+            'cached_delivery_lng', _currentLocation!.longitude);
       }
       if (_houseNumber.isNotEmpty) {
         await prefs.setString('cached_delivery_house', _houseNumber);
@@ -122,6 +124,9 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('Error checking location on resume: $e');
     }
   }
+
+  /// Public entry point to trigger lifecycle location check on resume or role switch
+  Future<void> checkLocationOnResume() => _checkLocationOnResume();
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -354,12 +359,36 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     return false;
   }
 
+  /// 100x Reviewer Security Guard: Restricts the far-away default address bypass
+  /// strictly to verified Apple App Store Reviewer demo phone credentials.
+  /// Never hijacks the location of real production customers, sellers, or admins.
+  bool _isAppleReviewerAccount() {
+    try {
+      final phone = _supabase.auth.currentUser?.phone ?? '';
+      final digits = phone.replaceAll(RegExp(r'\D'), '');
+      if (digits.isEmpty) return false;
+      return digits.endsWith('9999999991') ||
+          digits.endsWith('9999999992') ||
+          digits.endsWith('9999999993') ||
+          digits.endsWith('9999999996') ||
+          digits.endsWith('9999999997') ||
+          digits.endsWith('9999999998') ||
+          digits.endsWith('9999999999') ||
+          digits.endsWith('9876500000');
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Manually select a saved address as the delivery address
   void selectSavedAddress(SavedAddress addr) {
     _selectedAddress = addr;
     _matchedAddress = null; // Clear auto-match when manual selection
     if (addr.hasValidCoordinates) {
       _currentLocation = addr.location;
+    } else {
+      // 100x Self-Healing Geocoder: Resolve genuine coordinates if missing (0,0)
+      _resolveAndSyncAddressCoordinates(addr);
     }
     _currentAddress = addr.address;
     _houseNumber = addr.flatNumber ?? '';
@@ -373,6 +402,30 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
     final userId = _supabase.auth.currentUser?.id;
     if (userId != null) {
       syncLocationToDatabase('customer', userId);
+    }
+  }
+
+  /// Asynchronously resolves coordinates for addresses lacking GPS coordinates
+  Future<void> _resolveAndSyncAddressCoordinates(SavedAddress addr) async {
+    try {
+      final loc = await geocodeAddress(addr.fullAddress);
+      if (loc != null && isValidCoordinates(loc)) {
+        if (_selectedAddress?.id == addr.id) {
+          _currentLocation = loc;
+          _cacheCurrentState();
+          safeNotifyListeners();
+          final userId = _supabase.auth.currentUser?.id;
+          if (userId != null) {
+            syncLocationToDatabase('customer', userId);
+            await _supabase.from('saved_addresses').update({
+              'latitude': loc.latitude,
+              'longitude': loc.longitude,
+            }).eq('id', addr.id);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('_resolveAndSyncAddressCoordinates error: $e');
     }
   }
 
@@ -428,6 +481,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       // If user has saved addresses and either no GPS locked or GPS is far outside
       // serviceable region (e.g. Apple Reviewer testing in California), auto-select
       // the default saved address so nearby stores and menus display properly.
+      // 100x Guard: Strictly restricted to Apple Reviewer demo credentials; never hijacks real users.
       if (_savedAddresses.isNotEmpty && _selectedAddress == null) {
         final defaultAddr = _savedAddresses.firstWhere(
           (a) => a.isDefault && a.hasValidCoordinates,
@@ -440,7 +494,7 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
           const distCalc = Distance();
           final isFarAway = _currentLocation == null ||
               distCalc(_currentLocation!, defaultAddr.location) > 50000;
-          if (isFarAway) {
+          if (isFarAway && _isAppleReviewerAccount()) {
             selectSavedAddress(defaultAddr);
           }
         }
@@ -455,15 +509,25 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Add a new saved address
   Future<String?> addSavedAddress(SavedAddress addr) async {
     try {
+      var resolvedAddr = addr;
+      if (!resolvedAddr.hasValidCoordinates) {
+        final coords = await geocodeAddress(resolvedAddr.fullAddress);
+        if (coords != null) {
+          resolvedAddr = resolvedAddr.copyWith(
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          );
+        }
+      }
       final db = _supabase;
       // If this is the first address or marked default, clear others' default
-      if (addr.isDefault || _savedAddresses.isEmpty) {
+      if (resolvedAddr.isDefault || _savedAddresses.isEmpty) {
         await db
             .from('saved_addresses')
-            .update({'is_default': false}).eq('user_id', addr.userId);
+            .update({'is_default': false}).eq('user_id', resolvedAddr.userId);
       }
-      await db.from('saved_addresses').insert(addr.toInsertMap());
-      await loadSavedAddresses(addr.userId);
+      await db.from('saved_addresses').insert(resolvedAddr.toInsertMap());
+      await loadSavedAddresses(resolvedAddr.userId);
       return null; // success
     } catch (e) {
       debugPrint('addSavedAddress error: $e');
@@ -477,18 +541,28 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Update an existing saved address
   Future<String?> updateSavedAddress(SavedAddress addr) async {
     try {
+      var resolvedAddr = addr;
+      if (!resolvedAddr.hasValidCoordinates) {
+        final coords = await geocodeAddress(resolvedAddr.fullAddress);
+        if (coords != null) {
+          resolvedAddr = resolvedAddr.copyWith(
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          );
+        }
+      }
       final db = _supabase;
-      if (addr.isDefault) {
+      if (resolvedAddr.isDefault) {
         await db
             .from('saved_addresses')
-            .update({'is_default': false}).eq('user_id', addr.userId);
+            .update({'is_default': false}).eq('user_id', resolvedAddr.userId);
       }
       await db
           .from('saved_addresses')
-          .update(addr.toUpdateMap())
-          .eq('id', addr.id);
-      await loadSavedAddresses(addr.userId);
-      return null;
+          .update(resolvedAddr.toUpdateMap())
+          .eq('id', resolvedAddr.id);
+      await loadSavedAddresses(resolvedAddr.userId);
+      return null; // success
     } catch (e) {
       debugPrint('updateSavedAddress error: $e');
       return 'Failed to update address: $e';
@@ -547,13 +621,21 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void setLocalAddressDetails(
-      {String? house, String? mark, String? pin, String? addressText}) {
+      {String? house,
+      String? mark,
+      String? pin,
+      String? addressText,
+      LatLng? location}) {
     if (house != null) _houseNumber = house;
     if (mark != null) _landmark = mark;
     if (pin != null) _pincode = pin;
     if (addressText != null && addressText.isNotEmpty) {
       _currentAddress = addressText;
     }
+    if (location != null && isValidCoordinates(location)) {
+      _currentLocation = location;
+    }
+    _cacheCurrentState();
     safeNotifyListeners();
   }
 
@@ -698,6 +780,37 @@ class LocationProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('getAddressForLocation error: $e');
     }
     return '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}';
+  }
+
+  /// Forward-geocodes an address string via Nominatim to resolve genuine GPS coordinates.
+  Future<LatLng?> geocodeAddress(String addressText) async {
+    if (addressText.trim().isEmpty) return null;
+    try {
+      final query = Uri.encodeComponent(addressText.trim());
+      final response = await http.get(
+        Uri.parse(
+          'https://nominatim.openstreetmap.org/search?format=json&q=$query&limit=1',
+        ),
+        headers: {
+          'User-Agent':
+              'Enything-Food-Delivery-App/1.0 (contact: support@enything.in)',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data is List && data.isNotEmpty) {
+          final first = data.first as Map<String, dynamic>;
+          final lat = double.tryParse(first['lat']?.toString() ?? '') ?? 0.0;
+          final lon = double.tryParse(first['lon']?.toString() ?? '') ?? 0.0;
+          final loc = LatLng(lat, lon);
+          if (isValidCoordinates(loc)) return loc;
+        }
+      }
+    } catch (e) {
+      debugPrint('geocodeAddress error: $e');
+    }
+    return null;
   }
 
   /// Writes the current in-memory GPS coordinates back to the correct Supabase

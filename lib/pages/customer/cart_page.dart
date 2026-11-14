@@ -1,20 +1,21 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+
+import '../../config/payment_config.dart';
+import '../../config/routes.dart';
+import '../../config/tax_config.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/location_provider.dart';
+import '../../providers/platform_config_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/premium_effects.dart';
-import '../../config/routes.dart';
-import '../../config/payment_config.dart';
-import '../../providers/platform_config_provider.dart';
-import '../../providers/location_provider.dart';
-import '../../utils/responsive_layout.dart';
-import '../../config/tax_config.dart';
-import '../../providers/auth_provider.dart';
 import '../../utils/app_toast.dart';
+import '../../utils/responsive_layout.dart';
 
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
@@ -137,6 +138,10 @@ class _CartPageState extends State<CartPage> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                   children: [
+                    if (config.isMaintenanceMode) ...[
+                      _buildMaintenanceBanner(config, isDark),
+                      const SizedBox(height: 12),
+                    ],
                     if (cart.hasClosedShops) ...[
                       _buildClosedShopsAlertCard(context, cart, isDark),
                       const SizedBox(height: 12),
@@ -269,7 +274,8 @@ class _CartPageState extends State<CartPage> {
                     Text(
                       item.shop.name,
                       style: GoogleFonts.outfit(
-                        color: isDark ? Colors.white38 : AppColors.textSecondary,
+                        color:
+                            isDark ? Colors.white38 : AppColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),

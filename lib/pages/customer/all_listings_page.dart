@@ -197,6 +197,120 @@ class _AllListingsPageState extends State<AllListingsPage> {
       'dishes',
       'all food',
     ],
+    'MeatAndFish': [
+      'meat',
+      'chicken',
+      'mutton',
+      'fish',
+      'seafood',
+      'raw meat',
+      'butcher',
+      'meat & fish',
+      'prawns',
+      'all meat',
+      'fresh meat',
+    ],
+    'DairyAndEggs': [
+      'dairy',
+      'milk',
+      'fresh milk',
+      'butter',
+      'cheese',
+      'paneer',
+      'curd',
+      'dahi',
+      'yogurt',
+      'eggs',
+      'egg',
+      'ghee',
+      'cream',
+      'all dairy',
+    ],
+    'BakeryAndSweets': [
+      'bakery',
+      'sweets',
+      'mithai',
+      'cake',
+      'cakes',
+      'pastry',
+      'pastries',
+      'bread',
+      'cookies',
+      'biscuit',
+      'biscuits',
+      'halwa',
+      'laddu',
+      'all bakery',
+      'all sweets',
+    ],
+    'FruitsVegsOrganic': [
+      'fruits',
+      'fruit',
+      'vegetables',
+      'vegs',
+      'veg',
+      'organic',
+      'fresh fruits',
+      'fresh vegetables',
+      'fresh produce',
+      'greens',
+      'all fruits',
+      'all vegetables',
+    ],
+    'Electronics': [
+      'electronics',
+      'electronic',
+      'gadgets',
+      'gadget',
+      'mobile',
+      'phone',
+      'charger',
+      'cable',
+      'headphones',
+      'earphones',
+      'earbuds',
+      'laptop',
+      'all electronics',
+    ],
+    'Hardware': [
+      'hardware',
+      'tools',
+      'tool',
+      'fixtures',
+      'electrical',
+      'screws',
+      'drill',
+      'pipes',
+      'sanitary',
+      'home repair',
+      'all hardware',
+    ],
+    'SalonAndBeauty': [
+      'salon',
+      'haircare',
+      'hair care',
+      'hair styling',
+      'grooming',
+      'hair oil',
+      'trimmer',
+      'wax',
+      'hair color',
+      'professional beauty',
+      'all salon',
+    ],
+    'Stationery': [
+      'stationery',
+      'books',
+      'book',
+      'notebook',
+      'pens',
+      'pen',
+      'art',
+      'craft',
+      'office supplies',
+      'school supplies',
+      'all stationery',
+    ],
     'Popular': [
       'popular',
       'popular items',
@@ -261,23 +375,78 @@ class _AllListingsPageState extends State<AllListingsPage> {
           collection.contains('dining') ||
           catLower.contains('restaurant') ||
           catLower.contains('fast food') ||
-          catLower.contains('bakery')) {
+          catLower.contains('cafe')) {
         buffer.write(
-            ' food restaurant fast food meal dishes eat bakery cafe sweets snacks burger pizza biryani noodle noodles maggi chowmein pasta ');
+            ' food restaurant fast food meal dishes eat dining cafe burger pizza biryani noodle noodles maggi chowmein pasta rice roll rolls thali ');
+      }
+      if (collection.contains('bakery') ||
+          catLower.contains('bakery') ||
+          catLower.contains('sweets') ||
+          catLower.contains('mithai') ||
+          catLower.contains('cake') ||
+          catLower.contains('pastry')) {
+        buffer.write(
+            ' bakery sweets mithai cake cakes pastry pastries bread cookies biscuit biscuits halwa laddu gulab jamun patties buns toast rusks desserts ');
       }
       if (collection.contains('cosmetics') ||
           collection.contains('beauty') ||
-          catLower.contains('cosmetics') ||
-          catLower.contains('salon')) {
+          catLower.contains('cosmetics')) {
         buffer.write(
             ' cosmetics cosmetic makeup beauty skincare lipstick lip balm eyeliner mascara foundation cream lotion serum perfume ');
+      }
+      if (catLower.contains('salon') ||
+          catLower.contains('haircare') ||
+          catLower.contains('styling') ||
+          catLower.contains('grooming')) {
+        buffer.write(
+            ' salon beauty haircare hair styling grooming trimmer shaver hair oil wax hair color professional salon spa massage ');
       }
       if (collection.contains('electronics') ||
           collection.contains('utilities') ||
           catLower.contains('electronics') ||
-          catLower.contains('mobile')) {
+          catLower.contains('mobile') ||
+          catLower.contains('gadget')) {
         buffer.write(
-            ' electronics mobile phone gadget device computer laptop charger cable repair ');
+            ' electronics mobile phone gadget device computer laptop charger cable repair headphones earphones earbuds smart watch power bank ');
+      }
+      if (collection.contains('hardware') ||
+          catLower.contains('hardware') ||
+          catLower.contains('tools') ||
+          catLower.contains('fixture') ||
+          catLower.contains('electrical')) {
+        buffer.write(
+            ' hardware tools fixtures electrical wire switch plug bulb screw screws nail hammer drill pipe sanitary plumbing home repair paint ');
+      }
+      if (catLower.contains('meat') ||
+          catLower.contains('chicken') ||
+          catLower.contains('mutton') ||
+          catLower.contains('fish') ||
+          catLower.contains('seafood') ||
+          catLower.contains('butcher')) {
+        buffer.write(
+            ' meat chicken mutton fish seafood butcher raw meat fresh meat prawns boneless curry cut keema lamb poultry ');
+      }
+      if (catLower.contains('dairy') ||
+          catLower.contains('milk') ||
+          catLower.contains('egg') ||
+          catLower.contains('butter') ||
+          catLower.contains('cheese') ||
+          catLower.contains('paneer')) {
+        buffer.write(
+            ' dairy milk fresh milk butter cheese paneer curd dahi yogurt eggs egg ghee cream buttermilk lassi ');
+      }
+      if (catLower.contains('fruit') ||
+          catLower.contains('veg') ||
+          catLower.contains('organic')) {
+        buffer.write(
+            ' fruits fruit vegetables veggies veg greens organic fresh produce fresh fruits fresh vegetables apple banana potato tomato onion ');
+      }
+      if (collection.contains('stationery') ||
+          catLower.contains('stationery') ||
+          catLower.contains('books') ||
+          catLower.contains('office')) {
+        buffer.write(
+            ' stationery books notebook paper pens pen pencils art craft office supplies school diary sticky notes folder ');
       }
     }
 
@@ -1029,22 +1198,24 @@ class _AllListingsPageState extends State<AllListingsPage> {
               '${p.name} ${p.description ?? ''} ${p.brand ?? ''} ${p.category} ${p.subCategory ?? ''} ${p.menuCategory ?? ''} ${p.medicineType} ${p.unitType} $variantNames ${p.specialTags.join(' ')} ${shop?.name ?? ''} ${shop?.category ?? ''} $syn'
                   .toLowerCase();
           return terms.every((t) => DemographicUtils.productMatchesTerm(
-            product: p,
-            term: t,
-            searchableText: searchable,
-          ));
+                product: p,
+                term: t,
+                searchableText: searchable,
+              ));
         }).toList();
 
         // 100x Disqualification Purge: Filter out negative score items for demographic queries
-        final demoIntent = DemographicUtils.detectDemographicIntent(_searchQuery);
+        final demoIntent =
+            DemographicUtils.detectDemographicIntent(_searchQuery);
         if (demoIntent.hasDemographicIntent) {
           list = list.where((p) {
             final s = _allProductShops[p.id] ?? _shopsMap[p.shopId];
             return SearchRelevanceEngine.computeScore(
-              product: p,
-              query: _searchQuery,
-              shop: s,
-            ) >= 0;
+                  product: p,
+                  query: _searchQuery,
+                  shop: s,
+                ) >=
+                0;
           }).toList();
         }
       }
